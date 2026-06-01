@@ -1,0 +1,8 @@
+name = "storefloorspacereserver"
+main = "compiledbuild.js"
+compatibility_date = "2026-05-29"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reservations-db"
+database_id = "d04975e7-47e9-4838-9fd6-8aa5d06ee700"

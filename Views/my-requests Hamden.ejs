@@ -1,0 +1,24 @@
+<h1>My Requests Hamden</h1>
+
+<p>Logged in as: <%= user.name %></p>
+
+<a href="/">⬅ Back to Home</a>
+
+<hr>
+
+<% if (requests.length === 0) { %>
+  <p>No requests yet.</p>
+<% } %>
+
+<% requests.forEach(req => { %>
+  <div style="border:1px solid #ccc; padding:10px; margin:10px 0; border-radius:8px;">
+    
+    <strong>Spot:</strong> <%= req.item_id %><br>
+    <strong>Brand:</strong> <%= req.brand %><br>
+    <strong>Products:</strong> <%= req.products %><br>
+    <strong>Status:</strong> <%= req.status %><br>
+    <strong>Month:</strong> <%= req.month %><br>
+    <strong>Requested:</strong> <%= new Date(req.created_at).toLocaleString() %>
+
+  </div>
+<% }) %>
