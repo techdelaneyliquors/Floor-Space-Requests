@@ -1,0 +1,59 @@
+<h1>Hi <%= name %></h1>
+
+<a href="/branfordstoremap">Open Branford Store Map</a>
+
+<a href="/my-requests-Branford">
+    <button>📋 My Requests in Branford</button>
+</a>
+
+<br><br>
+
+<a href="/stratfordstoremap">Open Stratford Store Map</a>
+
+<a href="/my-requests-Stratford">
+    <button>📋 My Requests in Stratford</button>
+</a>
+
+<br><br>
+
+
+<a href="/New-Havenstoremap">Open New Haven Store Map</a>
+
+<a href="/my-requests-New-Haven">
+    <button>📋 My Requests in New Haven</button>
+</a>
+
+<br><br>
+
+
+<a href="/Hamdenstoremap">Open Hamden Store Map</a>
+
+<a href="/my-requests-Hamden">
+    <button>📋 My Requests in Hamden</button>
+</a>
+
+<br><br>
+
+
+<a href="/New-Milfordstoremap">Open New Milford Store Map</a>
+
+<a href="/my-requests-New-Milford">
+    <button>📋 My Requests in New Milford</button>
+</a>
+
+<br><br>
+
+
+
+
+
+<form action="/logout?_method=DELETE" method="POST">
+    <button type="submit"> Log Out </button>
+</form>
+
+
+<% if (user.role === 'admin') { %>
+  <a href="/admin/users">
+    <button>Admin Panel</button>
+  </a>
+<% } %>

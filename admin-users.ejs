@@ -1,0 +1,61 @@
+
+<h1>Admin Panel - User Management</h1>
+
+<a href="/">⬅ Back</a>
+<hr>
+
+<table border="1" cellpadding="10">
+  <tr>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Role</th>
+    <th>Action</th>
+  </tr>
+
+  <% users.forEach(u => { %>
+    <tr>
+      <td><%= u.name %></td>
+      <td><%= u.email %></td>
+      <td><%= u.role %></td>
+      <td>
+        <% if (u.role !== 'admin') { %>
+          <button onclick="makeAdmin('<%= u.email %>')">
+            Make Admin
+          </button>
+        
+        <% } else { %>
+            <button onclick="removeAdmin('<%= u.email %>')">
+              Remove Admin
+            </button>
+        <% } %>
+      </td>
+    </tr>
+  <% }) %>
+</table>
+
+<script>
+async function makeAdmin(email) {
+    if (!confirm(`Promote ${email} to admin?`)) return;
+
+    await fetch('/admin/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+    });
+
+    location.reload(); // ✅ refresh page
+}
+
+async function removeAdmin(email) {
+    if (!confirm(`Remove admin from ${email}?`)) return;
+
+    await fetch('/admin/demote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+    });
+
+    location.reload();
+}
+
+</script>
