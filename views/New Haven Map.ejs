@@ -182,11 +182,9 @@ body {
   </a>
 
   <!-- ✅ Logout -->
- 
-  <form action="/logout" method="POST">
+  <form action="/logout?_method=DELETE" method="POST" style="display:inline;">
     <button type="submit">Log Out</button>
   </form>
-
 
 </div>
 
@@ -288,7 +286,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // 2. apply backend state
     try {
-      const data = await fetch(`/api/month?month=${MONTH}&map=${MAP_ID}`)
+      const data = await fetch(`http://localhost:3000/api/month?month=${MONTH}&map=${MAP_ID}`)
         .then(r => r.json());
 
       data.forEach(row => {
@@ -311,22 +309,22 @@ window.addEventListener("DOMContentLoaded", () => {
     const list = document.getElementById("adminRequests");
     list.innerHTML = "";
 
-    const data = await fetch(`/api/requests?month=${MONTH}&map=${MAP_ID}`)
+    const data = await fetch(`http://localhost:3000/api/requests?month=${MONTH}&map=${MAP_ID}`)
       .then(r => r.json());
 
     data.forEach(req => {
       const li = document.createElement("li");
-      li.textContent = `${req.user} → ${req.item_id} → ${req.brand} → ${req.products} `;
+      li.textContent = `${req.user} → ${req.item_id} → ${req.brand} → ${req.products}`;
 
       const approveBtn = document.createElement("button");
       approveBtn.textContent = "Approve";
 
       approveBtn.onclick = async () => {
-        await fetch(`/api/approve`, {
+        await fetch("http://localhost:3000/api/approve", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            request_id: req._id,
+            request_id: req.id,
             item_id: req.item_id,
             month: MONTH,
             map: MAP_ID
@@ -343,11 +341,11 @@ window.addEventListener("DOMContentLoaded", () => {
       rejectBtn.textContent = "Reject";
 
       rejectBtn.onclick = async () => {
-        await fetch(`/api/reject`, {
+        await fetch("http://localhost:3000/api/reject", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            request_id: req._id
+            request_id: req.id
           })
         });
 
@@ -369,7 +367,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (!selectedBox) return;
 
-    await fetch(`/api/request`, {
+    await fetch("http://localhost:3000/api/request", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
