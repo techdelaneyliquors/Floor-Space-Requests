@@ -31,7 +31,6 @@ const cookieParser = require('cookie-parser')
 const app = express()
 const mongoose = require('mongoose')
 const User = require('./models/User')
-const Item = require('./models/Item')
 const ItemMonthStatus = require('./models/ItemMonthStatus')
 const ItemRequest = require('./models/ItemRequest')
 
@@ -52,9 +51,8 @@ mongoose.connect(process.env.MONGO_URI)
 // ------------------------
 // EXPRESS SETUP
 // ------------------------
-const path = require('path')
+
 app.set('view engine', 'ejs')
-app.set('views', path.join(__dirname, 'views'))
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
 app.use(cookieParser())
