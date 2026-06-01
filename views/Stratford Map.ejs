@@ -181,9 +181,11 @@ body {
   </a>
 
   <!-- ✅ Logout -->
-  <form action="/logout?_method=DELETE" method="POST" style="display:inline;">
-    <button type="submit">Log Out</button>
+  
+  <form action="/logout" method="POST" style="display:inline;">
+   <button type="submit">Log Out</button>
   </form>
+
 
 </div>
 
@@ -284,7 +286,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // 2. apply backend state
     try {
-      const data = await fetch(`http://localhost:3000/api/month?month=${MONTH}&map=${MAP_ID}`)
+      const data = await fetch(`/api/month?month=${MONTH}&map=${MAP_ID}`)
         .then(r => r.json());
 
       data.forEach(row => {
@@ -307,7 +309,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const list = document.getElementById("adminRequests");
     list.innerHTML = "";
 
-    const data = await fetch(`http://localhost:3000/api/requests?month=${MONTH}&map=${MAP_ID}`)
+    const data = await fetch(`/api/requests?month=${MONTH}&map=${MAP_ID}`)
       .then(r => r.json());
 
     data.forEach(req => {
@@ -318,7 +320,7 @@ window.addEventListener("DOMContentLoaded", () => {
       approveBtn.textContent = "Approve";
 
       approveBtn.onclick = async () => {
-        await fetch("http://localhost:3000/api/approve", {
+        await fetch(`/api/approve`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
@@ -339,7 +341,7 @@ window.addEventListener("DOMContentLoaded", () => {
       rejectBtn.textContent = "Reject";
 
       rejectBtn.onclick = async () => {
-        await fetch("http://localhost:3000/api/reject", {
+        await fetch(`/api/reject`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
@@ -365,7 +367,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (!selectedBox) return;
 
-    await fetch("http://localhost:3000/api/request", {
+    await fetch(`/api/request`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({

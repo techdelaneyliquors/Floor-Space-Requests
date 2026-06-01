@@ -47,9 +47,13 @@
 
 
 
-<form action="/logout?_method=DELETE" method="POST">
-    <button type="submit"> Log Out </button>
+
+
+<form action="/logout" method="POST" style="display:inline;">
+  <button type="submit">Log Out</button>
 </form>
+
+
 
 
 <% if (user.role === 'admin') { %>
