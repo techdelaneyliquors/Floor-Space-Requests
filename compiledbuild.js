@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
 const sqlite3 = require('sqlite3').verbose()
 const fs = require('fs')
+const cors = require('cors')
 
 const app = express()
 const User = require('./models/User')
