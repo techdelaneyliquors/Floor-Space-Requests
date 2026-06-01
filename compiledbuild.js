@@ -2,6 +2,27 @@ if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config()
 }
 
+
+const Item = require('./models/Item')
+
+async function seedIfEmpty() {
+  const count = await Item.countDocuments()
+  if (count === 0) {
+    console.log("Seeding items...")
+
+    const items = ["FloorSpace"]
+    for (let i = 1; i <= 108; i++) {
+      items.push(`FloorSpace${i}`)
+    }
+
+    await Item.insertMany(items.map(i => ({ item_id: i })))
+    console.log("✅ Items seeded")
+  }
+}
+
+seedIfEmpty()
+
+
 const express = require('express')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
@@ -31,8 +52,9 @@ mongoose.connect(process.env.MONGO_URI)
 // ------------------------
 // EXPRESS SETUP
 // ------------------------
-
+const path = require('path')
 app.set('view engine', 'ejs')
+app.set('views', path.join(__dirname, 'views'))
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
 app.use(cookieParser())
@@ -652,11 +674,9 @@ app.get('/api/month', requireAuthApi, async (req, res) => {
 
 // Create request
 app.post('/api/request', requireAuthApi, async (req, res) => {
-  console.log("🚨 BODY:", req.body)
+  
   const { item_id, month, brand, products, map } = req.body
   const user = req.user.name
-
-  console.log("FIELDS:", { item_id, month, brand, products, map })
 
   if (!item_id || !month || !brand || !products || !map) {
     console.log("❌ Missing field!")
