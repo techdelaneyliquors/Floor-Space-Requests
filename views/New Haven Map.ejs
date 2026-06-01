@@ -326,7 +326,7 @@ window.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            request_id: req.id,
+            request_id: req._id,
             item_id: req.item_id,
             month: MONTH,
             map: MAP_ID
@@ -347,7 +347,7 @@ window.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            request_id: req.id
+            request_id: req._id
           })
         });
 
