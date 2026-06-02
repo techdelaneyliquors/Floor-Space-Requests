@@ -1,3 +1,4 @@
+
 <h1>Hi <%= name %></h1>
 
 <a href="/branfordstoremap">Open Branford Store Map</a>
@@ -43,21 +44,70 @@
 
 <br><br>
 
+<head>
+<meta charset="UTF-8" />
+  <title>Floor Space Reservations</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
+  <style>
+    body {
+      background-image: url('/Images/Enjoy Logo w Text.png');
+      background-size: 40%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    .btn {
+  border: none;
+  padding: 6px 12px;
+  margin-left: 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn-logout {
+  background: linear-gradient(135deg,  #d94141, #d60b0b);
+  color: white;
+}
 
+.btn-logout:hover {
+  background: linear-gradient(135deg, #bf2e2e, #bd0b0b);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.btn-admin {
+  background-color: #ffcc00;   /* yellow */
+  color: black;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-admin:hover {
+  background-color: #e6b800;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+  </style>
+</head>
 
 
 
 
 <form action="/logout" method="POST" style="display:inline;">
-  <button type="submit">Log Out</button>
+  <button type="submit" class="btn btn-logout">
+    <span class="icon">➜</span> LOGOUT
+  </button>
 </form>
 
 
 
 
 <% if (user.role === 'admin') { %>
-  <a href="/admin/users">
-    <button>Admin Panel</button>
-  </a>
+  
+<a href="/admin/users" class="btn btn-admin">
+  Admin Panel
+</a>
+
 <% } %>

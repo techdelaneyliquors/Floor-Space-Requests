@@ -38,7 +38,7 @@ const ItemRequest = require('./models/ItemRequest')
 // DB SETUP
 // ------------------------
 
-
+app.use(express.static(__dirname))
 
 
 mongoose.connect(process.env.MONGO_URI)
