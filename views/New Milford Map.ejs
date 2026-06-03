@@ -19,7 +19,6 @@
 
 
 
-
   <style>
        path[id^="FloorSpace"] {
       cursor: pointer;
@@ -167,6 +166,7 @@ body {
   cursor: pointer;
   font-weight: 500;
   transition: all 0.2s ease;
+  text-decoration: none;
 }
 
 /* approve button */
@@ -264,6 +264,13 @@ body {
   flex-direction: column;
   align-items: center;  /* keeps everything centered */
 }
+.user-line {
+  display: flex;
+  align-items: center;     /* ✅ vertical alignment */
+  justify-content: center; /* ✅ center it on page */
+  gap: 12px;               /* ✅ space between name + button */
+  margin-top: 10px;
+}
   </style>
 </head>
 
@@ -272,10 +279,12 @@ body {
   
 <div id="topControls">
   
-  
+  <div class="user-line">
   <label>User: <strong><%= user.name %></strong></label>
-
-
+  <a href="/my-requests?store=New Milford" class="btn btn-final">
+  📄 My Requests
+  </a>
+  </div>
   <br><br>
 
   <label for="monthPicker">Select Month:</label>

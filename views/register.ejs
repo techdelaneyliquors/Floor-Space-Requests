@@ -1,28 +1,170 @@
-<h1>Register</h1>
-<form action="/register" method="POST">
-    <div>
-        <label for="name"> Name</label>
-        <input type="text" id="name" name="name" required>
-    </div>
-    <div>
-        <label for="email"> Email</label>
-        <input type="email" id="email" name="email" required>
-    </div>
-    <div>
-        <label for="password"> Password</label>
-        <input type="password" id="password" name="password" required>
-    </div>
-    <button type="submit"> Register</button>
-</form>
-
+<!DOCTYPE html>
+<html>
 <head>
+  <title>Register</title>
+
   <style>
     body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+
       background-image: url('/Images/Enjoy Logo w Text.png');
       background-size: 40%;
       background-position: center;
       background-repeat: no-repeat;
+      background-color: #f6f6f6;
     }
+
+    .register-container {
+      background: rgba(255,255,255,0.95);
+      padding: 35px;
+      border-radius: 12px;
+      width: 360px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 20px;
+      white-space: nowrap;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 15px;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 4px rgba(0,123,255,0.4);
+    }
+
+    .btn-register {
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background: #8c17bd; /* matches your purple style */
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-register:hover {
+      background: #69118f;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      transform: translateY(-1px);
+    }
+
+    .login-link {
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    .login-link a {
+      text-decoration: none;
+      color: #2120ba;
+      font-weight: 500;
+    }
+
+    .login-link a:hover {
+      text-decoration: underline;
+    }
+
   </style>
 </head>
-<a href="/login">Login</a>
+
+<body>
+
+  <div class="register-container">
+
+    <h1>Register</h1>
+    <div class="subtitle">
+      Create your account for <strong>Delaney Liquors Floor Manager</strong>
+    </div>
+
+    
+  <% if (error) { %>
+    <p style="color:red; margin-bottom: 10px;"><%= error %></p>
+  <% } %>
+
+  <form action="/register" method="POST">
+
+  <div class="form-group">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required>
+  </div>
+
+  <div class="form-group">
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required>
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required>
+  </div>
+
+  <div class="form-group">
+    <label for="confirmPassword">Confirm Password</label>
+    <input type="password" id="confirmPassword" name="confirmPassword" required>
+  </div>
+
+  <button type="submit" class="btn-register">Register</button>
+
+  </form>
+
+
+    <div class="login-link">
+      <a href="/login">Already have an account? Login</a>
+    </div>
+
+  </div>
+
+
+<script>
+const form = document.querySelector("form");
+
+form.addEventListener("submit", function(e) {
+  const password = document.getElementById("password").value;
+  const confirm = document.getElementById("confirmPassword").value;
+
+  if (password !== confirm) {
+    e.preventDefault();
+    alert("Passwords must match");
+  }
+});
+</script>
+
+
+</body>
+</html>

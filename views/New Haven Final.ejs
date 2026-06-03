@@ -5,6 +5,9 @@
 
 <label for="monthPicker">Select Month:</label>
 <input type="month" id="monthPicker" value="<%= month %>">
+<button class="btn btn-print" onclick="printReservations()">
+  🖨 Print Reservations
+</button>
 
 <style>
   
@@ -13,15 +16,98 @@
   stroke-width: 5 !important;
   filter: drop-shadow(0 0 8px #00ccff);
 }
+.btn {
+  border: none;
+  padding: 6px 12px;
+  margin-left: 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+/* approve button */
+.btn-approve {
+  background-color: #0ad19b;
+  color: white;
+  border: 2px solid black;
+}
+
+.btn-approve:hover {
+  background-color: #09b889;
+  transform: translateY(-1px);
+}
+
+/* reject button */
+.btn-reject {
+  background-color: #dc3545;
+  color: white;
+  border: 2px solid black;
+}
+
+.btn-reject:hover {
+  background-color: #c82333;
+  transform: translateY(-1px);
+}
+
+.btn-logout {
+  background: linear-gradient(135deg,  #d94141, #d60b0b);
+  color: white;
+}
+
+.btn-logout:hover {
+  background: linear-gradient(135deg, #bf2e2e, #bd0b0b);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+
+.btn-home {
+  background-color: #2120ba; /* navy */
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-home:hover {
+  background-color: #1b1AA1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+
+.btn-final {
+  background-color: #8c17bd; /* purple/indigo */
+  color: white;
+}
+
+.btn-final:hover {
+  background-color: #69118f;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.btn-print {
+  background-color: #444;
+  color: white;
+  border: 2px solid black;
+}
+
+.btn-print:hover {
+  background-color: #2f2f2f;
+  tra
+}
 </style>
 
-<a href="/New-Havenstoremap">
-    <button>⬅ Back to Interactive Map</button>
+<a href="/New-Havenstoremap" class="btn btn-home">
+    ⬅ Back to Interactive Map
 </a>
 
 
+
 <form action="/logout" method="POST" style="display:inline;">
-  <button type="submit">Log Out</button>
+  <button type="submit" class="btn btn-logout">
+    <span class="icon">➜</span> LOGOUT
+  </button>
 </form>
 
 
@@ -49,7 +135,7 @@
 <div id="confirmedList"></div>
 
 
-
+<h3 id="currentMonthLabel"><%= month %></h3>
 
 
 <script>
@@ -147,14 +233,22 @@ function renderList() {
     return;
   }
 
+  
   container.innerHTML = reserved.map(req => `
-    <div style="border:1px solid #ccc; padding:10px; margin:10px 0; border-radius:8px;">
+    <div style="
+      border: 2px solid black;         /* ✅ black outline */
+      background-color: white;         /* ✅ white box */
+      padding: 10px;
+      margin: 10px auto;               /* ✅ center cards */
+      border-radius: 8px;
+    ">
       <strong>Spot:</strong> ${req.item_id}<br>
       <strong>User:</strong> ${req.user}<br>
       <strong>Brand:</strong> ${req.brand}<br>
       <strong>Products:</strong> ${req.products}
     </div>
   `).join("");
+
 }
 
 function showDetails(row) {
@@ -177,7 +271,116 @@ function clearDetails() {
   document.getElementById("detailProducts").textContent = "";
 }
 
+function printReservations() {
+  const reserved = currentRequests.filter(r => r.status === "reserved");
 
+  if (reserved.length === 0) {
+    alert("No confirmed reservations to print.");
+    return;
+  }
+
+  const month = monthLabel ? monthLabel.textContent : (monthInput ? monthInput.value : "");
+  const rows = reserved.map(req => `
+    <tr>
+      <td>${req.item_id || ""}</td>
+      <td>${req.user || ""}</td>
+      <td>${req.brand || ""}</td>
+      <td>${req.products || ""}</td>
+    </tr>
+  `).join("");
+
+  const printWindow = window.open("", "_blank", "width=1000,height=800");
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Confirmed Reservations</title>
+      <style>
+        @page {
+          size: auto;
+          margin: 0.4in;
+        }
+
+        body {
+          font-family: Arial, sans-serif;
+          color: black;
+          background: white;
+          margin: 0;
+          padding: 0;
+        }
+
+        h1 {
+          font-size: 18px;
+          margin: 0 0 6px 0;
+        }
+
+        .meta {
+          font-size: 12px;
+          margin-bottom: 10px;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 12px;
+        }
+
+        th, td {
+          border: 1px solid black;
+          padding: 4px 6px;
+          text-align: left;
+          vertical-align: top;
+          word-wrap: break-word;
+        }
+
+        th {
+          background: white;
+          font-weight: bold;
+        }
+
+        .col-spot { width: 16%; }
+        .col-user { width: 20%; }
+        .col-brand { width: 20%; }
+        .col-products { width: 44%; }
+
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Confirmed Reservations</h1>
+      <div class="meta">Map: ${MAP_ID} ${month ? `| Month: ${month}` : ""}</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="col-spot">Spot</th>
+            <th class="col-user">User</th>
+            <th class="col-brand">Brand</th>
+            <th class="col-products">Products</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.focus();
+
+  setTimeout(() => {
+    printWindow.print();
+  }, 300);
+}
 </script>
 
 </body>

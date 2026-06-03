@@ -1,0 +1,208 @@
+
+<h1>My Requests</h1>
+
+<div class="top-bar">
+<a href="/" class="btn btn-home">
+  ⬅ Back to Store Index
+</a>
+
+<a id="backToMapLink" href="/branfordstoremap" class="btn btn-map">
+    ⬅ Back to Interactive Map
+</a>
+</div>
+<hr>
+
+
+<label for="storePicker">Store:</label>
+<select id="storePicker">
+  <option value="">All Stores</option>
+  <option value="branford">Branford</option>
+  <option value="Hamden">Hamden</option>
+  <option value="stratford">Stratford</option>
+  <option value="New Haven">New Haven</option>
+  <option value="New Milford">New Milford</option>
+</select>
+
+<head>
+  <style>
+    body {
+      background-image: url('/Images/Enjoy Logo w Text.png');
+      background-size: 40%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    
+    /* request card base style */
+    .request-card {
+      background-color: white;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+
+    /* status colors */
+    .requested {
+      background-color: #fff8cc;
+    }
+
+    .reserved {
+      background-color: #89C9B2;
+    }
+
+    .rejected {
+      background-color: #CC7878;
+    }
+
+.top-bar {
+  display: flex;
+  justify-content: space-between; /* ✅ pushes items apart */
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+
+
+    .btn {
+  border: none;
+  padding: 6px 12px;
+  margin-left: 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+    .btn-home {
+  background-color: #2120ba; /* navy */
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-home:hover {
+  background-color: #1b1AA1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+.btn-map {
+  background-color: #ce1111;
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-map:hover {
+  background-color: #a00c0c;
+}
+  </style>
+</head>
+
+
+<label for="monthPicker">Filter by Month:</label>
+<input type="month" id="monthPicker">
+
+
+<% if (requests.length === 0) { %>
+  <p>No requests yet.</p>
+<% } %>
+
+<p id="noResults" style="display:none;">No requests for this month.</p>
+
+<% requests.forEach(req => { %>
+  
+<div class="request-card <%= req.status %>" 
+  data-month="<%= req.month %>"
+  data-store="<%= req.map_id %>"
+>
+
+    
+
+    <strong>Spot:</strong> <%= req.item_id %><br>
+    <strong>Brand:</strong> <%= req.brand %><br>
+    <strong>Products:</strong> <%= req.products %><br>
+    <strong>Status:</strong> <%= req.status %><br>
+    <strong>Month:</strong> <%= req.month %><br>
+    <strong>Requested:</strong> <%= new Date(req.created_at).toLocaleString() %>
+
+  </div>
+<% }) %>
+
+
+
+<script>
+
+const monthPicker = document.getElementById("monthPicker");
+const storePicker = document.getElementById("storePicker");
+storePicker.value = "<%= selectedStore %>";
+const cards = document.querySelectorAll(".request-card");
+const noResults = document.getElementById("noResults");
+
+function filterCards() {
+  let visibleCount = 0;
+
+  const selectedMonth = monthPicker.value;
+  const selectedStore = storePicker.value;
+
+  cards.forEach(card => {
+    const cardMonth = card.getAttribute("data-month");
+    const cardStore = card.getAttribute("data-store");
+
+    const monthMatch = !selectedMonth || cardMonth === selectedMonth;
+    const storeMatch = !selectedStore || cardStore === selectedStore;
+    
+    console.log("Picker:", selectedMonth);
+    console.log("Card:", cardMonth);
+
+
+    if (monthMatch && storeMatch) {
+      card.style.display = "block";
+      visibleCount++;
+    } else {
+      card.style.display = "none";
+    }
+  });
+
+  noResults.style.display = visibleCount === 0 ? "block" : "none";
+}
+
+// trigger on both controls
+monthPicker.addEventListener("change", filterCards);
+
+storePicker.addEventListener("change", () => {
+  updateMapLink();   // ✅ update button
+  filterCards();     // your existing function
+});
+
+// default month
+const today = new Date();
+monthPicker.value = today.toISOString().slice(0, 7);
+
+// initial render
+filterCards();
+
+
+const storeRoutes = {
+  "branford": '/branfordstoremap',
+  "Hamden": '/Hamdenstoremap',
+  "stratford": '/stratfordstoremap',
+  "New Haven" : '/New-Havenstoremap',
+  "New Milford" : '/New-Milfordstoremap',
+};
+
+const backToMapLink = document.getElementById("backToMapLink");
+
+function updateMapLink() {
+  const selectedStore = storePicker.value;
+  backToMapLink.href = storeRoutes[selectedStore] || "/";
+  
+
+  
+  if (!selectedStore) {
+    backToMapLink.href = "/branfordstoremap";
+    return;
+  }
+}
+updateMapLink()
+
+</script>
