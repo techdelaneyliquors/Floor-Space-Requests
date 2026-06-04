@@ -13,7 +13,22 @@
 
 
 <style>
-  
+  #svgContainer {
+  display: block;
+  margin: 20px auto;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ✅ ensures SVG behaves like a block */
+
+#svgContainer svg {
+  display: block;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 2800px;
+  height: auto;
+}
 .selected-box {
   stroke: #00ccff !important;
   stroke-width: 5 !important;

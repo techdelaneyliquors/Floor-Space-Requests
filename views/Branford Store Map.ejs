@@ -45,16 +45,21 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-/* ✅ keeps SVG centered and separate */
 #svgContainer {
   display: block;
   margin: 20px auto;
+  justify-content: center;
+  align-items: center;
 }
 
 /* ✅ ensures SVG behaves like a block */
+
 #svgContainer svg {
   display: block;
   margin: 0 auto;
+  width: 100%;
+  max-width: 2800px;
+  height: auto;
 }
 
 /* ✅ legend sits UNDER SVG, not beside it */
@@ -316,6 +321,7 @@ body {
     📄 My Requests
   </a>
   </div>
+
 
   
 <div class="month-group">
