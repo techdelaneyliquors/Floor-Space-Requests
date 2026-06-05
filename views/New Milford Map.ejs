@@ -16,7 +16,11 @@
   </button>
 <% } %>
 
-
+<% if (user.role === 'admin') { %>
+    <a href="/class" class="btn btn-final">
+     Create Class Event
+    </a>
+<% } %>
 
 
   <style>
