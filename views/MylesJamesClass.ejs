@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Event</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+
+      background-image: url('/Images/Enjoy Logo w Text.png');
+      background-size: 40%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #f6f6f6;
+    }
+
+    .form-container {
+      background: rgba(255,255,255,0.95);
+      padding: 35px;
+      border-radius: 12px;
+      width: 380px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 4px rgba(0,123,255,0.4);
+    }
+
+    .btn-submit {
+      margin-top: 12px;
+      width: 100%;
+      padding: 11px;
+      background: #2120ba;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-submit:hover {
+      background: #1b1AA1;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      transform: translateY(-1px);
+    }
+
+    .status {
+      margin-top: 15px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .success {
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
+
+    .back-link {
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    .back-link a {
+      text-decoration: none;
+      color: #2120ba;
+      font-weight: 500;
+    }
+
+    .back-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="form-container">
+
+    <h2>Create Event</h2>
+    <div class="subtitle">
+      Schedule a tasting for New Milford
+    </div>
+
+    <form id="eventForm">
+
+      <div class="form-group">
+        <label>Event Title</label>
+        <input type="text" name="eventName" required />
+      </div>
+
+      <div class="form-group">
+        <label>Host</label>
+        <input type="text" name="eventHost" />
+      </div>
+
+      <div class="form-group">
+        <label>Featured Products</label>
+        <input type="text" name="featuredBrands" />
+      </div>
+
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" name="date" required />
+      </div>
+
+      <div class="form-group">
+        <label>Start Time</label>
+        <input type="time" name="startTime" required />
+      </div>
+
+      <div class="form-group">
+        <label>Duration</label>
+        <input type="text" name="duration" placeholder="e.g. 1.5 hours" />
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea name="eventDescription"></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit">Create Event</button>
+
+    </form>
+
+    <p id="status" class="status"></p>
+
+    <div class="back-link">
+      ← Back to New Milford Map
+    </div>
+
+  </div>
+
+<script>
+document.getElementById("eventForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const form = e.target;
+
+  const data = {
+    eventName: form.eventName.value,
+    eventDescription: form.eventDescription.value,
+    eventHost: form.eventHost.value,
+    featuredBrands: form.featuredBrands.value,
+    date: form.date.value,
+    startTime: form.startTime.value,
+    duration: form.duration.value
+  };
+
+  const statusEl = document.getElementById("status");
+  statusEl.innerText = "Creating event...";
+  statusEl.className = "status";
+
+  try {
+    const res = await fetch("/class", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (result.success) {
+      statusEl.innerText = "✅ Event created successfully";
+      statusEl.className = "status success";
+      form.reset();
+    } else {
+      statusEl.innerText = "❌ Failed to create event";
+      statusEl.className = "status error";
+    }
+
+  } catch (err) {
+    console.error(err);
+    statusEl.innerText = "❌ Error sending request";
+    statusEl.className = "status error";
+  }
+});
+</script>
+
+</body>
+</html>

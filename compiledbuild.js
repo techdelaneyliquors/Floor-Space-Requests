@@ -1067,6 +1067,31 @@ app.post('/reset-password/:token', async (req, res) => {
 
 
 
+app.get('/class', requireAuth, requireAdmin, (req, res) => {
+  res.render('MylesJamesClass.ejs', {
+    user: req.user
+  });
+});
+
+
+app.post('/class', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const response = await fetch("https://script.google.com/macros/s/AKfycbxVNz1jmc90nOWQ3bw6Ovr35U7dWheHZTGRsRTDtkA54LTdzp-Ba6-BUUEOZZrrQPjW/exec", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ success: false });
+  }
+});
+
 
 startNextMonthRequestsEmailJob();
 app.listen(PORT, () => {
