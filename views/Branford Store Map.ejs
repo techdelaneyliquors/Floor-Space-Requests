@@ -15,6 +15,10 @@
   <button onclick="goToFinal()" class="btn btn-final">
     📊 Final View
   </button>
+<button onclick="goToSchedule()" class="btn btn-final">
+    📊 Schedule
+  </button>
+
 
 <% } %>
 
@@ -407,7 +411,9 @@ function goToFinal() {
 
   window.location.href = '/branfordstoremap/final';
 }
-
+function goToSchedule() {
+  window.location.href = '/Branfordstoremap/Schedule';
+}
 
 window.addEventListener("DOMContentLoaded", () => {
   const CURRENT_USER = "<%= user.name %>";

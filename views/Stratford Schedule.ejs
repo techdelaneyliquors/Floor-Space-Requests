@@ -1,0 +1,3645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stratford Weekly Schedule</title>
+  <style>
+    :root {
+      --navy:#17365d; --blue:#2f5597; --light:#eaf1fb; --line:#cbd5e1;
+      --text:#172033; --muted:#64748b; --green:#15803d; --amber:#b45309;
+      --red:#b91c1c; --white:#fff; --shadow:0 12px 32px rgba(15,23,42,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; background:#f5f7fb; color:var(--text); }
+    .page-shell { max-width:1500px; margin:0 auto; padding:24px; }
+    .topbar { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:18px; }
+    .topbar h1 { margin:0; font-size:28px; color:var(--navy); }
+    .topbar p { margin:5px 0 0; color:var(--muted); }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    button { border:0; border-radius:8px; padding:10px 14px; font-weight:700; cursor:pointer; }
+    .primary { background:var(--navy); color:#fff; }
+    .secondary { background:#fff; color:var(--navy); border:1px solid var(--line); }
+    .module-tabs { display:flex; gap:8px; overflow:auto; padding-bottom:10px; position:sticky; top:0; z-index:20; background:#f5f7fb; }
+    .module-tabs button { white-space:nowrap; background:#dbe7f7; color:var(--navy); }
+    .module-tabs button.active { background:var(--navy); color:#fff; }
+    .module { display:none; }
+    .module.active { display:block; }
+    .module-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:var(--shadow); margin:14px 0 24px; overflow:hidden; }
+    .module-heading { padding:18px 22px; background:linear-gradient(135deg,var(--navy),var(--blue)); color:#fff; }
+    .module-heading h2 { margin:0; font-size:21px; }
+    .module-heading p { margin:5px 0 0; opacity:.85; }
+    .section { padding:22px; border-top:1px solid #e7edf5; }
+    .section:first-of-type { border-top:0; }
+    .section-title { display:flex; justify-content:space-between; align-items:end; gap:14px; margin-bottom:12px; }
+    .section-title h3 { margin:0; color:var(--navy); font-size:17px; }
+    .section-title small { color:var(--muted); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
+    table { width:100%; border-collapse:collapse; min-width:980px; background:#fff; }
+    th, td { border-bottom:1px solid var(--line); border-right:1px solid #e8edf4; padding:9px; text-align:center; vertical-align:middle; }
+    th { background:#e9f0fa; color:var(--navy); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+    td:first-child, th:first-child { text-align:left; font-weight:700; position:sticky; left:0; background:inherit; z-index:2; }
+    tr:last-child td { border-bottom:0; }
+    select, input { width:100%; min-width:105px; border:1px solid #cbd5e1; border-radius:6px; padding:7px 8px; background:#fff; color:var(--text); }
+    input[type="checkbox"] { min-width:auto; width:18px; height:18px; }
+    .shift-label { display:block; font-size:12px; font-weight:700; color:#334155; margin-bottom:5px; }
+    .stack { display:grid; gap:7px; }
+    .availability-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .people-box { border:1px solid var(--line); border-radius:10px; padding:14px; background:#fafcff; }
+    .people-box h4 { margin:0 0 10px; color:var(--navy); }
+    .person-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0; border-bottom:1px dashed #dbe3ee; }
+    .person-row:last-child { border:0; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:800; }
+    .manager { background:#dbeafe; color:#1d4ed8; }
+    .associate { background:#dcfce7; color:#15803d; }
+    .metric { font-weight:800; }
+    .negative { color:var(--red); }
+    .positive { color:var(--green); }
+    .attendance-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .attendance-grid input { min-width:55px; }
+    .print-sheet { padding:16px; background:#fff; }
+    .print-sheet h2 { text-align:center; margin:0 0 4px; }
+    .print-sheet .period { text-align:center; color:var(--muted); margin-bottom:16px; }
+    .no-print-note { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+    .actual-cell { white-space:pre-line; line-height:1.45; }
+    @media(max-width:850px){ .availability-grid{grid-template-columns:1fr;} .topbar{align-items:flex-start;flex-direction:column;} }
+    @media print {
+
+       * {-webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        /* Previous Week print table */
+#previousWeekComparisonTable {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+#previousWeekComparisonTable th,
+#previousWeekComparisonTable td {
+  padding: 3px 2px !important;
+  font-size: 10px !important;
+  word-wrap: break-word;
+}
+
+#previousWeekComparisonTable .comparison-cell {
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+}
+
+#previousWeekComparisonTable .planned-shift,
+#previousWeekComparisonTable .actual-shift {
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+
+.table-wrap {
+  overflow: visible !important;
+}
+
+  body {
+    background:#fff;
+  }
+
+  .page-shell {
+    max-width:none;
+    padding:0;
+  }
+
+  .topbar,
+  .module-tabs,
+  .no-print,
+  .no-print-note {
+    display:none !important;
+  }
+
+  .module {
+    display:none !important;
+  }
+
+  /* Default print = schedule */
+  #module-3.print-page {
+    display:block !important;
+  }
+
+  /* Previous week review print */
+  #module-5.print-previous {
+    display:block !important;
+  }
+
+  .module-heading {
+    display:none;
+  }
+
+  .module-card {
+    box-shadow:none;
+    border:0;
+    margin:0;
+  }
+
+  .section {
+    padding:0;
+    border:0;
+  }
+
+  table {
+    min-width:0;
+    font-size:10px;
+  }
+
+  th,
+  td {
+    padding:6px 4px;
+  }
+
+  @page {
+  size: landscape;
+  margin: 0.2in;
+}
+}
+
+    .person-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  }
+
+.person-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  }
+
+.remove-person {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  }
+
+.remove-person:hover {
+  background: #fecaca;
+  }
+
+  .total-row{
+    font-weight:700;
+    background:#d9e1f2;
+    }
+
+    .total-row td{
+    border-top:2px solid #4a6fa5;
+    }
+
+    .shift-editor {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-bottom:6px;
+}
+
+.shift-editor input[type="time"] {
+  min-width:0;
+  padding:5px;
+  font-size:11px;
+}
+
+.shift-edit-actions {
+  display:flex;
+  gap:5px;
+  justify-content:center;
+  margin-bottom:7px;
+}
+
+.shift-edit-button {
+  padding:5px 8px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:11px;
+}
+
+.shift-clear-button {
+  padding:5px 8px;
+  border:1px solid #fecaca;
+  background:#fef2f2;
+  color:#b91c1c;
+  font-size:11px;
+}
+
+.add-shift-button {
+  padding:6px 9px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:11px;
+}
+
+.temporary-shift {
+  color:#dc2626 !important;
+  font-weight:800;
+}
+
+.temporary-hours {
+  color:#dc2626;
+  font-weight:800;
+}
+
+.temporary-note {
+  display:block;
+  color:#dc2626;
+  font-size:10px;
+  font-weight:700;
+  margin-top:3px;
+}
+
+.unassigned-shift {
+  background: #fef9c3 !important;
+  border: 2px solid #eab308 !important;
+  color: #713f12;
+  font-weight: 700;
+}
+
+.print-comments {
+  margin-top:20px;
+  padding:12px;
+  border:2px solid #fca5a5;
+  background:#fef2f2;
+}
+
+.print-comments h3 {
+  margin:0 0 8px;
+  color:#991b1b;
+}
+
+.print-comments ul {
+  margin:0;
+  padding-left:18px;
+}
+
+.print-comments li {
+  color:#991b1b;
+  margin-bottom:4px;
+}
+
+.previous-week-comments {
+  margin-top:20px;
+  padding:15px;
+  border:2px solid #94a3b8;
+  background:#f8fafc;
+}
+
+.previous-week-comments h3 {
+  margin:0 0 10px;
+  color:#17365d;
+}
+
+.previous-week-comments pre {
+  white-space:pre-wrap;
+  font-family:inherit;
+  margin:0;
+}
+
+.actual-compare{
+  font-style:italic;
+  color:#64748b;
+  margin-top:3px;
+  font-size:11px;
+}
+
+.actual-on-time{
+  font-style:italic;
+  color:#64748b;
+}
+
+.actual-different{
+  font-style:italic;
+  color:#b45309;
+  font-weight:600;
+}
+
+.actual-missed{
+  font-style:italic;
+  color:#b91c1c;
+  font-weight:700;
+}
+
+#actualShiftTable th:first-child,
+#actualShiftTable td:first-child,
+#scheduledShiftTable th:first-child,
+#scheduledShiftTable td:first-child,
+#actualHoursTable th:first-child,
+#actualHoursTable td:first-child {
+  width:120px;
+  min-width:120px;
+  text-align:center;
+}
+
+#actualShiftTable th:nth-child(2),
+#actualShiftTable td:nth-child(2),
+#scheduledShiftTable th:nth-child(2),
+#scheduledShiftTable td:nth-child(2),
+#actualHoursTable th:nth-child(2),
+#actualHoursTable td:nth-child(2) {
+  width:130px;
+  min-width:130px;
+  text-align:left;
+  font-weight:700;
+}
+
+.employee-number-control {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:#475569;
+  font-weight:700;
+}
+
+.employee-number-input {
+  width:90px;
+  min-width:90px;
+  padding:6px 8px;
+}
+
+#previousWeekComparisonTable .comparison-cell {
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+#previousWeekComparisonTable .planned-shift {
+  display: block;
+  font-size: 14px;
+}
+
+#previousWeekComparisonTable .actual-shift {
+  display: block;
+  font-size: 14px;
+  font-style: italic;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+#previousWeekComparisonTable th:first-child,
+#previousWeekComparisonTable td:first-child {
+  width: 90px;
+  min-width: 90px;
+}
+.attendance-issue {
+  background: #fee2e2 !important;
+}
+
+.attendance-severe {
+  background: #fecaca !important;
+}
+
+.template-toolbar {
+  display:grid;
+  grid-template-columns:
+    auto minmax(220px, 1fr)
+    auto auto auto auto;
+  gap:10px;
+  align-items:center;
+  margin-bottom:18px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#f8fafc;
+}
+
+.template-toolbar label {
+  color:var(--navy);
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.template-toolbar select {
+  min-width:220px;
+}
+
+@media(max-width:950px) {
+  .template-toolbar {
+    grid-template-columns:1fr 1fr;
+  }
+
+  .template-toolbar label,
+  .template-toolbar select {
+    grid-column:1 / -1;
+  }
+}
+  </style>
+</head>
+<body>
+<% const incoming = (typeof scheduleData !== 'undefined' && scheduleData) ? scheduleData : {}; %>
+<div class="page-shell">
+  <header class="topbar">
+    <div>
+      <h1>Stratford Weekly Scheduling Center</h1>
+      <p>Build next week, compare hours, print the schedule, and review prior-week attendance.</p>
+    </div>
+    <div class="actions no-print">
+      <button class="secondary" type="button" id="recalculateBtn">Recalculate hours</button>
+      <button
+  class="secondary"
+  type="button"
+  onclick="printWeeklySchedule()"
+>
+  Print weekly schedule
+</button>
+      <button class="primary" type="button" id="saveBtn">Save schedule</button>
+    </div>
+  </header>
+
+  <nav class="module-tabs no-print" aria-label="Schedule modules">
+    <button class="active" data-module="module-1">1. Build Schedule</button>
+    <button data-module="module-2">2. Hours Matrix</button>
+    <button data-module="module-3">3. Printable Schedule</button>
+    <button data-module="module-4">4. Attendance</button>
+    <button data-module="module-5">5. Previous Week</button>
+  </nav>
+
+  <!-- MODULE 1, SECTION 1 -->
+  <section class="module active" id="module-1">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 1: Build Next Week's Schedule</h2><p>Three sections for manager coverage, associate shifts, and availability.</p></div>
+      <div class="section">
+        <div class="template-toolbar no-print">
+
+  <label for="templateSelector">
+    Schedule Template
+  </label>
+
+  <select id="templateSelector">
+    <option value="">
+      Select a template
+    </option>
+  </select>
+
+
+  <button
+    type="button"
+    class="secondary"
+    id="loadTemplateBtn"
+  >
+    Load Template
+  </button>
+
+  <button
+    type="button"
+    class="secondary"
+    id="saveTemplateBtn"
+  >
+    Save As Template
+  </button>
+
+  <button
+    type="button"
+    class="secondary"
+    id="newTemplateBtn"
+  >
+    New Template
+  </button>
+
+  <button
+    type="button"
+    class="remove-person"
+    id="deleteTemplateBtn"
+  >
+    Delete Template
+  </button>
+
+</div>
+        <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Coverage windows are based on the manager-hours area in Stratford.pdf.</small></div></div>
+        <div class="table-wrap"><table id="managerTable"><thead><tr><th>Manager coverage</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- MODULE 1, SECTION 2 -->
+      <div class="section">
+        <div class="section-title"><div><h3>Section 2 of 8: Associate Shift Assignment</h3><small>Assign each recurring coverage shift to an available associate.</small></div></div>
+        <div class="table-wrap"><table id="associateTable"><thead><tr><th>Associate shift</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- MODULE 1, SECTION 3 -->
+      <div class="section">
+        <div class="section-title"><div><h3>Section 3 of 8: Available Employees</h3><small>Turn managers and associates on or off for next week's assignment lists.</small></div></div>
+        <div class="availability-grid">
+          <div class="people-box"><h4>Managers</h4><div id="managerAvailability"></div><button class="secondary" type="button" onclick="addEmployee('manager')">Add manager</button></div>
+          <div class="people-box"><h4>Associates</h4><div id="associateAvailability"></div><button class="secondary" type="button" onclick="addEmployee('associate')">Add associate</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2, SECTION 4 -->
+  <section class="module" id="module-2">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 2: Scheduled Hours by Employee</h2><p>Daily assigned hours are calculated from the selected shifts.</p></div>
+      <div class="section">
+        <div class="section-title"><div><h3>Section 4 of 8: Employee Hours Matrix</h3><small>Employees across the top, weekdays down the left, totals on the right and bottom.</small></div></div>
+        <div class="table-wrap"><table id="hoursMatrix"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 3, SECTION 5 -->
+  <section class="module" id="module-3">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 3: Printable Weekly Schedule</h2><p>A clean employee-by-day schedule modeled on the bottom table in the PDF.</p></div>
+      <div class="section print-sheet">
+        <div class="no-print-note">Use the Print button above. Printing is set to landscape and only this schedule is included.</div>
+        <h2>Stratford Weekly Schedule</h2>
+
+<div class="period" id="printPeriod">
+  Next week
+</div>
+
+<div
+  id="printTemplateName"
+  style="
+    text-align:center;
+    color:#64748b;
+    font-size:14px;
+    margin-bottom:16px;
+  "
+></div>
+        <div class="table-wrap"><table id="printSchedule"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 4, SECTION 6 -->
+  <section class="module" id="module-4">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 4: Attendance Review</h2><p>Upload or enter absence, tardy, and early-leave counts.</p></div>
+      <div class="section">
+        <div class="section-title"><div><h3>Section 6 of 8: Previous Week, Year, and All-Time Attendance</h3><small>Rows are editable so separately uploaded attendance data can populate these values.</small></div><input class="no-print" type="file" id="attendanceUpload" accept=".json,.csv"></div>
+        <div class="table-wrap"><table id="attendanceTable"><thead><tr><th rowspan="2">Employee</th><th colspan="3">Previous week</th><th colspan="3">Year</th><th colspan="3">All time</th></tr><tr><th>Absences</th><th>Tardies</th><th>Left early</th><th>Absences</th><th>Tardies</th><th>Left early</th><th>Absences</th><th>Tardies</th><th>Left early</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 5, SECTION 7 -->
+  <section class="module" id="module-5">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 5: Previous Week Actuals</h2><p>Actual shift ranges and daily worked-hour totals.</p></div>
+
+ 
+<div class="section">
+
+  <div class="section-title">
+    <div>
+      <h3>
+        Section 7 of 8: Previous Week Schedule Comparison
+      </h3>
+
+      <small>
+        Planned shifts are shown first. Actual shifts are
+        shown in italic text underneath.
+      </small>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="previousWeekComparisonTable"></table>
+  </div>
+
+</div>
+
+<!-- MODULE 5, SECTION 9 -->
+<div class="section">
+
+  <div class="section-title">
+
+    <div>
+
+      <h3>
+        Section 8 of 8: Previous Week Comments
+      </h3>
+
+      <small>
+        Notes regarding attendance,
+        staffing,
+        call-outs,
+        overtime,
+        inventory counts,
+        special events,
+        customer issues,
+        and other observations.
+      </small>
+
+    </div>
+
+    <button
+      class="secondary no-print"
+      type="button"
+      onclick="printPreviousWeek()"
+    >
+      Print Previous Week Review
+    </button>
+
+  </div>
+
+  <textarea
+    id="previousWeekNotes"
+    rows="8"
+    placeholder="Enter manager notes for the previous week..."
+    style="
+      width:100%;
+      padding:12px;
+      border:1px solid #cbd5e1;
+      border-radius:8px;
+      resize:vertical;
+    "
+  ></textarea>
+
+</div>
+    </div>
+  </section>
+
+
+</div>
+
+<script>
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const DAY_KEYS = DAYS.map(d => d.toLowerCase());
+  const temporaryShifts = {};
+  const temporaryShiftNotes = {};
+  let buildingNewTemplate = false;
+
+  const state = {
+  store: 'Stratford',
+ templates: [],
+ currentTemplateName: '',
+  managers:
+    <%- JSON.stringify(incoming.managers || []) %>,
+
+  associates:
+    <%- JSON.stringify(incoming.associates || []) %>,
+
+    buildEmployeeIdentifiers:
+  <%- JSON.stringify(
+    incoming.buildEmployeeIdentifiers || {}
+  ) %>,
+
+  availability:
+    <%- JSON.stringify(incoming.availability || {}) %>,
+
+  assignments:
+    <%- JSON.stringify(incoming.assignments || {}) %>,
+
+  attendance:
+  <%- JSON.stringify(incoming.attendance || {}) %>,
+
+employeeIdentifiers:
+  <%- JSON.stringify(
+    incoming.employeeIdentifiers || {}
+  ) %>,
+
+previousScheduledShifts:
+  <%- JSON.stringify(
+    incoming.previousScheduledShifts || {}
+  ) %>,
+
+
+
+  previousActualShifts:
+    <%- JSON.stringify(
+      incoming.previousActualShifts || {}
+    ) %>,
+
+  previousActualHours:
+    <%- JSON.stringify(
+      incoming.previousActualHours || {}
+    ) %>,
+
+  previousScheduledHours:
+    <%- JSON.stringify(
+      incoming.previousScheduledHours || {}
+    ) %>,
+    templates: []
+  };
+
+  // Coverage transcribed from Stratford.pdf. Blank means no preset coverage window.
+  const managerCoverage = {
+  manager1: {
+    label: 'Manager 1',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  manager2: {
+    label: 'Manager 2',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  manager3: {
+    label: 'Manager 3',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  }
+};
+
+const associateCoverage = {
+  associate1: {
+    label: 'Associate 1',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate2: {
+    label: 'Associate 2',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate3: {
+    label: 'Associate 3',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+  associate4: {
+    label: 'Associate 4',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  }
+};
+
+  function employeeKey(type, name){
+  return `${type}:${name}`;
+}
+
+  function initializeAvailability() {
+
+  const allEmployees = [
+    ...state.managers,
+    ...state.associates
+  ];
+
+  for (const employee of allEmployees) {
+
+    if (
+      typeof state.availability[employee] !== 'boolean'
+    ) {
+
+      state.availability[employee] = true;
+
+    }
+
+  }
+
+  }
+
+  initializeAvailability();
+
+  function available(type) {
+
+  let list;
+
+  if (type === 'manager') {
+
+    // Only managers may cover manager shifts
+    list = state.managers;
+
+  } else {
+
+    // Associates OR managers may cover associate shifts
+    list = [
+      ...state.associates,
+      ...state.managers
+    ];
+
+  }
+
+  return list.filter(
+    name => state.availability[name] === true
+  );
+}
+
+  function employeeOptions(type, selected = '') {
+
+    const options = available(type)
+    .map(name => {
+
+      const isSelected =
+        name === selected ? ' selected' : '';
+
+      return `
+        <option
+          value="${escapeHtml(name)}"
+          ${isSelected}
+        >
+          ${escapeHtml(name)}
+        </option>
+      `;
+
+    })
+    .join('');
+
+  return `
+    <option value="">Unassigned</option>
+    ${options}
+  `;
+
+  }
+
+  function scheduleCellKey(type, shiftId, day) {
+  return `${type}:${shiftId}:${day}`;
+}
+
+function legacyAssignmentKey(shiftId, day) {
+  return `${shiftId}:${day}`;
+}
+
+function getAssignment(type, shiftId, day) {
+  const newKey = scheduleCellKey(type, shiftId, day);
+
+  if (Object.prototype.hasOwnProperty.call(
+    state.assignments,
+    newKey
+  )) {
+    return state.assignments[newKey] || '';
+  }
+
+  return state.assignments[
+    legacyAssignmentKey(shiftId, day)
+  ] || '';
+}
+
+function getEffectiveShift(
+  type,
+  shiftId,
+  day,
+  presetShift
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      temporaryShifts,
+      key
+    )
+  ) {
+    return temporaryShifts[key];
+  }
+
+  return presetShift || '';
+}
+
+function isTemporaryShift(
+  type,
+  shiftId,
+  day
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  return Object.prototype.hasOwnProperty.call(
+    temporaryShifts,
+    key
+  );
+}
+
+function timeTextToInputValue(timeText) {
+  const parsed = parseTime(timeText);
+
+  if (parsed == null) {
+    return '';
+  }
+
+  const hours = Math.floor(parsed) % 24;
+  const minutes = Math.round(
+    (parsed - Math.floor(parsed)) * 60
+  );
+
+  return (
+    String(hours).padStart(2, '0') +
+    ':' +
+    String(minutes).padStart(2, '0')
+  );
+}
+
+function shiftToInputValues(shiftText) {
+  if (
+    !shiftText ||
+    !shiftText.includes(' to ')
+  ) {
+    return {
+      start: '',
+      end: ''
+    };
+  }
+
+  const parts = shiftText.split(' to ');
+
+  return {
+    start: timeTextToInputValue(parts[0]),
+    end: timeTextToInputValue(parts[1])
+  };
+}
+
+function inputTimeToDisplay(inputValue) {
+  if (!inputValue) {
+    return '';
+  }
+
+  const parts = inputValue.split(':');
+
+  let hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+
+  const suffix = hours >= 12
+    ? 'PM'
+    : 'AM';
+
+  hours = hours % 12;
+
+  if (hours === 0) {
+    hours = 12;
+  }
+
+  return (
+    hours +
+    ':' +
+    String(minutes).padStart(2, '0') +
+    ' ' +
+    suffix
+  );
+}
+
+function saveTemporaryShift(
+  type,
+  shiftId,
+  day
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  const startInput = document.querySelector(
+    `[data-shift-start="${key}"]`
+  );
+
+  const endInput = document.querySelector(
+    `[data-shift-end="${key}"]`
+  );
+
+  if (!startInput || !endInput) {
+    return;
+  }
+
+  if (!startInput.value || !endInput.value) {
+    alert(
+      'Enter both a start time and an end time.'
+    );
+    return;
+  }
+
+  const startText = inputTimeToDisplay(
+    startInput.value
+  );
+
+  const endText = inputTimeToDisplay(
+    endInput.value
+  );
+
+  const newShift =
+    `${startText} to ${endText}`;
+
+  let reason = '';
+
+  if (!buildingNewTemplate) {
+    const existingNote =
+      temporaryShiftNotes[key] || '';
+
+    const enteredReason = window.prompt(
+      'Reason for this schedule change:',
+      existingNote
+    );
+
+    if (enteredReason === null) {
+      renderAllTables();
+      return;
+    }
+
+    reason = enteredReason.trim();
+  }
+
+  /*
+   * Only save the shift after the user has
+   * completed or accepted the reason prompt.
+   */
+  temporaryShifts[key] = newShift;
+  temporaryShiftNotes[key] = reason;
+
+  renderAllTables();
+}
+
+function clearTemporaryShift(
+  type,
+  shiftId,
+  day,
+  hasPreset
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  delete temporaryShifts[key];
+  delete temporaryShiftNotes[key];
+
+  if (!hasPreset) {
+    state.assignments[key] = '';
+  }
+
+  renderAllTables();
+}
+
+  function renderCoverage(
+  tableId,
+  coverage,
+  type
+) {
+  const tbody = document.querySelector(
+    `#${tableId} tbody`
+  );
+
+  tbody.innerHTML = Object.entries(coverage)
+    .map(([shiftId, row]) => {
+      const cells = DAY_KEYS.map(day => {
+        const presetShift = row[day] || '';
+
+        const shift = getEffectiveShift(
+          type,
+          shiftId,
+          day,
+          presetShift
+        );
+
+        const temporary = isTemporaryShift(
+          type,
+          shiftId,
+          day
+        );
+
+        const assignmentKey = scheduleCellKey(
+          type,
+          shiftId,
+          day
+        );
+
+        if (!shift) {
+          return `
+            <td>
+              <span
+                style="display:block;color:#94a3b8;margin-bottom:7px"
+              >
+                No preset shift
+              </span>
+
+              <button
+                type="button"
+                class="add-shift-button"
+                data-add-shift-type="${escapeHtml(type)}"
+                data-add-shift-id="${escapeHtml(shiftId)}"
+                data-add-shift-day="${escapeHtml(day)}"
+              >
+                Add shift
+              </button>
+            </td>
+          `;
+        }
+
+        const inputValues =
+          shiftToInputValues(shift);
+
+        const selectedEmployee = getAssignment(
+          type,
+          shiftId,
+          day
+        );
+
+        return `
+          <td>
+            <span class="shift-label ${
+              temporary
+                ? 'temporary-shift'
+                : ''
+            }">
+              ${escapeHtml(shift)}
+            </span>
+
+            ${
+              temporary
+                ? `
+                  <span class="temporary-note">
+                    Temporary change
+                  </span>
+                `
+                : ''
+            }
+
+            <div class="shift-editor">
+              <input
+                type="time"
+                value="${inputValues.start}"
+                data-shift-start="${assignmentKey}"
+                aria-label="Shift start time"
+              >
+
+              <input
+                type="time"
+                value="${inputValues.end}"
+                data-shift-end="${assignmentKey}"
+                aria-label="Shift end time"
+              >
+            </div>
+
+            <div class="shift-edit-actions">
+              <button
+                type="button"
+                class="shift-edit-button"
+                data-save-shift-type="${escapeHtml(type)}"
+                data-save-shift-id="${escapeHtml(shiftId)}"
+                data-save-shift-day="${escapeHtml(day)}"
+              >
+                Apply time
+              </button>
+
+              ${
+                temporary
+                  ? `
+                    <button
+                      type="button"
+                      class="shift-clear-button"
+                      data-clear-shift-type="${escapeHtml(type)}"
+                      data-clear-shift-id="${escapeHtml(shiftId)}"
+                      data-clear-shift-day="${escapeHtml(day)}"
+                      data-has-preset="${
+                        presetShift
+                          ? 'true'
+                          : 'false'
+                      }"
+                    >
+                      ${
+                        presetShift
+                          ? 'Reset'
+                          : 'Remove'
+                      }
+                    </button>
+                  `
+                  : ''
+              }
+            </div>
+
+            <select
+                class="${
+                    !selectedEmployee
+                    ? 'unassigned-shift'
+                    : ''
+            }"
+            data-assignment="${assignmentKey}"
+            data-type="${escapeHtml(type)}"
+            onchange="setAssignment(this)"
+            >
+              ${employeeOptions(
+                type,
+                selectedEmployee
+              )}
+            </select>
+          </td>
+        `;
+      }).join('');
+
+      return `
+        <tr>
+          <td>${escapeHtml(row.label)}</td>
+          ${cells}
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+  function renderAvailability(){
+    renderPeople('managerAvailability','manager',state.managers);
+    renderPeople('associateAvailability','associate',state.associates);
+  }
+
+  function renderPeople(target, type, names) {
+  document.getElementById(target).innerHTML =
+    names.map(name => {
+      const employeeIdentifier =
+        state.buildEmployeeIdentifiers?.[name] || '';
+
+      return `
+        <div class="person-row">
+
+          <span>
+            <span class="badge ${escapeHtml(type)}">
+              ${escapeHtml(type)}
+            </span>
+
+            ${escapeHtml(name)}
+          </span>
+
+          <div class="person-controls">
+
+            <label class="employee-number-control">
+              Employee #
+              
+              <input
+                type="text"
+                class="employee-number-input"
+                data-employee-name="${escapeHtml(name)}"
+                value="${escapeHtml(employeeIdentifier)}"
+                placeholder="Employee #"
+                autocomplete="off"
+              >
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                class="availability-checkbox"
+                data-employee-type="${escapeHtml(type)}"
+                data-employee-name="${escapeHtml(name)}"
+                ${
+                  state.availability[name] === true
+                    ? 'checked'
+                    : ''
+                }
+              >
+
+              Available
+            </label>
+
+            <button
+              type="button"
+              class="remove-person"
+              data-remove-type="${escapeHtml(type)}"
+              data-remove-name="${escapeHtml(name)}"
+            >
+              Remove
+            </button>
+
+          </div>
+        </div>
+      `;
+    }).join('');
+}
+
+document.addEventListener('change', event => {
+  const checkbox = event.target.closest(
+    '.availability-checkbox'
+  );
+
+  if (!checkbox) {
+    return;
+  }
+
+  toggleAvailability(
+    checkbox.dataset.employeeType,
+    checkbox.dataset.employeeName,
+    checkbox.checked
+  );
+});
+
+document.addEventListener('change', async event => {
+  const identifierInput = event.target.closest(
+    '.employee-number-input'
+  );
+
+  if (!identifierInput) {
+    return;
+  }
+
+  const employeeName =
+    identifierInput.dataset.employeeName;
+
+  const employeeIdentifier =
+    identifierInput.value.trim();
+
+  state.buildEmployeeIdentifiers[employeeName] =
+    employeeIdentifier;
+
+  try {
+    await saveEmployeeSettings();
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      'The employee number changed on the page, ' +
+      'but the change could not be saved.'
+    );
+  }
+});
+
+document.addEventListener('click', event => {
+  const removeButton = event.target.closest(
+    '.remove-person[data-remove-name]'
+  );
+
+  if (!removeButton) {
+    return;
+  }
+
+  removeEmployee(
+    removeButton.dataset.removeType,
+    removeButton.dataset.removeName
+  );
+});
+
+  async function toggleAvailability(
+  type,
+  name,
+  isAvailable
+) {
+
+  console.log(
+    'toggleAvailability',
+    name,
+    isAvailable
+  );
+
+  state.availability[name] = isAvailable;
+
+  console.log(
+    'after change:',
+    state.availability
+  );
+
+  if (!isAvailable) {
+    clearEmployeeAssignments(name);
+  }
+
+  renderAllTables();
+
+  try {
+    await saveEmployeeSettings();
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      'Availability changed on the page, ' +
+      'but it could not be saved.'
+    );
+  }
+}
+
+  function clearEmployeeAssignments(
+  employeeName
+  ) {
+  for (
+    const assignmentKey of
+    Object.keys(state.assignments)
+  ) {
+    if (
+      state.assignments[assignmentKey] ===
+      employeeName
+    ) {
+      state.assignments[assignmentKey] = ''
+    }
+  }
+  }
+
+
+  async function addEmployee(type) {
+  const enteredName = window.prompt(
+    `New ${type} name:`
+  )
+
+  const name = enteredName?.trim()
+
+  if (!name) {
+    return
+  }
+
+  const alreadyManager =
+    state.managers.some(
+      existing =>
+        existing.toLowerCase() ===
+        name.toLowerCase()
+    )
+
+  const alreadyAssociate =
+    state.associates.some(
+      existing =>
+        existing.toLowerCase() ===
+        name.toLowerCase()
+    )
+
+  if (alreadyManager || alreadyAssociate) {
+    alert(
+      `${name} is already on an employee list.`
+    )
+
+    return
+  }
+
+  if (type === 'manager') {
+    state.managers.push(name)
+  } else {
+    state.associates.push(name)
+  }
+
+  state.availability[name] = true
+  state.buildEmployeeIdentifiers[name] = ''
+
+  renderAllTables()
+
+  try {
+    await saveEmployeeSettings()
+  } catch (err) {
+    console.error(err)
+
+    alert(
+      'The employee was added to the page, ' +
+      'but the change could not be saved.'
+    )
+  }
+  }
+
+  async function removeEmployee(
+  type,
+  employeeName
+  ) {
+  const confirmed = window.confirm(
+    `Remove ${employeeName} from the ` +
+    `${type} list? Existing shift assignments ` +
+    `for this employee will be cleared.`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  clearEmployeeAssignments(employeeName)
+
+  if (type === 'manager') {
+    state.managers =
+      state.managers.filter(
+        name => name !== employeeName
+      )
+  } else {
+    state.associates =
+      state.associates.filter(
+        name => name !== employeeName
+      )
+  }
+
+  delete state.availability[employeeName]
+  delete state.buildEmployeeIdentifiers[employeeName]
+  renderAllTables()
+
+  try {
+    await saveEmployeeSettings()
+  } catch (err) {
+    console.error(err)
+
+    alert(
+      'The employee was removed from the page, ' +
+      'but the change could not be saved.'
+    )
+  }
+  }
+
+
+  async function saveEmployeeSettings() {
+  const response = await fetch(
+    '/api/schedule-settings',
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      credentials: 'same-origin',
+
+      body: JSON.stringify({
+        store: state.store,
+        managers: state.managers,
+        associates: state.associates,
+        buildEmployeeIdentifiers: state.buildEmployeeIdentifiers,
+        availability: state.availability
+      })
+    }
+  )
+
+  const result = await response.json()
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Schedule settings could not be saved'
+    )
+  }
+
+  return result
+  }
+
+
+  function setAssignment(el) {
+
+  state.assignments[
+    el.dataset.assignment
+  ] = el.value;
+
+  renderCoverage(
+    'managerTable',
+    managerCoverage,
+    'manager'
+  );
+
+  renderCoverage(
+    'associateTable',
+    associateCoverage,
+    'associate'
+  );
+
+  recalculate();
+}
+
+  function parseTime(text){
+    const m = text.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i); if(!m) return null;
+    let h=Number(m[1])%12; if(m[3].toUpperCase()==='PM') h+=12; return h+Number(m[2])/60;
+  }
+  function hasAttendanceIssue(
+  scheduledShift,
+  actualShift
+) {
+  if (
+    !scheduledShift ||
+    !actualShift ||
+    !scheduledShift.includes(' to ') ||
+    !actualShift.includes(' to ')
+  ) {
+    return null;
+  }
+
+  const [scheduledStart, scheduledEnd] =
+    scheduledShift.split(' to ');
+
+  const [actualStart, actualEnd] =
+    actualShift.split(' to ');
+
+  const scheduledStartTime =
+    parseTime(scheduledStart);
+
+  const scheduledEndTime =
+    parseTime(scheduledEnd);
+
+  const actualStartTime =
+    parseTime(actualStart);
+
+  const actualEndTime =
+    parseTime(actualEnd);
+
+  if (
+    scheduledStartTime == null ||
+    scheduledEndTime == null ||
+    actualStartTime == null ||
+    actualEndTime == null
+  ) {
+    return null;
+  }
+
+  const lateMinutes =
+    (actualStartTime -
+      scheduledStartTime) * 60;
+
+  const earlyMinutes =
+    (scheduledEndTime -
+      actualEndTime) * 60;
+
+  return {
+    late: lateMinutes > 15,
+    early: earlyMinutes > 15
+  };
+}
+  function shiftHours(shift){
+    if(!shift || !shift.includes(' to ')) return 0;
+    const [a,b]=shift.split(' to ').map(parseTime); if(a==null||b==null) return 0;
+    return +(b<a?b+24-a:b-a).toFixed(2);
+  }
+
+  function gatherScheduled() {
+  const employees = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates
+    ])
+  ];
+
+  const values = {};
+
+  employees.forEach(name => {
+    values[name] = Object.fromEntries(
+      DAY_KEYS.map(day => [
+        day,
+        {
+          hours: 0,
+          rawHours: 0,
+          lunchDeducted: false,
+          modified: false,
+          shifts: []
+        }
+      ])
+    );
+  });
+
+  const coverageGroups = [
+    {
+      type: 'manager',
+      coverage: managerCoverage
+    },
+    {
+      type: 'associate',
+      coverage: associateCoverage
+    }
+  ];
+
+  coverageGroups.forEach(group => {
+    Object.entries(group.coverage)
+      .forEach(([shiftId, row]) => {
+        DAY_KEYS.forEach(day => {
+          const name = getAssignment(
+            group.type,
+            shiftId,
+            day
+          );
+
+          const shift = getEffectiveShift(
+            group.type,
+            shiftId,
+            day,
+            row[day] || ''
+          );
+
+          const modified = isTemporaryShift(
+            group.type,
+            shiftId,
+            day
+          );
+
+          if (
+            name &&
+            shift &&
+            values[name]
+          ) {
+            values[name][day].rawHours +=
+              shiftHours(shift);
+
+            values[name][day].shifts.push({
+              text: shift,
+              modified
+            });
+
+            if (modified) {
+              values[name][day].modified = true;
+            }
+          }
+        });
+      });
+  });
+
+  employees.forEach(name => {
+    DAY_KEYS.forEach(day => {
+      const dayData = values[name][day];
+
+      const rawHours = Number(
+        dayData.rawHours || 0
+      );
+
+      if (rawHours >= 7.5) {
+        dayData.hours = Math.max(
+          0,
+          rawHours - 0.5
+        );
+
+        dayData.lunchDeducted = true;
+      } else {
+        dayData.hours = rawHours;
+        dayData.lunchDeducted = false;
+      }
+
+      dayData.rawHours = Number(
+        rawHours.toFixed(2)
+      );
+
+      dayData.hours = Number(
+        dayData.hours.toFixed(2)
+      );
+    });
+  });
+
+  return values;
+}
+
+
+  function renderHoursMatrix() {
+  const data = gatherScheduled();
+
+  const employees = Object.keys(data).filter(
+    name =>
+      state.availability[name] !== false ||
+      DAY_KEYS.some(
+        day => data[name][day].hours
+      )
+  );
+
+  let html = `
+    <thead>
+      <tr>
+        <th>Day</th>
+        ${
+          employees.map(
+            name => `<th>${escapeHtml(name)}</th>`
+          ).join('')
+        }
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  DAY_KEYS.forEach((day, index) => {
+    const total = employees.reduce(
+      (sum, name) =>
+        sum + data[name][day].hours,
+      0
+    );
+
+    html += `
+      <tr>
+        <td>${DAYS[index]}</td>
+
+        ${
+          employees.map(name => {
+            const dayData = data[name][day];
+
+            return `
+              <td class="${
+                dayData.modified
+                  ? 'temporary-hours'
+                  : ''
+              }">
+                ${dayData.hours.toFixed(2)}
+              </td>
+            `;
+          }).join('')
+        }
+
+        <td class="metric">
+          ${total.toFixed(2)}
+        </td>
+      </tr>
+    `;
+  });
+
+  html += `
+    <tr class="total-row">
+      <td>Total</td>
+
+      ${
+        employees.map(name => `
+          <td class="metric">
+            ${
+              DAY_KEYS.reduce(
+                (sum, day) =>
+                  sum + data[name][day].hours,
+                0
+              ).toFixed(2)
+            }
+          </td>
+        `).join('')
+      }
+
+      <td class="metric">
+        ${
+          employees.reduce(
+            (grandTotal, name) =>
+              grandTotal +
+              DAY_KEYS.reduce(
+                (sum, day) =>
+                  sum + data[name][day].hours,
+                0
+              ),
+            0
+          ).toFixed(2)
+        }
+      </td>
+    </tr>
+  </tbody>
+  `;
+
+  document.getElementById(
+    'hoursMatrix'
+  ).innerHTML = html;
+}
+function generateScheduleComments() {
+
+  const comments = [];
+
+  const coverageGroups = [
+    {
+      type: 'manager',
+      coverage: managerCoverage
+    },
+    {
+      type: 'associate',
+      coverage: associateCoverage
+    }
+  ];
+
+  coverageGroups.forEach(group => {
+
+    Object.entries(group.coverage)
+      .forEach(([shiftId,row]) => {
+
+        DAY_KEYS.forEach(day => {
+
+          const key =
+            scheduleCellKey(
+              group.type,
+              shiftId,
+              day
+            );
+
+          if (!(key in temporaryShifts)) {
+            return;
+          }
+
+          const originalShift =
+            row[day] || '';
+
+          const newShift =
+            temporaryShifts[key];
+
+          const note =
+            temporaryShiftNotes[key] ||
+            'No explanation provided';
+
+          const shiftLabel =
+            row.label;
+
+          if (!originalShift) {
+
+            comments.push({
+              type: 'Added Shift',
+              day: DAYS[
+                DAY_KEYS.indexOf(day)
+              ],
+              shift: shiftLabel,
+              details: newShift,
+              reason: note
+            });
+
+          } else {
+
+            comments.push({
+              type: 'Adjusted Shift',
+              day: DAYS[
+                DAY_KEYS.indexOf(day)
+              ],
+              shift: shiftLabel,
+              details:
+                `${originalShift} → ${newShift}`,
+              reason: note
+            });
+
+          }
+
+        });
+
+      });
+
+  });
+
+  return comments;
+
+}
+  function renderPrintSchedule() {
+  const data = gatherScheduled();
+
+  const employees = Object.keys(data).filter(
+    name =>
+      DAY_KEYS.some(
+        day => data[name][day].shifts.length
+      )
+  );
+
+  let bodyHtml = '';
+
+  employees.forEach(name => {
+    const total = DAY_KEYS.reduce(
+      (sum, day) =>
+        sum + data[name][day].hours,
+      0
+    );
+
+    const employeeHasChanges =
+      DAY_KEYS.some(
+        day => data[name][day].modified
+      );
+
+    const dayCells = DAY_KEYS.map(day => {
+      const dayData = data[name][day];
+
+      if (!dayData.shifts.length) {
+        return '<td></td>';
+      }
+
+      const shiftsHtml = dayData.shifts
+        .map(shift => `
+          <span class="${
+            shift.modified
+              ? 'temporary-shift'
+              : ''
+          }">
+            ${escapeHtml(shift.text)}
+          </span>
+        `)
+        .join('<br>');
+
+      return `
+        <td>
+          ${shiftsHtml}
+        </td>
+      `;
+    }).join('');
+
+    bodyHtml += `
+      <tr>
+        <td>${escapeHtml(name)}</td>
+
+        ${dayCells}
+
+        <td class="metric ${
+          employeeHasChanges
+            ? 'temporary-hours'
+            : ''
+        }">
+          ${total.toFixed(2)}
+        </td>
+      </tr>
+    `;
+  });
+
+  const dayTotals = DAY_KEYS.map(day =>
+    employees.reduce(
+      (sum, name) =>
+        sum + data[name][day].hours,
+      0
+    )
+  );
+
+  const grandTotal = dayTotals.reduce(
+    (sum, value) => sum + value,
+    0
+  );
+
+  bodyHtml += `
+    <tr class="total-row">
+      <td>Total</td>
+
+      ${dayTotals.map(value => `
+        <td class="metric">
+          ${value.toFixed(2)}
+        </td>
+      `).join('')}
+
+      <td class="metric">
+        ${grandTotal.toFixed(2)}
+      </td>
+    </tr>
+  `;
+
+  const comments = generateScheduleComments();
+
+  if (comments.length) {
+    bodyHtml += `
+      <tr>
+        <td colspan="${DAYS.length + 2}">
+          <div class="print-comments">
+            <h3>Schedule Adjustments</h3>
+
+            <table
+              style="
+                width:100%;
+                min-width:0;
+                border-collapse:collapse;
+              "
+            >
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Shift</th>
+                  <th>Change</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${comments.map(item => `
+                  <tr>
+                    <td>
+                      ${escapeHtml(item.day)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.shift)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.details)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.reason)}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  document.getElementById(
+    'printSchedule'
+  ).innerHTML = `
+    <thead>
+      <tr>
+        <th>Name</th>
+
+        ${DAYS.map(day => `
+          <th>${escapeHtml(day)}</th>
+        `).join('')}
+
+        <th>Hours</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${bodyHtml}
+    </tbody>
+  `;
+}
+  function renderAttendance() {
+  const buildScheduleNames = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates
+    ])
+  ];
+
+  const periods = [
+    'week',
+    'year',
+    'allTime'
+  ];
+
+  const fields = [
+    'absences',
+    'tardies',
+    'leftEarly'
+  ];
+
+  /*
+   * Only use employees listed on the Build Schedule.
+   * Find attendance using the employee number saved
+   * for that Build Schedule employee.
+   */
+  const employees = buildScheduleNames.map(buildName => {
+    const employeeNumber = String(
+      state.buildEmployeeIdentifiers?.[
+        buildName
+      ] || ''
+    ).trim();
+
+    const attendanceRecord = employeeNumber
+      ? state.attendance?.[employeeNumber]
+      : null;
+
+    /*
+     * The row still displays the Build Schedule name.
+     * Attendance only connects when the employee number
+     * exists and the uploaded name also matches.
+     */
+    const uploadedName = String(
+      attendanceRecord?.employeeName || ''
+    ).trim();
+
+    const numberMatches =
+      Boolean(employeeNumber) &&
+      Boolean(attendanceRecord);
+
+    const nameMatches =
+      normalizeEmployeeName(uploadedName) ===
+      normalizeEmployeeName(buildName);
+
+    const matched =
+      numberMatches &&
+      nameMatches;
+
+    return {
+      buildName,
+      employeeNumber,
+      attendance: matched
+        ? attendanceRecord
+        : null
+    };
+  });
+
+  document.querySelector(
+    '#attendanceTable tbody'
+  ).innerHTML = employees.map(employee => {
+    const {
+      buildName,
+      employeeNumber,
+      attendance
+    } = employee;
+
+    const cells = periods.flatMap(period =>
+      fields.map(field => {
+        const value = Number(
+          attendance?.[period]?.[field] || 0
+        );
+
+        return `
+          <td>
+            <input
+              type="number"
+              min="0"
+              value="${value}"
+              data-attendance-number="${
+                escapeHtml(employeeNumber)
+              }"
+              data-attendance-name="${
+                escapeHtml(buildName)
+              }"
+              data-attendance-period="${
+                escapeHtml(period)
+              }"
+              data-attendance-field="${
+                escapeHtml(field)
+              }"
+              ${
+                attendance
+                  ? ''
+                  : 'disabled'
+              }
+            >
+          </td>
+        `;
+      })
+    ).join('');
+
+    return `
+      <tr>
+        <td>
+          ${escapeHtml(buildName)}
+        </td>
+
+        ${cells}
+      </tr>
+    `;
+  }).join('');
+}
+
+function normalizeEmployeeName(value) {
+  let normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  if (normalized === 'thomas') {
+    normalized = 'thom';
+  }
+
+  return normalized;
+}
+
+
+function getMatchingUploadedName(buildName) {
+  const buildIdentifier = String(
+    state.buildEmployeeIdentifiers?.[
+      buildName
+    ] || ''
+  ).trim();
+
+  if (!buildIdentifier) {
+    return '';
+  }
+
+  return Object.keys(
+    state.employeeIdentifiers || {}
+  ).find(uploadedName => {
+    const uploadedIdentifier = String(
+      state.employeeIdentifiers?.[
+        uploadedName
+      ] || ''
+    ).trim();
+
+    return (
+      normalizeEmployeeName(uploadedName) ===
+        normalizeEmployeeName(buildName) &&
+      uploadedIdentifier === buildIdentifier
+    );
+  }) || '';
+}
+  function renderPrevious() {
+  const table = document.getElementById(
+    'previousWeekComparisonTable'
+  );
+
+  if (!table) {
+    return;
+  }
+
+  /*
+   * Start only with employees currently listed
+   * on the Build Schedule page.
+   */
+  const buildScheduleNames = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates
+    ])
+  ];
+
+  /*
+   * Find the corresponding uploaded employee.
+   * getMatchingUploadedName requires both:
+   *
+   * 1. Matching normalized name
+   * 2. Matching employee number
+   */
+  const matchedEmployees = buildScheduleNames
+    .map(buildName => {
+      const uploadedName =
+        getMatchingUploadedName(buildName);
+
+      if (!uploadedName) {
+        return null;
+      }
+
+      const hasReviewData =
+        Boolean(
+          state.previousScheduledShifts?.[
+            uploadedName
+          ]
+        ) ||
+        Boolean(
+          state.previousActualShifts?.[
+            uploadedName
+          ]
+        ) ||
+        Boolean(
+          state.previousActualHours?.[
+            uploadedName
+          ]
+        ) ||
+        state.previousScheduledHours?.[
+          uploadedName
+        ] !== undefined;
+
+      if (!hasReviewData) {
+        return null;
+      }
+
+      return {
+        buildName,
+        uploadedName
+      };
+    })
+    .filter(Boolean);
+
+  const dayTotals = Object.fromEntries(
+    DAY_KEYS.map(day => [day, 0])
+  );
+
+  let totalScheduled = 0;
+  let totalWorked = 0;
+
+  const rows = matchedEmployees.map(employee => {
+    const {
+      buildName,
+      uploadedName
+    } = employee;
+
+    /*
+     * Display the employee number saved on
+     * the Build Schedule page.
+     */
+    const employeeIdentifier = String(
+      state.buildEmployeeIdentifiers?.[
+        buildName
+      ] || ''
+    ).trim();
+
+    /*
+     * Read previous-week information using
+     * the matching uploaded employee name.
+     */
+    const scheduledShifts =
+      state.previousScheduledShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualShifts =
+      state.previousActualShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualHours =
+      state.previousActualHours?.[
+        uploadedName
+      ] || {};
+
+    const scheduledTotal = Number(
+      state.previousScheduledHours?.[
+        uploadedName
+      ] || 0
+    );
+
+    const workedTotal = DAY_KEYS.reduce(
+      (sum, day) =>
+        sum + Number(actualHours[day] || 0),
+      0
+    );
+
+    const difference =
+      workedTotal - scheduledTotal;
+
+    totalScheduled += scheduledTotal;
+    totalWorked += workedTotal;
+
+    DAY_KEYS.forEach(day => {
+      dayTotals[day] += Number(
+        actualHours[day] || 0
+      );
+    });
+
+    const differenceClass =
+      difference < 0
+        ? 'negative'
+        : difference > 0
+          ? 'positive'
+          : '';
+
+    const dayCells = DAY_KEYS.map(day => {
+      const plannedValues =
+        normalizeShiftValues(
+          scheduledShifts[day]
+        );
+
+      const actualValues =
+        normalizeShiftValues(
+          actualShifts[day]
+        );
+
+        const issue =
+  plannedValues.length &&
+  actualValues.length
+    ? hasAttendanceIssue(
+        plannedValues[0],
+        actualValues[0]
+      )
+    : null;
+
+let cellClass = 'comparison-cell';
+
+if (issue) {
+
+  if (issue.late && issue.early) {
+    cellClass += ' attendance-severe';
+  }
+
+  else if (
+    issue.late ||
+    issue.early
+  ) {
+    cellClass += ' attendance-issue';
+  }
+
+}
+
+      const plannedHtml = plannedValues.length
+  ? plannedValues
+      .map(value => escapeHtml(value))
+      .join('<br>')
+  : 'OFF';
+
+const actualHtml = actualValues.length
+  ? actualValues
+      .map(value => escapeHtml(value))
+      .join('<br>')
+  : 'No time worked';
+
+/*
+ * If schedule is OFF and no work was performed,
+ * leave the cell completely blank.
+ */
+if (
+  plannedHtml === 'OFF' &&
+  actualHtml === 'No time worked'
+) {
+  return `
+  <td class="${cellClass}"></td>`;
+}
+
+      return `
+        <td class="${cellClass}">
+
+          <span class="planned-shift">
+            ${plannedHtml}
+          </span>
+
+          <span class="actual-shift ${
+            actualValues.length
+              ? ''
+              : 'no-time-worked'
+          }">
+            ${actualHtml}
+          </span>
+
+        </td>
+      `;
+    }).join('');
+
+    return `
+      <tr>
+
+
+        <td>
+          ${escapeHtml(buildName)}
+        </td>
+
+        ${dayCells}
+
+        <td class="comparison-hours">
+          ${scheduledTotal.toFixed(2)}
+        </td>
+
+        <td class="comparison-hours">
+          ${workedTotal.toFixed(2)}
+        </td>
+
+        <td class="comparison-hours ${differenceClass}">
+          ${difference.toFixed(2)}
+        </td>
+
+      </tr>
+    `;
+  }).join('');
+
+  const grandDifference =
+    totalWorked - totalScheduled;
+
+  const grandDifferenceClass =
+    grandDifference < 0
+      ? 'negative'
+      : grandDifference > 0
+        ? 'positive'
+        : '';
+
+  const totalDayCells = DAY_KEYS.map(day => `
+    <td class="metric">
+      ${dayTotals[day].toFixed(2)}
+    </td>
+  `).join('');
+
+  const totalRow = `
+    <tr class="total-row">
+
+      <td>
+        TOTAL
+      </td>
+
+      ${totalDayCells}
+
+      <td class="metric">
+        ${totalScheduled.toFixed(2)}
+      </td>
+
+      <td class="metric">
+        ${totalWorked.toFixed(2)}
+      </td>
+
+      <td class="metric ${grandDifferenceClass}">
+        ${grandDifference.toFixed(2)}
+      </td>
+
+    </tr>
+  `;
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+
+
+        <th>Employee Name</th>
+
+        ${DAYS.map(day => `
+          <th>${escapeHtml(day)}</th>
+        `).join('')}
+
+        <th>Scheduled</th>
+        <th>Worked</th>
+        <th>Difference</th>
+
+      </tr>
+    </thead>
+
+    <tbody>
+
+      ${
+        rows ||
+        `
+          <tr>
+            <td colspan="12">
+              No employees had matching names
+              and employee numbers.
+            </td>
+          </tr>
+        `
+      }
+
+      ${rows ? totalRow : ''}
+
+    </tbody>
+  `;
+}
+
+function normalizeShiftValues(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => String(item).trim())
+      .filter(Boolean);
+  }
+
+  if (
+    value !== undefined &&
+    value !== null &&
+    String(value).trim()
+  ) {
+    return [String(value).trim()];
+  }
+
+  return [];
+}
+
+  function renderAllTables(){ renderCoverage('managerTable',managerCoverage,'manager'); renderCoverage('associateTable',associateCoverage,'associate'); renderAvailability(); recalculate(); renderAttendance(); renderPrevious(); }
+  function recalculate(){ renderHoursMatrix(); renderPrintSchedule(); renderTemplateName(); }
+  function escapeHtml(v) {return String(v ?? '');}
+
+  
+
+  document.querySelectorAll('.module-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('.module-tabs button').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active'); document.getElementById(btn.dataset.module).classList.add('active');
+  }));
+  document.getElementById('recalculateBtn').addEventListener('click',recalculate);
+  document.getElementById('saveBtn').addEventListener('click',async()=>{
+    const payload = {
+  store: state.store,
+  managers: state.managers,
+  associates: state.associates,
+  buildEmployeeIdentifiers:
+    state.buildEmployeeIdentifiers,
+  availability: state.availability,
+  assignments: state.assignments,
+  scheduled: gatherScheduled()
+};
+
+    try { const r=await fetch('/api/schedules/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!r.ok) throw new Error(await r.text()); alert('Schedule saved.'); }
+    catch(err){ console.error(err); alert('The schedule view works, but /api/schedules/save has not been connected yet.'); }
+  });
+
+  document.addEventListener(
+  'input',
+  event => {
+    const input = event.target.closest(
+      '[data-attendance-number]'
+    );
+
+    if (!input) {
+      return;
+    }
+
+    const employeeNumber =
+      input.dataset.attendanceNumber;
+
+    const period =
+      input.dataset.attendancePeriod;
+
+    const field =
+      input.dataset.attendanceField;
+
+    if (
+      !state.attendance[
+        employeeNumber
+      ]
+    ) {
+      return;
+    }
+
+    if (
+      !state.attendance[
+        employeeNumber
+      ][period]
+    ) {
+      state.attendance[
+        employeeNumber
+      ][period] = {};
+    }
+
+    state.attendance[
+      employeeNumber
+    ][period][field] =
+      Math.max(
+        0,
+        Number(input.value || 0)
+      );
+  }
+);
+  document
+  .getElementById('attendanceUpload')
+  .addEventListener(
+    'change',
+    async event => {
+      const file = event.target.files[0];
+
+      if (!file) {
+        return;
+      }
+
+      if (
+        !file.name
+          .toLowerCase()
+          .endsWith('.json')
+      ) {
+        alert(
+          'The attendance upload must be a JSON file.'
+        );
+
+        event.target.value = '';
+        return;
+      }
+
+      try {
+        const attendance =
+          JSON.parse(
+            await file.text()
+          );
+
+        const response = await fetch(
+          '/api/attendance/upload',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            credentials: 'same-origin',
+
+            body: JSON.stringify({
+              store: state.store,
+              attendance
+            })
+          }
+        );
+
+        const result =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error ||
+            'Attendance could not be uploaded.'
+          );
+        }
+
+        state.attendance =
+          result.attendance || attendance;
+
+        renderAttendance();
+
+        alert(
+          `${result.employeeCount} attendance ` +
+          `record(s) uploaded successfully.`
+        );
+      } catch (err) {
+        console.error(
+          'Attendance upload failed:',
+          err
+        );
+
+        alert(
+          err.message ||
+          'The attendance JSON could not be read.'
+        );
+      } finally {
+        event.target.value = '';
+      }
+    }
+  );
+
+  document.addEventListener('click', event => {
+  const addButton = event.target.closest(
+    '[data-add-shift-type]'
+  );
+
+  if (addButton) {
+    const type =
+      addButton.dataset.addShiftType;
+
+    const shiftId =
+      addButton.dataset.addShiftId;
+
+    const day =
+      addButton.dataset.addShiftDay;
+
+    const key = scheduleCellKey(
+      type,
+      shiftId,
+      day
+    );
+
+    temporaryShifts[key] =
+  '9:00 AM to 5:00 PM';
+
+if (buildingNewTemplate) {
+  temporaryShiftNotes[key] = '';
+} else {
+  const reason = prompt(
+    'Why is this shift being added?',
+    ''
+  );
+
+  if (reason === null) {
+    delete temporaryShifts[key];
+    return;
+  }
+
+  temporaryShiftNotes[key] =
+    reason.trim();
+}
+
+renderAllTables();
+
+    return;
+  }
+
+  const saveButton = event.target.closest(
+    '[data-save-shift-type]'
+  );
+
+  if (saveButton) {
+    saveTemporaryShift(
+      saveButton.dataset.saveShiftType,
+      saveButton.dataset.saveShiftId,
+      saveButton.dataset.saveShiftDay
+    );
+
+    return;
+  }
+
+  const clearButton = event.target.closest(
+    '[data-clear-shift-type]'
+  );
+
+  if (clearButton) {
+    clearTemporaryShift(
+      clearButton.dataset.clearShiftType,
+      clearButton.dataset.clearShiftId,
+      clearButton.dataset.clearShiftDay,
+      clearButton.dataset.hasPreset === 'true'
+    );
+  }
+});
+
+document.addEventListener(
+  'input',
+  event => {
+
+    if (
+      event.target.id ===
+      'previousWeekNotes'
+    ) {
+
+      renderPrevious();
+
+    }
+
+  }
+);
+function printPreviousWeek() {
+
+  document
+    .querySelectorAll('.module')
+    .forEach(module => {
+      module.classList.remove(
+        'print-previous'
+      );
+    });
+
+  document
+    .getElementById('module-5')
+    .classList.add(
+      'print-previous'
+    );
+
+  window.print();
+
+  setTimeout(() => {
+
+    document
+      .getElementById('module-5')
+      .classList.remove(
+        'print-previous'
+      );
+
+  }, 100);
+
+}
+
+function printWeeklySchedule() {
+
+  document
+    .querySelectorAll('.module')
+    .forEach(module => {
+      module.classList.remove(
+        'print-page',
+        'print-previous'
+      );
+    });
+
+  document
+    .getElementById('module-3')
+    .classList.add('print-page');
+
+  window.print();
+
+  setTimeout(() => {
+
+    document
+      .getElementById('module-3')
+      .classList.remove('print-page');
+
+  }, 100);
+}
+
+function cloneTemplateData(value) {
+  return JSON.parse(
+    JSON.stringify(value || {})
+  );
+}
+
+function captureCurrentTemplate() {
+  const savedManagerCoverage =
+    cloneTemplateData(managerCoverage);
+
+  const savedAssociateCoverage =
+    cloneTemplateData(associateCoverage);
+
+  /*
+   * Merge every temporary/adjusted shift into
+   * the permanent coverage saved in the template.
+   */
+  Object.entries(temporaryShifts)
+    .forEach(([key, shiftText]) => {
+      const [
+        type,
+        shiftId,
+        day
+      ] = key.split(':');
+
+      if (
+        type === 'manager' &&
+        savedManagerCoverage[shiftId]
+      ) {
+        savedManagerCoverage[
+          shiftId
+        ][day] = shiftText;
+      }
+
+      if (
+        type === 'associate' &&
+        savedAssociateCoverage[shiftId]
+      ) {
+        savedAssociateCoverage[
+          shiftId
+        ][day] = shiftText;
+      }
+    });
+
+  return {
+    assignments:
+      cloneTemplateData(
+        state.assignments
+      ),
+
+    managerCoverage:
+      savedManagerCoverage,
+
+    associateCoverage:
+      savedAssociateCoverage,
+
+    /*
+     * All saved shifts are permanent template shifts.
+     * Nothing remains marked temporary.
+     */
+    temporaryShifts: {},
+    temporaryShiftNotes: {}
+  };
+}
+function createBlankCoverage(
+  existingCoverage
+) {
+  const blankCoverage = {};
+
+  Object.entries(existingCoverage)
+    .forEach(([shiftId, row]) => {
+      blankCoverage[shiftId] = {
+        label:
+          row.label ||
+          shiftId,
+
+        monday: '',
+        tuesday: '',
+        wednesday: '',
+        thursday: '',
+        friday: '',
+        saturday: '',
+        sunday: ''
+      };
+    });
+
+  return blankCoverage;
+}
+
+
+function replaceObjectContents(
+  target,
+  source
+) {
+  Object.keys(target).forEach(key => {
+    delete target[key];
+  });
+
+  Object.assign(
+    target,
+    cloneTemplateData(source)
+  );
+}
+
+function renderTemplateSelector(
+  selectedTemplateId = ''
+) {
+  const selector =
+    document.getElementById(
+      'templateSelector'
+    );
+
+  if (!selector) {
+    return;
+  }
+
+  selector.innerHTML = `
+    <option value="">
+      Select a template
+    </option>
+
+    ${state.templates.map(template => `
+      <option
+        value="${escapeHtml(template._id)}"
+        ${
+          template._id === selectedTemplateId
+            ? 'selected'
+            : ''
+        }
+      >
+        ${escapeHtml(template.templateName)}
+        ${
+          template.isDefault
+            ? ' (Default)'
+            : ''
+        }
+      </option>
+    `).join('')}
+  `;
+}
+
+async function loadTemplateList(
+  selectedTemplateId = ''
+) {
+  const response = await fetch(
+    `/api/schedule-templates?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'GET',
+      credentials: 'same-origin'
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Templates could not be loaded.'
+    );
+  }
+
+  state.templates =
+    Array.isArray(result.templates)
+      ? result.templates
+      : [];
+
+  renderTemplateSelector(
+    selectedTemplateId
+  );
+}
+
+async function saveCurrentAsTemplate() {
+  const enteredName = window.prompt(
+    'Template name:'
+  );
+
+  const templateName =
+    enteredName?.trim();
+
+  if (!templateName) {
+    return;
+  }
+
+  const makeDefault = window.confirm(
+    'Make this the default template ' +
+    `for ${state.store}?`
+  );
+state.currentTemplateName =
+  templateName;
+  const templateData =
+    captureCurrentTemplate();
+
+  const response = await fetch(
+    '/api/schedule-templates',
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      credentials: 'same-origin',
+
+      body: JSON.stringify({
+        store: state.store,
+        templateName,
+        isDefault: makeDefault,
+        templateData
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'The template could not be saved.'
+    );
+  }
+
+  buildingNewTemplate = false;
+
+  /*
+   * Convert the currently displayed schedule
+   * into the permanent version that was saved.
+   */
+  replaceObjectContents(
+    managerCoverage,
+    result.template?.templateData
+      ?.managerCoverage ||
+      templateData.managerCoverage ||
+      {}
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    result.template?.templateData
+      ?.associateCoverage ||
+      templateData.associateCoverage ||
+      {}
+  );
+
+  replaceObjectContents(
+    state.assignments,
+    result.template?.templateData
+      ?.assignments ||
+      templateData.assignments ||
+      {}
+  );
+
+  /*
+   * Everything saved in a template is permanent.
+   */
+  replaceObjectContents(
+    temporaryShifts,
+    {}
+  );
+
+  replaceObjectContents(
+    temporaryShiftNotes,
+    {}
+  );
+
+  await loadTemplateList(
+    result.template?._id || ''
+  );
+
+  renderAllTables();
+
+  alert(
+    `"${templateName}" was saved for ` +
+    `${state.store}.`
+  );
+}
+function renderTemplateName() {
+
+  const label =
+    document.getElementById(
+      'printTemplateName'
+    );
+
+  if (!label) {
+    return;
+  }
+
+  label.textContent =
+    state.currentTemplateName
+      ? `Template: ${state.currentTemplateName}`
+      : '';
+}
+async function loadSelectedTemplate() {
+  const selector = document.getElementById(
+    'templateSelector'
+  );
+
+  const templateId = selector?.value || '';
+
+  if (!templateId) {
+    alert('Select a template first.');
+    return;
+  }
+
+  const response = await fetch(
+    `/api/schedule-templates/${
+      encodeURIComponent(templateId)
+    }?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'GET',
+      credentials: 'same-origin'
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'The template could not be loaded.'
+    );
+  }
+
+  const template = result.template;
+  state.currentTemplateName =
+  template.templateName || '';
+
+  if (!template) {
+    throw new Error(
+      'The server did not return a template.'
+    );
+  }
+
+  const templateData =
+    template.templateData || {};
+
+  const loadedManagerCoverage =
+    cloneTemplateData(
+      templateData.managerCoverage || {}
+    );
+
+  const loadedAssociateCoverage =
+    cloneTemplateData(
+      templateData.associateCoverage || {}
+    );
+
+  /*
+   * Backward compatibility:
+   * Merge shifts stored in either the current
+   * lowercase property or the old uppercase property.
+   */
+  const legacyTemporaryShifts =
+    templateData.temporaryShifts ||
+    templateData.TemporaryShifts ||
+    {};
+
+  Object.entries(
+    legacyTemporaryShifts
+  ).forEach(([key, shiftText]) => {
+    const [
+      type,
+      shiftId,
+      day
+    ] = key.split(':');
+
+    /*
+     * Ignore malformed temporary-shift keys.
+     */
+    if (!DAY_KEYS.includes(day)) {
+      return;
+    }
+
+    if (
+      type === 'manager' &&
+      loadedManagerCoverage[shiftId]
+    ) {
+      loadedManagerCoverage[
+        shiftId
+      ][day] = shiftText;
+    }
+
+    if (
+      type === 'associate' &&
+      loadedAssociateCoverage[shiftId]
+    ) {
+      loadedAssociateCoverage[
+        shiftId
+      ][day] = shiftText;
+    }
+  });
+
+  /*
+   * Apply the assignments and permanent coverage
+   * from the selected template.
+   */
+  replaceObjectContents(
+    state.assignments,
+    templateData.assignments || {}
+  );
+
+  replaceObjectContents(
+    managerCoverage,
+    loadedManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    loadedAssociateCoverage
+  );
+
+  /*
+   * A loaded template contains permanent shifts,
+   * so nothing should remain marked temporary.
+   */
+  replaceObjectContents(
+    temporaryShifts,
+    {}
+  );
+
+  replaceObjectContents(
+    temporaryShiftNotes,
+    {}
+  );
+
+  buildingNewTemplate = false;
+
+  renderAllTables();
+
+  alert(
+    `"${template.templateName || 'Template'}" was loaded.`
+  );
+}
+
+function beginNewTemplate() {
+  const confirmed = window.confirm(
+    'Start a new blank template? ' +
+    'All current shift times, assignments, ' +
+    'and unsaved schedule changes will be cleared.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  /*
+   * Preserve the coverage row labels but clear
+   * every shift time from Monday through Sunday.
+   */
+  state.currentTemplateName =
+  'New Unsaved Template';
+  const blankManagerCoverage =
+    createBlankCoverage(
+      managerCoverage
+    );
+
+  const blankAssociateCoverage =
+    createBlankCoverage(
+      associateCoverage
+    );
+
+  replaceObjectContents(
+    managerCoverage,
+    blankManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    blankAssociateCoverage
+  );
+
+  /*
+   * Clear all employee assignments.
+   */
+  replaceObjectContents(
+    state.assignments,
+    {}
+  );
+
+  /*
+   * Clear all temporary shifts and adjustment notes.
+   */
+  replaceObjectContents(
+    temporaryShifts,
+    {}
+  );
+
+  replaceObjectContents(
+    temporaryShiftNotes,
+    {}
+  );
+
+  const selector =
+    document.getElementById(
+      'templateSelector'
+    );
+
+  if (selector) {
+    selector.value = '';
+  }
+  buildingNewTemplate = true;
+  renderAllTables();
+}
+
+async function deleteSelectedTemplate() {
+  const selector =
+    document.getElementById(
+      'templateSelector'
+    );
+
+  const templateId =
+    selector?.value || '';
+
+  if (!templateId) {
+    alert('Select a template first.');
+    return;
+  }
+
+  const selectedOption =
+    selector.options[
+      selector.selectedIndex
+    ];
+
+  const templateName =
+    selectedOption?.textContent?.trim() ||
+    'this template';
+
+  const confirmed = window.confirm(
+    `Delete "${templateName}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const response = await fetch(
+    `/api/schedule-templates/${
+      encodeURIComponent(templateId)
+    }?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'The template could not be deleted.'
+    );
+  }
+
+  await loadTemplateList();
+
+  alert('Template deleted.');
+}
+
+document
+  .getElementById('loadTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await loadSelectedTemplate();
+      } catch (err) {
+        console.error(
+          'Template load error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+
+document
+  .getElementById('saveTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await saveCurrentAsTemplate();
+      } catch (err) {
+        console.error(
+          'Template save error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+
+document
+  .getElementById('newTemplateBtn')
+  .addEventListener(
+    'click',
+    beginNewTemplate
+  );
+
+document
+  .getElementById('deleteTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await deleteSelectedTemplate();
+      } catch (err) {
+        console.error(
+          'Template delete error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+function restoreDefaultTemplate() {
+
+  replaceObjectContents(
+    managerCoverage,
+    defaultManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    defaultAssociateCoverage
+  );
+
+  replaceObjectContents(
+    state.assignments,
+    {}
+  );
+
+  replaceObjectContents(
+    temporaryShifts,
+    {}
+  );
+
+  replaceObjectContents(
+    temporaryShiftNotes,
+    {}
+  );
+
+  buildingNewTemplate = false;
+
+  renderAllTables();
+}
+  window.removeEmployee = removeEmployee;
+
+  window.addEmployee = addEmployee;
+
+  window.toggleAvailability = toggleAvailability;
+
+  window.setAssignment = setAssignment;
+  async function initializeSchedulePage() {
+  renderAllTables();
+
+  try {
+    await loadTemplateList();
+
+    const defaultTemplate =
+      state.templates.find(
+        template =>
+          template.isDefault === true
+      );
+
+    if (defaultTemplate) {
+      const selector =
+        document.getElementById(
+          'templateSelector'
+        );
+
+      selector.value =
+        defaultTemplate._id;
+
+      await loadSelectedTemplate();
+    }
+  } catch (err) {
+    console.error(
+      'Template initialization error:',
+      err
+    );
+  }
+}
+
+initializeSchedulePage();
+</script>
+</body>
+</html>

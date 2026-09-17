@@ -16,6 +16,10 @@
     📊 Final View
   </button>
 
+  <button onclick="goToSchedule()" class="btn btn-final">
+    📊 Schedule
+  </button>
+
 <% } %>
 
 
@@ -409,6 +413,10 @@ function goToFinal() {
   window.location.href = '/Hamdenstoremap/final';
 }
 
+
+function goToSchedule() {
+  window.location.href = '/Hamdenstoremap/Schedule';
+}
 
 window.addEventListener("DOMContentLoaded", () => {
   const CURRENT_USER = "<%= user.name %>";

@@ -14,6 +14,10 @@
     <button onclick="goToFinal()" class="btn btn-final">
     📊 Final View
   </button>
+
+  <button onclick="goToSchedule()" class="btn btn-final">
+    📊 Schedule
+  </button>
 <% } %>
 
 <% if (user.role === 'admin') { %>
@@ -356,6 +360,10 @@ function goToFinal() {
   }
 
   window.location.href = '/New-Milfordstoremap/final';
+}
+
+function goToSchedule() {
+  window.location.href = '/New-Milfordstoremap/Schedule';
 }
 
 

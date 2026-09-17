@@ -16,6 +16,9 @@
   <button onclick="goToFinal()" class="btn btn-final">
     📊 Final View
   </button>
+  <button onclick="goToSchedule()" class="btn btn-final">
+    📊 Schedule
+  </button>
 
 <% } %>
 
@@ -362,7 +365,9 @@ function goToFinal() {
   window.location.href = '/New-Havenstoremap/final';
 }
 
-
+function goToSchedule() {
+  window.location.href = '/New-Havenstoremap/Schedule';
+}
 window.addEventListener("DOMContentLoaded", () => {
   const CURRENT_USER = "<%= user.name %>";
 
@@ -438,7 +443,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("currentMonthDisplay").textContent = "Viewing: " + MONTH;
   }
-
+    
   // ✅ ADMIN LIST
   async function loadAdminRequests() {
     const list = document.getElementById("adminRequests");

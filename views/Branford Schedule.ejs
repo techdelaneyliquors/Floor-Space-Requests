@@ -1,0 +1,7761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Branford Weekly Schedule</title>
+  <style>
+    :root {
+      --navy:#17365d; --blue:#2f5597; --light:#eaf1fb; --line:#cbd5e1;
+      --text:#172033; --muted:#64748b; --green:#15803d; --amber:#b45309;
+      --red:#b91c1c; --white:#fff; --shadow:0 12px 32px rgba(15,23,42,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; background:#f5f7fb; color:var(--text); }
+    .page-shell { max-width:1500px; margin:0 auto; padding:24px; }
+    .topbar { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:18px; }
+    .topbar h1 { margin:0; font-size:28px; color:var(--navy); }
+    .topbar p { margin:5px 0 0; color:var(--muted); }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    button { border:0; border-radius:8px; padding:10px 14px; font-weight:700; cursor:pointer; }
+    .primary { background:var(--navy); color:#fff; }
+    .secondary { background:#fff; color:var(--navy); border:1px solid var(--line); }
+    .module-tabs { display:flex; gap:8px; overflow:auto; padding-bottom:10px; position:sticky; top:0; z-index:20; background:#f5f7fb; }
+    .module-tabs button { white-space:nowrap; background:#dbe7f7; color:var(--navy); }
+    .module-tabs button.active { background:var(--navy); color:#fff; }
+    .module { display:none; }
+    .module.active { display:block; }
+    .module-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:var(--shadow); margin:14px 0 24px; overflow:hidden; }
+    .module-heading { padding:18px 22px; background:linear-gradient(135deg,var(--navy),var(--blue)); color:#fff; }
+    .module-heading h2 { margin:0; font-size:21px; }
+    .module-heading p { margin:5px 0 0; opacity:.85; }
+    .section { padding:22px; border-top:1px solid #e7edf5; }
+    .section:first-of-type { border-top:0; }
+    .section-title { display:flex; justify-content:space-between; align-items:end; gap:14px; margin-bottom:12px; }
+    .section-title h3 { margin:0; color:var(--navy); font-size:17px; }
+    .section-title small { color:var(--muted); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
+    table { width:100%; border-collapse:collapse; min-width:980px; background:#fff; }
+    th, td { border-bottom:1px solid var(--line); border-right:1px solid #e8edf4; padding:9px; text-align:center; vertical-align:middle; }
+    th { background:#e9f0fa; color:var(--navy); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+    td:first-child, th:first-child { text-align:left; font-weight:700; position:sticky; left:0; background:inherit; z-index:2; }
+    tr:last-child td { border-bottom:0; }
+    select, input { width:100%; min-width:105px; border:1px solid #cbd5e1; border-radius:6px; padding:7px 8px; background:#fff; color:var(--text); }
+    input[type="checkbox"] { min-width:auto; width:18px; height:18px; }
+    .shift-label { display:block; font-size:12px; font-weight:700; color:#334155; margin-bottom:5px; }
+    .stack { display:grid; gap:7px; }
+    .availability-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .people-box { border:1px solid var(--line); border-radius:10px; padding:14px; background:#fafcff; }
+    .people-box h4 { margin:0 0 10px; color:var(--navy); }
+    .person-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0; border-bottom:1px dashed #dbe3ee; }
+    .person-row:last-child { border:0; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:800; }
+    .manager { background:#dbeafe; color:#1d4ed8; }
+    .associate { background:#dcfce7; color:#15803d; }
+    .metric { font-weight:800; }
+    .negative { color:var(--red); }
+    .positive { color:var(--green); }
+    .attendance-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .attendance-grid input { min-width:55px; }
+    .print-sheet { padding:16px; background:#fff; }
+    .print-sheet h2 { text-align:center; margin:0 0 4px; }
+    .print-sheet .period { text-align:center; color:var(--muted); margin-bottom:16px; }
+    .no-print-note { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+    .actual-cell { white-space:pre-line; line-height:1.45; }
+    @media(max-width:850px){ .availability-grid{grid-template-columns:1fr;} .topbar{align-items:flex-start;flex-direction:column;} }
+    @media print {
+
+       * {-webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        /* Previous Week print table */
+#previousWeekComparisonTable {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+#previousWeekComparisonTable th,
+#previousWeekComparisonTable td {
+  padding: 3px 2px !important;
+  font-size: 10px !important;
+  word-wrap: break-word;
+}
+
+#previousWeekComparisonTable .comparison-cell {
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+}
+
+#previousWeekComparisonTable .planned-shift,
+#previousWeekComparisonTable .actual-shift {
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+
+.table-wrap {
+  overflow: visible !important;
+}
+
+  body {
+    background:#fff;
+  }
+
+  .page-shell {
+    max-width:none;
+    padding:0;
+  }
+
+  .topbar,
+  .module-tabs,
+  .no-print,
+  .no-print-note {
+    display:none !important;
+  }
+
+  .module {
+    display:none !important;
+  }
+
+  /* Default print = schedule */
+  #module-3.print-page {
+    display:block !important;
+  }
+
+  /* Previous week review print */
+  #module-5.print-previous {
+    display:block !important;
+  }
+
+  .module-heading {
+    display:none;
+  }
+
+  .module-card {
+    box-shadow:none;
+    border:0;
+    margin:0;
+  }
+
+  .section {
+    padding:0;
+    border:0;
+  }
+
+  table {
+    min-width:0;
+    font-size:10px;
+  }
+
+  th,
+  td {
+    padding:6px 4px;
+  }
+
+  @page {
+  size: landscape;
+  margin: 0.2in;
+}
+}
+
+    .person-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  }
+
+.person-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  }
+
+.remove-person {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  }
+
+.remove-person:hover {
+  background: #fecaca;
+  }
+
+  .total-row{
+    font-weight:700;
+    background:#d9e1f2;
+    }
+
+    .total-row td{
+    border-top:2px solid #4a6fa5;
+    }
+
+    .shift-editor {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+  margin-bottom:6px;
+}
+
+.shift-editor input[type="time"] {
+  min-width:0;
+  padding:5px;
+  font-size:11px;
+}
+
+.shift-edit-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  justify-content:center;
+  margin-bottom:7px;
+}
+
+.shift-edit-button {
+  padding:5px 8px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:11px;
+}
+
+.shift-clear-button {
+  padding:5px 8px;
+  border:1px solid #fecaca;
+  background:#fef2f2;
+  color:#b91c1c;
+  font-size:11px;
+}
+
+.add-shift-button {
+  padding:6px 9px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:11px;
+}
+
+.temporary-shift {
+  color:#dc2626 !important;
+  font-weight:800;
+}
+
+.temporary-hours {
+  color:#dc2626;
+  font-weight:800;
+}
+
+.temporary-note {
+  display:block;
+  color:#dc2626;
+  font-size:10px;
+  font-weight:700;
+  margin-top:3px;
+}
+
+.unassigned-shift {
+  background: #fef9c3 !important;
+  border: 2px solid #eab308 !important;
+  color: #713f12;
+  font-weight: 700;
+}
+
+.print-comments {
+  margin-top:20px;
+  padding:12px;
+  border:2px solid #fca5a5;
+  background:#fef2f2;
+}
+
+.print-comments h3 {
+  margin:0 0 8px;
+  color:#991b1b;
+}
+
+.print-comments ul {
+  margin:0;
+  padding-left:18px;
+}
+
+.print-comments li {
+  color:#991b1b;
+  margin-bottom:4px;
+}
+
+.previous-week-comments {
+  margin-top:20px;
+  padding:15px;
+  border:2px solid #94a3b8;
+  background:#f8fafc;
+}
+
+.previous-week-comments h3 {
+  margin:0 0 10px;
+  color:#17365d;
+}
+
+.previous-week-comments pre {
+  white-space:pre-wrap;
+  font-family:inherit;
+  margin:0;
+}
+
+.actual-compare{
+  font-style:italic;
+  color:#64748b;
+  margin-top:3px;
+  font-size:11px;
+}
+
+.actual-on-time{
+  font-style:italic;
+  color:#64748b;
+}
+
+.actual-different{
+  font-style:italic;
+  color:#b45309;
+  font-weight:600;
+}
+
+.actual-missed{
+  font-style:italic;
+  color:#b91c1c;
+  font-weight:700;
+}
+
+#actualShiftTable th:first-child,
+#actualShiftTable td:first-child,
+#scheduledShiftTable th:first-child,
+#scheduledShiftTable td:first-child,
+#actualHoursTable th:first-child,
+#actualHoursTable td:first-child {
+  width:120px;
+  min-width:120px;
+  text-align:center;
+}
+
+#actualShiftTable th:nth-child(2),
+#actualShiftTable td:nth-child(2),
+#scheduledShiftTable th:nth-child(2),
+#scheduledShiftTable td:nth-child(2),
+#actualHoursTable th:nth-child(2),
+#actualHoursTable td:nth-child(2) {
+  width:130px;
+  min-width:130px;
+  text-align:left;
+  font-weight:700;
+}
+
+.employee-number-control {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:#475569;
+  font-weight:700;
+}
+
+.employee-number-input {
+  width:90px;
+  min-width:90px;
+  padding:6px 8px;
+}
+
+#previousWeekComparisonTable .comparison-cell {
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+#previousWeekComparisonTable .planned-shift {
+  display: block;
+  font-size: 14px;
+}
+
+#previousWeekComparisonTable .actual-shift {
+  display: block;
+  font-size: 14px;
+  font-style: italic;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+#previousWeekComparisonTable th:first-child,
+#previousWeekComparisonTable td:first-child {
+  width: 90px;
+  min-width: 90px;
+}
+.attendance-issue {
+  background: #f7a7a7 !important;
+}
+
+.attendance-severe {
+  background: #ef5a5a !important;
+}
+
+.no-time-worked-cell {
+  background: #fca5a5 !important;
+}
+
+.no-time-worked-cell .actual-shift {
+  color: #991b1b !important;
+  font-weight: 700;
+}
+
+.attendance-exception-review {
+  margin-top:20px;
+  display:grid;
+  gap:18px;
+}
+
+.exception-section {
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  overflow:hidden;
+  background:#fff;
+}
+
+.exception-section-heading {
+  padding:11px 14px;
+  background:#e9f0fa;
+  color:#17365d;
+  font-size:15px;
+  font-weight:800;
+  border-bottom:1px solid #cbd5e1;
+}
+
+.exception-section-heading.absence-heading {
+  background:#fee2e2;
+  color:#991b1b;
+}
+
+.exception-section-heading.both-heading {
+  background:#fecaca;
+  color:#991b1b;
+}
+
+.exception-section-heading.overtime-heading {
+  background:#dcfce7;
+  color:#166534;
+}
+
+.exception-row {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  padding:16px 14px;
+  border-bottom:1px solid #e2e8f0;
+  align-items:start;
+}
+
+.exception-description {
+  width:100%;
+  min-width:0;
+}
+
+.exception-row:last-child {
+  border-bottom:0;
+}
+
+.exception-description {
+  color:#334155;
+  line-height:1.45;
+}
+
+.exception-description strong {
+  color:#17365d;
+}
+
+.exception-times {
+  display:block;
+  margin-top:4px;
+  color:#64748b;
+  font-size:12px;
+}
+
+.exception-comment {
+  width:100%;
+  min-height:66px;
+  resize:vertical;
+  padding:9px 10px;
+  border:1px solid #cbd5e1;
+  border-radius:7px;
+  font-family:inherit;
+  color:#172033;
+  background:#fff;
+}
+
+.exception-comment:focus {
+  border-color:#2f5597;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(47,85,151,.12);
+}
+
+.no-exceptions {
+  padding:12px 14px;
+  color:#64748b;
+  font-style:italic;
+}
+
+.overtime-issue {
+  background:#dcfce7 !important;
+}
+
+.overtime-issue .actual-shift {
+  color:#166534 !important;
+  font-weight:700;
+}
+
+.comparison-cell.attendance-issue.overtime-issue {
+  background:#f7a7a7 !important;
+  box-shadow:inset 0 -4px 0 #16a34a;
+}
+
+.comparison-cell.attendance-severe.overtime-issue {
+  background:#ef5a5a !important;
+  box-shadow:inset 0 -4px 0 #16a34a;
+}
+
+.comparison-cell.no-time-worked-cell.overtime-issue {
+  background:#fca5a5 !important;
+  box-shadow:inset 0 -4px 0 #16a34a;
+}
+
+@media(max-width:900px) {
+  .exception-row {
+    grid-template-columns:1fr;
+  }
+}
+
+@media print {
+  .attendance-exception-review {
+    margin-top:14px;
+    gap:10px;
+  }
+
+  .exception-section {
+    break-inside:avoid;
+  }
+
+  .exception-row {
+    grid-template-columns:1fr 1.4fr;
+    padding:7px;
+    font-size:10px;
+  }
+
+  .exception-comment {
+    min-height:44px;
+    font-size:10px;
+    border:1px solid #94a3b8;
+  }
+}
+
+.template-toolbar {
+  display:grid;
+  grid-template-columns:
+    auto minmax(220px, 1fr)
+    auto auto auto auto;
+  gap:10px;
+  align-items:center;
+  margin-bottom:18px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#f8fafc;
+}
+
+.template-toolbar label {
+  color:var(--navy);
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.template-toolbar select {
+  min-width:220px;
+}
+
+@media(max-width:950px) {
+  .template-toolbar {
+    grid-template-columns:1fr 1fr;
+  }
+
+  .template-toolbar label,
+  .template-toolbar select {
+    grid-column:1 / -1;
+  }
+
+  .availability-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+
+@media(max-width:1100px) {
+  .availability-grid {
+    grid-template-columns:1fr;
+  }
+}
+}
+
+.point-assignment-controls {
+  width:100%;
+  min-width:0;
+
+  display:grid;
+
+  grid-template-columns:
+    minmax(160px,220px)
+    minmax(280px,1fr)
+    minmax(320px,420px);
+
+  gap:12px;
+  align-items:end;
+}
+
+.point-assignment-controls label {
+  display:grid;
+  grid-template-rows:auto 1fr;
+  gap:6px;
+  min-width:0;
+  margin:0;
+
+  color:#475569;
+  font-size:12px;
+  font-weight:700;
+}
+
+.point-assignment-controls select {
+  width:100%;
+  min-width:0;
+  height:40px;
+}
+
+.point-comment-label {
+  width:100%;
+  min-width:0;
+}
+
+.point-comment-label .exception-comment {
+  width:100%;
+  min-width:0;
+  min-height:70px;
+  margin:0;
+}
+
+.recommend-points-button,
+.assign-points-button {
+  min-width:140px;
+}
+
+.point-action-buttons {
+  display:flex;
+  gap:10px;
+  width:100%;
+}
+
+.point-action-buttons button {
+  flex:1;
+}
+
+.recommend-points-button {
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  white-space:nowrap;
+  background:#fef3c7;
+  color:#92400e;
+  border:1px solid #f59e0b;
+}
+
+.recommend-points-button:hover:not(:disabled) {
+  background:#fde68a;
+}
+
+.recommend-points-button.recommendation-saved {
+  background:#f59e0b;
+  color:#fff;
+}
+
+.recommend-points-button:disabled {
+  cursor:not-allowed;
+  opacity:1;
+}
+
+.recommendation-status {
+  grid-column:1 / -1;
+  min-height:18px;
+  color:#92400e;
+  font-size:12px;
+  font-weight:700;
+}
+
+@media(max-width:900px) {
+  .point-action-buttons {
+    grid-template-columns:1fr;
+  }
+
+  .recommendation-status {
+    grid-column:1;
+  }
+}
+
+.assign-points-button {
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  white-space:nowrap;
+}
+
+.assign-points-button:disabled {
+  cursor:not-allowed;
+  opacity:1;
+}
+
+.assign-points-button.points-assigned {
+  background:#15803d;
+  color:#fff;
+}
+
+.assign-points-button.points-not-assigned {
+  background:#64748b;
+  color:#fff;
+}
+
+.point-assignment-status {
+  grid-column:1 / -1;
+  min-height:18px;
+  font-size:12px;
+  font-weight:700;
+}
+
+.point-save-success {
+  color:#15803d;
+}
+
+.point-not-assigned-status {
+  color:#475569;
+}
+
+.point-save-error {
+  color:#b91c1c;
+}
+
+.point-assignment-controls.absence-point-controls {
+  grid-template-columns:
+    minmax(180px, 230px)
+    minmax(130px, 170px)
+    minmax(320px, 1fr)
+    minmax(340px, 420px);
+}
+
+.absence-point-controls .point-action-buttons {
+  min-width:300px;
+}
+
+@media(max-width:1100px) {
+  .absence-point-controls .point-action-buttons {
+    grid-column:1 / -1;
+    min-width:0;
+  }
+}
+
+.overtime-review-controls {
+  display:grid;
+  grid-template-columns:
+    minmax(280px, 1fr)
+    minmax(160px, 210px);
+  gap:12px;
+  align-items:end;
+  width:100%;
+  min-width:0;
+}
+
+.overtime-comment-label {
+  display:grid;
+  gap:6px;
+  min-width:0;
+  color:#475569;
+  font-size:12px;
+  font-weight:700;
+}
+
+.save-overtime-review-button {
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  white-space:nowrap;
+  background:#166534;
+  color:#fff;
+}
+
+.save-overtime-review-button:hover:not(:disabled) {
+  background:#14532d;
+}
+
+.save-overtime-review-button.review-saved {
+  background:#15803d;
+  color:#fff;
+}
+
+.save-overtime-review-button:disabled {
+  cursor:not-allowed;
+}
+
+.overtime-review-status {
+  grid-column:1 / -1;
+  min-height:18px;
+  color:#166534;
+  font-size:12px;
+  font-weight:700;
+}
+
+@media(max-width:900px) {
+  .overtime-review-controls {
+    grid-template-columns:1fr;
+  }
+
+  .overtime-review-status {
+    grid-column:1;
+  }
+}
+
+@media(max-width:1100px) {
+  .point-assignment-controls.absence-point-controls {
+    grid-template-columns:
+      minmax(180px, 1fr)
+      minmax(130px, 1fr);
+  }
+
+  .absence-point-controls .point-comment-label {
+    grid-column:1 / -1;
+  }
+
+  .absence-point-controls .assign-points-button {
+    grid-column:1 / -1;
+  }
+
+  .absence-point-controls .point-assignment-status {
+    grid-column:1 / -1;
+  }
+}
+
+@media(max-width:700px) {
+  .point-assignment-controls.absence-point-controls {
+    grid-template-columns:1fr;
+  }
+
+  .absence-point-controls .point-comment-label,
+  .absence-point-controls .assign-points-button,
+  .absence-point-controls .point-assignment-status {
+    grid-column:1;
+  }
+}
+
+@media(max-width:900px) {
+  .point-assignment-controls {
+    grid-template-columns:1fr;
+  }
+
+  .point-assignment-status {
+    grid-column:1;
+  }
+}
+
+.point-history-employee {
+  margin-bottom:12px;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  overflow:hidden;
+  background:#fff;
+}
+
+.point-history-employee:last-child {
+  margin-bottom:0;
+}
+
+.point-history-toggle {
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  padding:13px 15px;
+  border:0;
+  border-radius:0;
+  background:#e9f0fa;
+  color:#17365d;
+  text-align:left;
+  cursor:pointer;
+}
+
+.point-history-toggle:hover {
+  background:#dbe7f7;
+}
+
+.point-history-toggle[aria-expanded="true"] {
+  background:#dbe7f7;
+  border-bottom:1px solid #cbd5e1;
+}
+
+.point-history-person {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  font-size:15px;
+  font-weight:800;
+}
+
+.point-history-arrow {
+  display:inline-block;
+  width:16px;
+  flex:0 0 16px;
+  color:#2f5597;
+  font-size:12px;
+}
+
+.point-history-number {
+  display:inline-block;
+  margin-left:7px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+}
+
+.point-history-total {
+  flex:0 0 auto;
+  padding:5px 10px;
+  border-radius:999px;
+  background:#17365d;
+  color:#fff;
+  font-size:12px;
+  font-weight:800;
+}
+
+.point-history-details[hidden] {
+  display:none;
+}
+
+.point-history-details {
+  display:block;
+}
+
+.point-history-table-wrap {
+  border:0;
+  border-radius:0;
+}
+
+.point-history-table {
+  width:100%;
+  min-width:850px;
+}
+
+.point-history-table th:first-child,
+.point-history-table td:first-child {
+  position:static;
+  left:auto;
+  width:120px;
+  min-width:120px;
+  background:inherit;
+}
+
+.point-history-table th:nth-child(2),
+.point-history-table td:nth-child(2) {
+  width:170px;
+}
+
+.point-history-table th:nth-child(3),
+.point-history-table td:nth-child(3) {
+  width:90px;
+}
+
+.point-history-table th:nth-child(4),
+.point-history-table td:nth-child(4) {
+  width:170px;
+}
+
+.point-history-points {
+  color:#b91c1c;
+  font-weight:800;
+}
+
+.point-history-comment {
+  text-align:left;
+  white-space:normal;
+  line-height:1.4;
+}
+
+@media(max-width:700px) {
+  .point-history-toggle {
+    align-items:flex-start;
+  }
+
+  .point-history-number {
+    display:block;
+    margin-top:3px;
+    margin-left:0;
+  }
+}
+
+.delete-scheduled-shift-button {
+  padding:5px 8px;
+  border:1px solid #fecaca;
+  background:#fee2e2;
+  color:#b91c1c;
+  font-size:11px;
+}
+
+.delete-scheduled-shift-button:hover {
+  background:#fecaca;
+}
+
+.removed-shift-cell {
+  background:#fef2f2 !important;
+  border:2px dashed #fca5a5 !important;
+}
+
+.removed-shift-label {
+  display:block;
+  margin-bottom:4px;
+  color:#b91c1c;
+  font-size:12px;
+  font-weight:800;
+}
+
+.removed-shift-original {
+  display:block;
+  margin-bottom:4px;
+  color:#7f1d1d;
+  font-size:11px;
+  text-decoration:line-through;
+}
+
+.removed-shift-reason {
+  display:block;
+  margin-bottom:8px;
+  color:#991b1b;
+  font-size:10px;
+  font-weight:700;
+  white-space:normal;
+}
+
+  </style>
+</head>
+<body>
+<% const incoming = (typeof scheduleData !== 'undefined' && scheduleData) ? scheduleData : {}; %>
+<div class="page-shell">
+  <header class="topbar">
+    <div>
+      <h1>Branford Weekly Scheduling Center</h1>
+      <p>Build next week, compare hours, print the schedule, and review prior-week attendance.</p>
+    </div>
+    <div class="actions no-print">
+      <button type="button" class="secondary" id="backToStoreMapBtn">
+        ← Back to Store Map
+      </button>
+      
+      <button
+  class="secondary"
+  type="button"
+  onclick="printWeeklySchedule()"
+>
+  Print weekly schedule
+</button>
+    </div>
+  </header>
+
+  <nav class="module-tabs no-print" aria-label="Schedule modules">
+    <button class="active" data-module="module-1">1. Build Schedule</button>
+    <button data-module="module-2">2. Hours Matrix</button>
+    <button data-module="module-3">3. Printable Schedule</button>
+    <button data-module="module-4">4. Attendance</button>
+    <button data-module="module-5">5. Previous Week</button>
+  </nav>
+
+  <!-- MODULE 1, SECTION 1 -->
+  <section class="module active" id="module-1">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 1: Build Next Week's Schedule</h2><p>Three sections for manager coverage, associate shifts, and availability.</p></div>
+      <div class="section">
+        <div class="template-toolbar no-print">
+
+  <label for="templateSelector">
+    Schedule Template
+  </label>
+
+  <select id="templateSelector">
+    <option value="">
+      Select a template
+    </option>
+  </select>
+
+
+  <button
+    type="button"
+    class="secondary"
+    id="loadTemplateBtn"
+  >
+    Load Template
+  </button>
+
+  <button
+    type="button"
+    class="secondary"
+    id="saveTemplateBtn"
+  >
+    Save As Template
+  </button>
+
+  <button
+    type="button"
+    class="secondary"
+    id="newTemplateBtn"
+  >
+    New Template
+  </button>
+
+  <button
+    type="button"
+    class="remove-person"
+    id="deleteTemplateBtn"
+  >
+    Delete Template
+  </button>
+
+</div>
+        <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Coverage windows are based on the manager-hours area in Branford.pdf.</small></div></div>
+        <div class="table-wrap"><table id="managerTable"><thead><tr><th>Manager coverage</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- MODULE 1, SECTION 2 -->
+      <div class="section">
+        <div class="section-title"><div><h3>Section 2 of 8: Associate Shift Assignment</h3><small>Assign each recurring coverage shift to an available associate.</small></div></div>
+        <div class="table-wrap"><table id="associateTable"><thead><tr><th>Associate shift</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="section">
+  <div class="section-title">
+    <div>
+      <h3>Cashier Shift Assignment</h3>
+
+      <small>
+        Assign cashier coverage to an available cashier,
+        associate, or manager.
+      </small>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="cashierTable">
+      <thead>
+        <tr>
+          <th>Cashier shift</th>
+          <th>Monday</th>
+          <th>Tuesday</th>
+          <th>Wednesday</th>
+          <th>Thursday</th>
+          <th>Friday</th>
+          <th>Saturday</th>
+          <th>Sunday</th>
+        </tr>
+      </thead>
+
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+      <!-- MODULE 1, SECTION 3 -->
+      <div class="section">
+        <div class="section-title"><div><h3>Section 3 of 8: Available Employees</h3><small>Turn managers and associates on or off for next week's assignment lists.</small></div></div>
+        <div class="availability-grid">
+  <div class="people-box">
+    <h4>Managers</h4>
+    <div id="managerAvailability"></div>
+
+    <button
+      class="secondary"
+      type="button"
+      onclick="addEmployee('manager')"
+    >
+      Add manager
+    </button>
+  </div>
+
+  <div class="people-box">
+    <h4>Associates</h4>
+    <div id="associateAvailability"></div>
+
+    <button
+      class="secondary"
+      type="button"
+      onclick="addEmployee('associate')"
+    >
+      Add associate
+    </button>
+  </div>
+
+  <div class="people-box">
+    <h4>Cashiers</h4>
+    <div id="cashierAvailability"></div>
+
+    <button
+      class="secondary"
+      type="button"
+      onclick="addEmployee('cashier')"
+    >
+      Add cashier
+    </button>
+  </div>
+</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 2, SECTION 4 -->
+  <section class="module" id="module-2">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 2: Scheduled Hours by Employee</h2><p>Daily assigned hours are calculated from the selected shifts.</p></div>
+      <div class="section">
+        <div class="section-title"><div><h3>Section 4 of 8: Employee Hours Matrix</h3><small>Employees across the top, weekdays down the left, totals on the right and bottom.</small></div></div>
+        <div class="table-wrap"><table id="hoursMatrix"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 3, SECTION 5 -->
+  <section class="module" id="module-3">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 3: Printable Weekly Schedule</h2><p>A clean employee-by-day schedule modeled on the bottom table in the PDF.</p></div>
+      <div class="section print-sheet">
+        <div class="no-print-note">Use the Print button above. Printing is set to landscape and only this schedule is included.</div>
+        <h2>Branford Weekly Schedule</h2>
+
+<div class="period" id="printPeriod">
+  Next week
+</div>
+
+<div
+  id="printTemplateName"
+  style="
+    text-align:center;
+    color:#64748b;
+    font-size:14px;
+    margin-bottom:16px;
+  "
+></div>
+        <div class="table-wrap"><table id="printSchedule"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULE 4, SECTION 6 -->
+  <section class="module" id="module-4">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 4: Attendance Review</h2><p>Upload or enter absence, tardy, and early-leave counts.</p></div>
+      <div class="section">
+        <div class="section-title"><div><h3>Section 6 of 8: Previous Week, Year, and All-Time Attendance</h3><small>Rows are editable so separately uploaded attendance data can populate these values.</small></div><input class="no-print" type="file" id="attendanceUpload" accept=".json,.csv"></div>
+        <div class="table-wrap"><table id="attendanceTable"><thead><tr><th rowspan="2">Employee</th><th colspan="3">Previous week</th><th colspan="3">Year</th><th colspan="3">All time</th></tr><tr><th>Absences</th><th>Tardies</th><th>Left early</th><th>Absences</th><th>Tardies</th><th>Left early</th><th>Absences</th><th>Tardies</th><th>Left early</th></tr></thead><tbody></tbody></table></div>
+      </div>
+<div class="section">
+
+  <div class="section-title">
+    <div>
+      <h3>
+        Attendance Point History
+      </h3>
+
+      <small>
+        Last 365 days only.
+      </small>
+    </div>
+  </div>
+
+  <div id="attendancePointHistory">
+  </div>
+
+</div>
+
+    </div>
+  </section>
+
+  <!-- MODULE 5, SECTION 7 -->
+  <section class="module" id="module-5">
+    <div class="module-card">
+      <div class="module-heading"><h2>Module 5: Previous Week Actuals</h2><p>Actual shift ranges and daily worked-hour totals.</p></div>
+
+ 
+<div class="section">
+
+  <div class="section-title">
+    <div>
+      <h3>
+        Section 7 of 8: Previous Week Schedule Comparison
+      </h3>
+
+      <small>
+        Planned shifts are shown first. Actual shifts are
+        shown in italic text underneath.
+      </small>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="previousWeekComparisonTable"></table>
+  </div>
+
+</div>
+
+<div
+  id="attendanceExceptionReview"
+  class="attendance-exception-review"
+></div>
+
+<!-- MODULE 5, SECTION 9 -->
+<div class="section">
+
+  <div class="section-title">
+
+    <div>
+
+      <h3>
+        Section 8 of 8: Previous Week Comments
+      </h3>
+
+      <small>
+        Notes regarding attendance,
+        staffing,
+        call-outs,
+        overtime,
+        inventory counts,
+        special events,
+        customer issues,
+        and other observations.
+      </small>
+
+    </div>
+
+    <button
+      class="secondary no-print"
+      type="button"
+      onclick="printPreviousWeek()"
+    >
+      Print Previous Week Review
+    </button>
+
+  </div>
+
+  <textarea
+    id="previousWeekNotes"
+    rows="8"
+    placeholder="Enter manager notes for the previous week..."
+    style="
+      width:100%;
+      padding:12px;
+      border:1px solid #cbd5e1;
+      border-radius:8px;
+      resize:vertical;
+    "
+  ></textarea>
+
+</div>
+    </div>
+  </section>
+
+
+</div>
+
+<script>
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const DAY_KEYS = DAYS.map(d => d.toLowerCase());
+  const temporaryShifts = {};
+  const temporaryShiftNotes = {};
+  const deletedShiftAssignments = {};
+  const attendanceExceptionComments = {};
+
+let currentAttendanceExceptions = {};
+
+let existingAttendancePoints = {};
+let attendancePointSummary = [];
+let existingPointRecommendations = {};
+let existingOvertimeReviews = {};
+
+let attendancePointsLoaded = false;
+let overtimeReviewsLoaded = false;
+let pointRecommendationsLoaded = false;
+
+let buildingNewTemplate = false;
+
+
+  const state = {
+  store: 'Branford',
+ templates: [],
+ currentTemplateName: '',
+  managers:
+    <%- JSON.stringify(incoming.managers || []) %>,
+
+  associates:
+    <%- JSON.stringify(incoming.associates || []) %>,
+
+    cashiers:
+    <%- JSON.stringify(incoming.cashiers || []) %>,
+
+    buildEmployeeIdentifiers:
+  <%- JSON.stringify(
+    incoming.buildEmployeeIdentifiers || {}
+  ) %>,
+
+  availability:
+    <%- JSON.stringify(incoming.availability || {}) %>,
+
+  assignments:
+    <%- JSON.stringify(incoming.assignments || {}) %>,
+
+  attendance:
+  <%- JSON.stringify(incoming.attendance || {}) %>,
+
+employeeIdentifiers:
+  <%- JSON.stringify(
+    incoming.employeeIdentifiers || {}
+  ) %>,
+
+previousScheduledShifts:
+  <%- JSON.stringify(
+    incoming.previousScheduledShifts || {}
+  ) %>,
+
+
+
+  previousActualShifts:
+    <%- JSON.stringify(
+      incoming.previousActualShifts || {}
+    ) %>,
+
+  previousActualHours:
+    <%- JSON.stringify(
+      incoming.previousActualHours || {}
+    ) %>,
+
+    previousWeekStart:
+  <%- JSON.stringify(
+    incoming.previousWeekStart || null
+  ) %>,
+
+previousWeekEnd:
+  <%- JSON.stringify(
+    incoming.previousWeekEnd || null
+  ) %>,
+
+  previousScheduledHours:
+    <%- JSON.stringify(
+      incoming.previousScheduledHours || {}
+    ) %>,
+  };
+
+  // Coverage transcribed from Branford.pdf. Blank means no preset coverage window.
+  const managerCoverage = {
+  manager1: {
+    label: 'Manager 1',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  manager2: {
+    label: 'Manager 2',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  manager3: {
+    label: 'Manager 3',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  manager4: {
+    label: 'Manager 4',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  }
+};
+
+const associateCoverage = {
+  associate1: {
+    label: 'Associate 1',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate2: {
+    label: 'Associate 2',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate3: {
+    label: 'Associate 3',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate4: {
+    label: 'Associate 4',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+  associate5: {
+    label: 'Associate 5',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+  associate6: {
+    label: 'Associate 6',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate7: {
+    label: 'Associate 7',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  associate8: {
+    label: 'Associate 8',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  }
+
+};
+
+const cashierCoverage = {
+  cashier1: {
+    label: 'Cashier 1',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  cashier2: {
+    label: 'Cashier 2',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  cashier3: {
+    label: 'Cashier 3',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+
+  cashier4: {
+    label: 'Cashier 4',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+  cashier5: {
+    label: 'Cashier 5',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  },
+  cashier6: {
+    label: 'Cashier 6',
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  }
+};
+
+  function employeeKey(type, name){
+  return `${type}:${name}`;
+}
+
+  function initializeAvailability() {
+
+  const allEmployees = [
+    ...state.managers,
+    ...state.associates,
+    ...state.cashiers
+  ];
+
+  for (const employee of allEmployees) {
+
+    if (
+      typeof state.availability[employee] !== 'boolean'
+    ) {
+
+      state.availability[employee] = true;
+
+    }
+
+  }
+
+  }
+
+  initializeAvailability();
+
+  function available(type) {
+  let list = [];
+
+  if (type === 'manager') {
+    /*
+     * Manager shifts can only be filled
+     * by managers.
+     */
+    list = [
+      ...state.managers
+    ];
+  } else if (type === 'associate') {
+    /*
+     * Associate shifts can be filled by
+     * associates or managers.
+     */
+    list = [
+      ...state.associates,
+      ...state.managers,
+      ...state.cashiers
+    ];
+  } else if (type === 'cashier') {
+    /*
+     * Cashier shifts can be filled by
+     * cashiers, associates, or managers.
+     */
+    list = [
+      ...state.cashiers,
+      ...state.associates,
+      ...state.managers
+    ];
+  }
+
+  return [
+    ...new Set(list)
+  ].filter(
+    name =>
+      state.availability[name] === true
+  );
+}
+
+  function getEmployeeRole(name) {
+  if (state.managers.includes(name)) {
+    return 'Manager';
+  }
+
+  if (state.associates.includes(name)) {
+    return 'Associate';
+  }
+
+  if (state.cashiers.includes(name)) {
+    return 'Cashier';
+  }
+
+  return '';
+}
+
+function employeeOptions(
+  type,
+  selected = ''
+) {
+  const options = available(type)
+    .map(name => {
+      const isSelected =
+        name === selected
+          ? ' selected'
+          : '';
+
+      const role =
+        getEmployeeRole(name);
+
+      const displayText =
+        role
+          ? `${name} (${role})`
+          : name;
+
+      return `
+        <option
+          value="${escapeHtml(name)}"
+          ${isSelected}
+        >
+          ${escapeHtml(displayText)}
+        </option>
+      `;
+    })
+    .join('');
+
+  return `
+    <option value="">
+      Unassigned
+    </option>
+
+    ${options}
+  `;
+}
+
+  function scheduleCellKey(type, shiftId, day) {
+  return `${type}:${shiftId}:${day}`;
+}
+
+function legacyAssignmentKey(shiftId, day) {
+  return `${shiftId}:${day}`;
+}
+
+function getAssignment(type, shiftId, day) {
+  const newKey = scheduleCellKey(type, shiftId, day);
+
+  if (Object.prototype.hasOwnProperty.call(
+    state.assignments,
+    newKey
+  )) {
+    return state.assignments[newKey] || '';
+  }
+
+  return state.assignments[
+    legacyAssignmentKey(shiftId, day)
+  ] || '';
+}
+
+function getEffectiveShift(
+  type,
+  shiftId,
+  day,
+  presetShift
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      temporaryShifts,
+      key
+    )
+  ) {
+    return temporaryShifts[key];
+  }
+
+  return presetShift || '';
+}
+
+function isTemporaryShift(
+  type,
+  shiftId,
+  day
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  return Object.prototype.hasOwnProperty.call(
+    temporaryShifts,
+    key
+  );
+}
+
+function timeTextToInputValue(timeText) {
+  const parsed = parseTime(timeText);
+
+  if (parsed == null) {
+    return '';
+  }
+
+  const hours = Math.floor(parsed) % 24;
+  const minutes = Math.round(
+    (parsed - Math.floor(parsed)) * 60
+  );
+
+  return (
+    String(hours).padStart(2, '0') +
+    ':' +
+    String(minutes).padStart(2, '0')
+  );
+}
+
+function shiftToInputValues(shiftText) {
+  if (
+    !shiftText ||
+    !shiftText.includes(' to ')
+  ) {
+    return {
+      start: '',
+      end: ''
+    };
+  }
+
+  const parts = shiftText.split(' to ');
+
+  return {
+    start: timeTextToInputValue(parts[0]),
+    end: timeTextToInputValue(parts[1])
+  };
+}
+
+function inputTimeToDisplay(inputValue) {
+  if (!inputValue) {
+    return '';
+  }
+
+  const parts = inputValue.split(':');
+
+  let hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+
+  const suffix = hours >= 12
+    ? 'PM'
+    : 'AM';
+
+  hours = hours % 12;
+
+  if (hours === 0) {
+    hours = 12;
+  }
+
+  return (
+    hours +
+    ':' +
+    String(minutes).padStart(2, '0') +
+    ' ' +
+    suffix
+  );
+}
+
+function saveTemporaryShift(
+  type,
+  shiftId,
+  day
+) {
+  const key = scheduleCellKey(
+    type,
+    shiftId,
+    day
+  );
+
+  const startInput = document.querySelector(
+    `[data-shift-start="${key}"]`
+  );
+
+  const endInput = document.querySelector(
+    `[data-shift-end="${key}"]`
+  );
+
+  if (!startInput || !endInput) {
+    return;
+  }
+
+  if (!startInput.value || !endInput.value) {
+    alert(
+      'Enter both a start time and an end time.'
+    );
+    return;
+  }
+
+  const startText = inputTimeToDisplay(
+    startInput.value
+  );
+
+  const endText = inputTimeToDisplay(
+    endInput.value
+  );
+
+  const newShift =
+    `${startText} to ${endText}`;
+
+  let reason = '';
+
+  if (!buildingNewTemplate) {
+    const existingNote =
+      temporaryShiftNotes[key] || '';
+
+    const enteredReason = window.prompt(
+      'Reason for this schedule change:',
+      existingNote
+    );
+
+    if (enteredReason === null) {
+      renderAllTables();
+      return;
+    }
+
+    reason = enteredReason.trim();
+  }
+
+  /*
+   * Only save the shift after the user has
+   * completed or accepted the reason prompt.
+   */
+  temporaryShifts[key] = newShift;
+  temporaryShiftNotes[key] = reason;
+
+  renderAllTables();
+}
+
+function clearTemporaryShift(
+  type,
+  shiftId,
+  day,
+  hasPreset
+) {
+  const key =
+    scheduleCellKey(
+      type,
+      shiftId,
+      day
+    );
+
+  /*
+   * Restore the employee who was assigned before
+   * the shift was removed.
+   */
+  if (
+    hasPreset &&
+    Object.prototype.hasOwnProperty.call(
+      deletedShiftAssignments,
+      key
+    )
+  ) {
+    state.assignments[key] =
+      deletedShiftAssignments[key] || '';
+  }
+
+  delete temporaryShifts[key];
+  delete temporaryShiftNotes[key];
+  delete deletedShiftAssignments[key];
+
+  /*
+   * If this was an added shift rather than a preset
+   * shift, removing it should clear its assignment.
+   */
+  if (!hasPreset) {
+    state.assignments[key] = '';
+  }
+
+  renderAllTables();
+}
+
+function deleteScheduledShift(
+  type,
+  shiftId,
+  day,
+  presetShift
+) {
+  const key =
+    scheduleCellKey(
+      type,
+      shiftId,
+      day
+    );
+
+  const currentShift =
+    getEffectiveShift(
+      type,
+      shiftId,
+      day,
+      presetShift
+    );
+
+  if (!currentShift) {
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      `Delete the ${currentShift} shift ` +
+      `for ${DAYS[DAY_KEYS.indexOf(day)]}?`
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const existingReason =
+    temporaryShiftNotes[key] || '';
+
+  const enteredReason =
+    window.prompt(
+      'Why is this shift being removed? ' +
+      'This explanation will appear on the ' +
+      'printable schedule.',
+      existingReason
+    );
+
+  if (enteredReason === null) {
+    return;
+  }
+
+  const reason =
+    enteredReason.trim();
+
+  if (!reason) {
+    alert(
+      'Enter an explanation before removing the shift.'
+    );
+
+    return;
+  }
+
+  /*
+   * Save the current assignment so Reset can restore it.
+   */
+  deletedShiftAssignments[key] =
+    getAssignment(
+      type,
+      shiftId,
+      day
+    );
+
+  /*
+   * An empty temporary shift means that the preset
+   * shift has been temporarily removed.
+   */
+  temporaryShifts[key] = '';
+
+  temporaryShiftNotes[key] =
+    reason;
+
+  /*
+   * Clear the employee assignment because the shift
+   * no longer exists in the current schedule.
+   */
+  state.assignments[key] = '';
+
+  /*
+   * Also clear a possible legacy assignment key.
+   */
+  const oldAssignmentKey =
+    legacyAssignmentKey(
+      shiftId,
+      day
+    );
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      state.assignments,
+      oldAssignmentKey
+    )
+  ) {
+    state.assignments[
+      oldAssignmentKey
+    ] = '';
+  }
+
+  renderAllTables();
+}
+
+  function renderCoverage(
+  tableId,
+  coverage,
+  type
+) {
+  const tbody = document.querySelector(
+    `#${tableId} tbody`
+  );
+
+  tbody.innerHTML = Object.entries(coverage)
+    .map(([shiftId, row]) => {
+      const cells = DAY_KEYS.map(day => {
+        const presetShift = row[day] || '';
+
+        const shift = getEffectiveShift(
+          type,
+          shiftId,
+          day,
+          presetShift
+        );
+
+        const temporary = isTemporaryShift(
+          type,
+          shiftId,
+          day
+        );
+
+        const assignmentKey = scheduleCellKey(
+          type,
+          shiftId,
+          day
+        );
+
+        if (!shift) {
+  const key =
+    scheduleCellKey(
+      type,
+      shiftId,
+      day
+    );
+
+  const shiftWasRemoved =
+    Boolean(presetShift) &&
+    Object.prototype.hasOwnProperty.call(
+      temporaryShifts,
+      key
+    ) &&
+    temporaryShifts[key] === '';
+
+  if (shiftWasRemoved) {
+    const removalReason =
+      temporaryShiftNotes[key] ||
+      'No explanation provided';
+
+    return `
+      <td class="removed-shift-cell">
+        <span class="removed-shift-label">
+          Shift removed
+        </span>
+
+        <span class="removed-shift-original">
+          Original: ${escapeHtml(presetShift)}
+        </span>
+
+        <span class="removed-shift-reason">
+          ${escapeHtml(removalReason)}
+        </span>
+
+        <button
+          type="button"
+          class="shift-clear-button"
+          data-clear-shift-type="${escapeHtml(type)}"
+          data-clear-shift-id="${escapeHtml(shiftId)}"
+          data-clear-shift-day="${escapeHtml(day)}"
+          data-has-preset="true"
+        >
+          Reset Removed Shift
+        </button>
+      </td>
+    `;
+  }
+
+  return `
+    <td>
+      <span
+        style="
+          display:block;
+          color:#94a3b8;
+          margin-bottom:7px;
+        "
+      >
+        No preset shift
+      </span>
+
+      <button
+        type="button"
+        class="add-shift-button"
+        data-add-shift-type="${escapeHtml(type)}"
+        data-add-shift-id="${escapeHtml(shiftId)}"
+        data-add-shift-day="${escapeHtml(day)}"
+      >
+        Add shift
+      </button>
+    </td>
+  `;
+}
+
+        const inputValues =
+          shiftToInputValues(shift);
+
+        const selectedEmployee = getAssignment(
+          type,
+          shiftId,
+          day
+        );
+
+        return `
+          <td>
+            <span class="shift-label ${
+              temporary
+                ? 'temporary-shift'
+                : ''
+            }">
+              ${escapeHtml(shift)}
+            </span>
+
+            ${
+              temporary
+                ? `
+                  <span class="temporary-note">
+                    Temporary change
+                  </span>
+                `
+                : ''
+            }
+
+            <div class="shift-editor">
+              <input
+                type="time"
+                value="${inputValues.start}"
+                data-shift-start="${assignmentKey}"
+                aria-label="Shift start time"
+              >
+
+              <input
+                type="time"
+                value="${inputValues.end}"
+                data-shift-end="${assignmentKey}"
+                aria-label="Shift end time"
+              >
+            </div>
+
+            <div class="shift-edit-actions">
+  <button
+    type="button"
+    class="shift-edit-button"
+    data-save-shift-type="${escapeHtml(type)}"
+    data-save-shift-id="${escapeHtml(shiftId)}"
+    data-save-shift-day="${escapeHtml(day)}"
+  >
+    Apply time
+  </button>
+
+  <button
+    type="button"
+    class="delete-scheduled-shift-button"
+    data-delete-shift-type="${escapeHtml(type)}"
+    data-delete-shift-id="${escapeHtml(shiftId)}"
+    data-delete-shift-day="${escapeHtml(day)}"
+    data-delete-shift-preset="${escapeHtml(presetShift)}"
+  >
+    Delete shift
+  </button>
+
+  ${
+    temporary
+      ? `
+        <button
+          type="button"
+          class="shift-clear-button"
+          data-clear-shift-type="${escapeHtml(type)}"
+          data-clear-shift-id="${escapeHtml(shiftId)}"
+          data-clear-shift-day="${escapeHtml(day)}"
+          data-has-preset="${
+            presetShift
+              ? 'true'
+              : 'false'
+          }"
+        >
+          ${
+            presetShift
+              ? 'Reset change'
+              : 'Remove added shift'
+          }
+        </button>
+      `
+      : ''
+  }
+</div>
+
+            <select
+                class="${
+                    !selectedEmployee
+                    ? 'unassigned-shift'
+                    : ''
+            }"
+            data-assignment="${assignmentKey}"
+            data-type="${escapeHtml(type)}"
+            onchange="setAssignment(this)"
+            >
+              ${employeeOptions(
+                type,
+                selectedEmployee
+              )}
+            </select>
+          </td>
+        `;
+      }).join('');
+
+      return `
+        <tr>
+          <td>${escapeHtml(row.label)}</td>
+          ${cells}
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+  function renderAvailability() {
+  renderPeople(
+    'managerAvailability',
+    'manager',
+    state.managers
+  );
+
+  renderPeople(
+    'associateAvailability',
+    'associate',
+    state.associates
+  );
+
+  renderPeople(
+    'cashierAvailability',
+    'cashier',
+    state.cashiers
+  );
+}
+
+  function renderPeople(target, type, names) {
+  document.getElementById(target).innerHTML =
+    names.map(name => {
+      const employeeIdentifier =
+        state.buildEmployeeIdentifiers?.[name] || '';
+
+      return `
+        <div class="person-row">
+
+          <span>
+            <span class="badge ${escapeHtml(type)}">
+              ${escapeHtml(type)}
+            </span>
+
+            ${escapeHtml(name)}
+          </span>
+
+          <div class="person-controls">
+
+            <label class="employee-number-control">
+              Employee #
+              
+              <input
+                type="text"
+                class="employee-number-input"
+                data-employee-name="${escapeHtml(name)}"
+                value="${escapeHtml(employeeIdentifier)}"
+                placeholder="Employee #"
+                autocomplete="off"
+              >
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                class="availability-checkbox"
+                data-employee-type="${escapeHtml(type)}"
+                data-employee-name="${escapeHtml(name)}"
+                ${
+                  state.availability[name] === true
+                    ? 'checked'
+                    : ''
+                }
+              >
+
+              Available
+            </label>
+
+            <button
+              type="button"
+              class="remove-person"
+              data-remove-type="${escapeHtml(type)}"
+              data-remove-name="${escapeHtml(name)}"
+            >
+              Remove
+            </button>
+
+          </div>
+        </div>
+      `;
+    }).join('');
+}
+
+document.addEventListener('change', event => {
+  const checkbox = event.target.closest(
+    '.availability-checkbox'
+  );
+
+  if (!checkbox) {
+    return;
+  }
+
+  toggleAvailability(
+    checkbox.dataset.employeeType,
+    checkbox.dataset.employeeName,
+    checkbox.checked
+  );
+});
+
+document.addEventListener(
+  'change',
+  event => {
+    const typeSelector =
+      event.target.closest(
+        '.exception-infraction-type'
+      );
+
+    if (!typeSelector) {
+      return;
+    }
+
+    const exceptionId =
+      typeSelector.dataset.exceptionId;
+
+    const panel =
+      typeSelector.closest(
+        '.point-assignment-controls'
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    const pointSelector =
+      panel.querySelector(
+        '.exception-points'
+      );
+
+    if (!pointSelector) {
+      return;
+    }
+
+    const selectedType =
+      typeSelector.value;
+
+    const options =
+      getPointOptions(selectedType);
+
+    const defaultPoints =
+      defaultPointsForException(
+        selectedType
+      );
+
+    pointSelector.innerHTML =
+      options.map(value => `
+        <option
+          value="${value}"
+          ${
+            value === defaultPoints
+              ? 'selected'
+              : ''
+          }
+        >
+          ${value} point${value === 1 ? '' : 's'}
+        </option>
+      `).join('');
+  }
+);
+
+document.addEventListener(
+  'click',
+  async event => {
+    const button =
+      event.target.closest(
+        '[data-recommend-points-id]'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    const exceptionId =
+      button.dataset.recommendPointsId;
+
+    const item =
+      currentAttendanceExceptions[
+        exceptionId
+      ];
+
+    if (!item) {
+      alert(
+        'The attendance exception could not be found.'
+      );
+
+      return;
+    }
+
+    if (!item.infractionDate) {
+      alert(
+        'The infraction date is missing. ' +
+        'Upload the previous-week review again.'
+      );
+
+      return;
+    }
+
+    if (!item.employeeNumber) {
+      alert(
+        'The employee number is missing.'
+      );
+
+      return;
+    }
+
+    const panel =
+      button.closest(
+        '.point-assignment-controls'
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    const pointSelector =
+      panel.querySelector(
+        '.exception-points'
+      );
+
+    const commentBox =
+      panel.querySelector(
+        '.exception-comment'
+      );
+
+    const typeSelector =
+      panel.querySelector(
+        '.exception-infraction-type'
+      );
+
+    const status =
+      panel.querySelector(
+        '.recommendation-status'
+      );
+
+    if (
+      !pointSelector ||
+      !commentBox
+    ) {
+      return;
+    }
+
+    const recommendedPoints =
+      Number(pointSelector.value);
+
+    const managerComment =
+      commentBox.value.trim();
+
+    const infractionType =
+      typeSelector
+        ? typeSelector.value
+        : apiInfractionType(
+            item.type
+          );
+
+    if (!managerComment) {
+      alert(
+        'Enter a manager explanation before ' +
+        'saving the recommendation.'
+      );
+
+      commentBox.focus();
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Recommend ${recommendedPoints} point(s) ` +
+        `for ${item.buildName}'s ` +
+        `${item.dayLabel} infraction?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const originalButtonText =
+      button.textContent;
+
+    button.disabled = true;
+    button.textContent =
+      'Saving Recommendation...';
+
+    if (status) {
+      status.textContent =
+        'Saving recommendation...';
+
+      status.className =
+        'recommendation-status';
+    }
+
+    try {
+      const sourceExceptionId =
+        buildSourceExceptionId(
+          item,
+          infractionType
+        );
+
+      const response = await fetch(
+        '/api/attendance-point-recommendations',
+        {
+          method: 'POST',
+
+          credentials: 'same-origin',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            store:
+              state.store,
+
+            employeeNumber:
+              item.employeeNumber,
+
+            employeeName:
+              item.buildName,
+
+            infractionDate:
+              item.infractionDate,
+
+            infractionType,
+
+            recommendedPoints,
+
+            managerComment,
+
+            sourceExceptionId
+          })
+        }
+      );
+
+      const responseText =
+        await response.text();
+
+      let result = {};
+
+      try {
+        result = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch (parseError) {
+        throw new Error(
+          `Recommendation returned HTTP ` +
+          `${response.status}. The server returned ` +
+          `a non-JSON response.`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          'The recommendation could not be saved.'
+        );
+      }
+
+      if (!result.recommendation) {
+        throw new Error(
+          'The server did not return the saved ' +
+          'recommendation.'
+        );
+      }
+
+      existingPointRecommendations[
+        result.recommendation.sourceExceptionId
+      ] = result.recommendation;
+
+      attendanceExceptionComments[
+        item.id
+      ] = result.recommendation.managerComment;
+
+      renderPrevious();
+    } catch (err) {
+      console.error(
+        'Recommendation save error:',
+        err
+      );
+
+      button.disabled = false;
+      button.textContent =
+        originalButtonText;
+
+      if (status) {
+        status.textContent =
+          err.message;
+
+        status.className =
+          'recommendation-status ' +
+          'point-save-error';
+      }
+    }
+  }
+);
+
+document.addEventListener(
+  'click',
+  async event => {
+    const button =
+      event.target.closest(
+        '[data-assign-recommended-points-id]'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    const exceptionId =
+      button.dataset.assignRecommendedPointsId;
+
+    const item =
+      currentAttendanceExceptions[
+        exceptionId
+      ];
+
+    if (!item) {
+      alert(
+        'The attendance exception could not be found.'
+      );
+
+      return;
+    }
+
+    const panel =
+      button.closest(
+        '.point-assignment-controls'
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    const pointSelector =
+      panel.querySelector(
+        '.exception-points'
+      );
+
+    const commentBox =
+      panel.querySelector(
+        '.exception-comment'
+      );
+
+    const typeSelector =
+      panel.querySelector(
+        '.exception-infraction-type'
+      );
+
+    const status =
+      panel.querySelector(
+        '.point-assignment-status'
+      );
+
+    const recommendedPoints =
+      Number(
+        pointSelector?.value || 0
+      );
+
+    const infractionType =
+      typeSelector
+        ? typeSelector.value
+        : apiInfractionType(
+            item.type
+          );
+
+    const sourceExceptionId =
+      buildSourceExceptionId(
+        item,
+        infractionType
+      );
+
+    const recommendation =
+      existingPointRecommendations[
+        sourceExceptionId
+      ];
+
+    if (!recommendation) {
+      alert(
+        'Save the recommendation before assigning points.'
+      );
+
+      return;
+    }
+
+    /*
+     * Validate that the displayed values still match
+     * the stored recommendation.
+     */
+    if (
+      Number(
+        recommendation.recommendedPoints
+      ) !== recommendedPoints
+    ) {
+      alert(
+        'The recommended point value has changed. ' +
+        'Save the recommendation again before assigning.'
+      );
+
+      return;
+    }
+
+    if (
+      String(
+        recommendation.managerComment || ''
+      ).trim() !==
+      String(
+        commentBox?.value || ''
+      ).trim()
+    ) {
+      alert(
+        'The manager explanation has changed. ' +
+        'Save the recommendation again before assigning.'
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Actually assign ${recommendedPoints} ` +
+        `point(s) to ${item.buildName}? ` +
+        `This creates the official point record.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const originalButtonText =
+      button.textContent;
+
+    button.disabled = true;
+    button.textContent =
+      'Assigning...';
+
+    if (status) {
+      status.textContent =
+        'Assigning recommended points...';
+
+      status.className =
+        'point-assignment-status';
+    }
+
+    try {
+      const response = await fetch(
+        '/api/attendance-points',
+        {
+          method: 'POST',
+
+          credentials: 'same-origin',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            store:
+              state.store,
+
+            employeeNumber:
+              item.employeeNumber,
+
+            employeeName:
+              item.buildName,
+
+            infractionDate:
+              item.infractionDate,
+
+            infractionType:
+              recommendation.infractionType,
+
+            points:
+              recommendation.recommendedPoints,
+
+            scheduledShift:
+              item.plannedValues.join(
+                ', '
+              ),
+
+            actualShift:
+              item.actualValues.join(
+                ', '
+              ),
+
+            lateMinutes:
+              item.lateMinutes || 0,
+
+            earlyMinutes:
+              item.earlyMinutes || 0,
+
+            managerComment:
+              recommendation.managerComment,
+
+            sourceExceptionId:
+              recommendation.sourceExceptionId
+          })
+        }
+      );
+
+      const responseText =
+        await response.text();
+
+      let result = {};
+
+      try {
+        result = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch (parseError) {
+        throw new Error(
+          `Point assignment returned HTTP ` +
+          `${response.status}. The server returned ` +
+          `a non-JSON response.`
+        );
+      }
+
+      if (!response.ok) {
+        /*
+         * If the backend says a point record already
+         * exists, cache it so the UI locks correctly.
+         */
+        if (
+          result.pointRecord?.sourceExceptionId
+        ) {
+          existingAttendancePoints[
+  result.pointRecord.sourceExceptionId
+] = result.pointRecord;
+
+const completionResponse = await fetch(
+  `/api/attendance-point-recommendations/` +
+  `${encodeURIComponent(
+    recommendation._id
+  )}/mark-assigned`,
+  {
+    method: 'POST',
+
+    credentials: 'same-origin',
+
+    headers: {
+      'Content-Type':
+        'application/json',
+
+      Accept:
+        'application/json'
+    },
+
+    body: JSON.stringify({
+      pointRecordId:
+        result.pointRecord._id
+    })
+  }
+);
+
+const completionText =
+  await completionResponse.text();
+
+let completionResult = {};
+
+try {
+  completionResult =
+    completionText
+      ? JSON.parse(completionText)
+      : {};
+} catch (parseError) {
+  console.error(
+    'Recommendation completion returned ' +
+    'a non-JSON response.'
+  );
+}
+
+if (
+  completionResponse.ok &&
+  completionResult.recommendation
+) {
+  existingPointRecommendations[
+    completionResult.recommendation
+      .sourceExceptionId
+  ] = completionResult.recommendation;
+} else {
+  console.error(
+    'The point was assigned, but the ' +
+    'recommendation was not marked completed:',
+    completionResult.error ||
+    completionText
+  );
+}
+
+renderPrevious();
+        }
+
+        throw new Error(
+          result.error ||
+          'The recommended points could not be assigned.'
+        );
+      }
+
+      if (!result.pointRecord) {
+        throw new Error(
+          'The server did not return the assigned ' +
+          'point record.'
+        );
+      }
+
+      existingAttendancePoints[
+  result.pointRecord.sourceExceptionId
+] = result.pointRecord;
+
+renderPrevious();
+
+try {
+  await loadAttendancePointSummary();
+} catch (summaryError) {
+  console.error(
+    'Point history refresh failed:',
+    summaryError
+  );
+}
+``
+    } catch (err) {
+      console.error(
+        'Recommended point assignment error:',
+        err
+      );
+
+      const currentPanel =
+        document.querySelector(
+          `[data-point-panel="${exceptionId}"]`
+        );
+
+      if (
+        currentPanel &&
+        currentPanel.dataset.pointCompleted !==
+          'true'
+      ) {
+        const currentButton =
+          currentPanel.querySelector(
+            '[data-assign-recommended-points-id]'
+          );
+
+        if (currentButton) {
+          currentButton.disabled = false;
+          currentButton.textContent =
+            originalButtonText;
+        }
+
+        const currentStatus =
+          currentPanel.querySelector(
+            '.point-assignment-status'
+          );
+
+        if (currentStatus) {
+          currentStatus.textContent =
+            err.message;
+
+          currentStatus.className =
+            'point-assignment-status ' +
+            'point-save-error';
+        }
+      }
+    }
+  }
+);
+
+document.addEventListener('change', async event => {
+  const identifierInput = event.target.closest(
+    '.employee-number-input'
+  );
+
+  if (!identifierInput) {
+    return;
+  }
+
+  const employeeName =
+    identifierInput.dataset.employeeName;
+
+  const employeeIdentifier =
+    identifierInput.value.trim();
+
+  state.buildEmployeeIdentifiers[employeeName] =
+    employeeIdentifier;
+
+  try {
+    await saveEmployeeSettings();
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      'The employee number changed on the page, ' +
+      'but the change could not be saved.'
+    );
+  }
+});
+
+document.addEventListener('click', event => {
+  const removeButton = event.target.closest(
+    '.remove-person[data-remove-name]'
+  );
+
+  if (!removeButton) {
+    return;
+  }
+
+  removeEmployee(
+    removeButton.dataset.removeType,
+    removeButton.dataset.removeName
+  );
+});
+
+  async function toggleAvailability(
+  type,
+  name,
+  isAvailable
+) {
+
+  console.log(
+    'toggleAvailability',
+    name,
+    isAvailable
+  );
+
+  state.availability[name] = isAvailable;
+
+  console.log(
+    'after change:',
+    state.availability
+  );
+
+  if (!isAvailable) {
+    clearEmployeeAssignments(name);
+  }
+
+  renderAllTables();
+
+  try {
+    await saveEmployeeSettings();
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      'Availability changed on the page, ' +
+      'but it could not be saved.'
+    );
+  }
+}
+
+  function clearEmployeeAssignments(
+  employeeName
+  ) {
+  for (
+    const assignmentKey of
+    Object.keys(state.assignments)
+  ) {
+    if (
+      state.assignments[assignmentKey] ===
+      employeeName
+    ) {
+      state.assignments[assignmentKey] = ''
+    }
+  }
+  }
+
+
+  async function addEmployee(type) {
+  const enteredName = window.prompt(
+    `New ${type} name:`
+  )
+
+  const name = enteredName?.trim()
+
+  if (!name) {
+    return
+  }
+
+  const alreadyManager =
+    state.managers.some(
+      existing =>
+        existing.toLowerCase() ===
+        name.toLowerCase()
+    )
+
+  const alreadyAssociate =
+    state.associates.some(
+      existing =>
+        existing.toLowerCase() ===
+        name.toLowerCase()
+    )
+
+    const alreadyCashier =
+  state.cashiers.some(
+    existing =>
+      existing.toLowerCase() ===
+      name.toLowerCase()
+  );
+
+  if (
+  alreadyManager ||
+  alreadyAssociate ||
+  alreadyCashier
+) {
+    alert(
+      `${name} is already on an employee list.`
+    )
+
+    return
+  }
+
+  if (type === 'manager') {
+  state.managers.push(name);
+} else if (type === 'associate') {
+  state.associates.push(name);
+} else if (type === 'cashier') {
+  state.cashiers.push(name);
+} else {
+  alert('Invalid employee role.');
+  return;
+}
+
+  state.availability[name] = true
+  state.buildEmployeeIdentifiers[name] = ''
+
+  renderAllTables()
+
+  try {
+    await saveEmployeeSettings()
+  } catch (err) {
+    console.error(err)
+
+    alert(
+      'The employee was added to the page, ' +
+      'but the change could not be saved.'
+    )
+  }
+  }
+
+  async function removeEmployee(
+  type,
+  employeeName
+  ) {
+  const confirmed = window.confirm(
+    `Remove ${employeeName} from the ` +
+    `${type} list? Existing shift assignments ` +
+    `for this employee will be cleared.`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  clearEmployeeAssignments(employeeName)
+
+  if (type === 'manager') {
+  state.managers =
+    state.managers.filter(
+      name => name !== employeeName
+    );
+} else if (type === 'associate') {
+  state.associates =
+    state.associates.filter(
+      name => name !== employeeName
+    );
+} else if (type === 'cashier') {
+  state.cashiers =
+    state.cashiers.filter(
+      name => name !== employeeName
+    );
+}
+
+  delete state.availability[employeeName]
+  delete state.buildEmployeeIdentifiers[employeeName]
+  renderAllTables()
+
+  try {
+    await saveEmployeeSettings()
+  } catch (err) {
+    console.error(err)
+
+    alert(
+      'The employee was removed from the page, ' +
+      'but the change could not be saved.'
+    )
+  }
+  }
+
+
+  async function saveEmployeeSettings() {
+  const response = await fetch(
+    '/api/schedule-settings',
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      credentials: 'same-origin',
+
+      body: JSON.stringify({
+        store: state.store,
+        managers: state.managers,
+        associates: state.associates,
+        cashiers: state.cashiers,
+        buildEmployeeIdentifiers: state.buildEmployeeIdentifiers,
+        availability: state.availability
+      })
+    }
+  )
+
+  const result = await response.json()
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Schedule settings could not be saved'
+    )
+  }
+
+  return result
+  }
+
+
+  function setAssignment(el) {
+
+  state.assignments[
+    el.dataset.assignment
+  ] = el.value;
+
+  renderCoverage(
+    'managerTable',
+    managerCoverage,
+    'manager'
+  );
+
+  renderCoverage(
+    'associateTable',
+    associateCoverage,
+    'associate'
+  );
+
+  recalculate();
+}
+
+  function parseTime(text){
+    const m = text.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i); if(!m) return null;
+    let h=Number(m[1])%12; if(m[3].toUpperCase()==='PM') h+=12; return h+Number(m[2])/60;
+  }
+  function hasAttendanceIssue(
+  scheduledShift,
+  actualShift
+) {
+  if (
+    !scheduledShift ||
+    !actualShift ||
+    !scheduledShift.includes(' to ') ||
+    !actualShift.includes(' to ')
+  ) {
+    return null;
+  }
+
+  const [scheduledStart, scheduledEnd] =
+    scheduledShift.split(' to ');
+
+  const [actualStart, actualEnd] =
+    actualShift.split(' to ');
+
+  const scheduledStartTime =
+    parseTime(scheduledStart);
+
+  const scheduledEndTime =
+    parseTime(scheduledEnd);
+
+  const actualStartTime =
+    parseTime(actualStart);
+
+  const actualEndTime =
+    parseTime(actualEnd);
+
+  if (
+    scheduledStartTime == null ||
+    scheduledEndTime == null ||
+    actualStartTime == null ||
+    actualEndTime == null
+  ) {
+    return null;
+  }
+
+  const lateMinutes =
+    (actualStartTime -
+      scheduledStartTime) * 60;
+
+  const earlyMinutes =
+    (scheduledEndTime -
+      actualEndTime) * 60;
+
+  return {
+    late: lateMinutes > 15,
+    early: earlyMinutes > 15
+  };
+}
+  function shiftHours(shift){
+    if(!shift || !shift.includes(' to ')) return 0;
+    const [a,b]=shift.split(' to ').map(parseTime); if(a==null||b==null) return 0;
+    return +(b<a?b+24-a:b-a).toFixed(2);
+  }
+
+  function gatherScheduled() {
+  const employees = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates,
+      ...state.cashiers
+    ])
+  ];
+
+  const values = {};
+
+  employees.forEach(name => {
+    values[name] = Object.fromEntries(
+      DAY_KEYS.map(day => [
+        day,
+        {
+          hours: 0,
+          rawHours: 0,
+          lunchDeducted: false,
+          modified: false,
+          shifts: []
+        }
+      ])
+    );
+  });
+
+  const coverageGroups = [
+  {
+    type: 'manager',
+    coverage: managerCoverage
+  },
+  {
+    type: 'associate',
+    coverage: associateCoverage
+  },
+  {
+    type: 'cashier',
+    coverage: cashierCoverage
+  }
+];
+
+  coverageGroups.forEach(group => {
+    Object.entries(group.coverage)
+      .forEach(([shiftId, row]) => {
+        DAY_KEYS.forEach(day => {
+          const name = getAssignment(
+            group.type,
+            shiftId,
+            day
+          );
+
+          const shift = getEffectiveShift(
+            group.type,
+            shiftId,
+            day,
+            row[day] || ''
+          );
+
+          const modified = isTemporaryShift(
+            group.type,
+            shiftId,
+            day
+          );
+
+          if (
+            name &&
+            shift &&
+            values[name]
+          ) {
+            values[name][day].rawHours +=
+              shiftHours(shift);
+
+            values[name][day].shifts.push({
+              text: shift,
+              modified
+            });
+
+            if (modified) {
+              values[name][day].modified = true;
+            }
+          }
+        });
+      });
+  });
+
+  employees.forEach(name => {
+    DAY_KEYS.forEach(day => {
+      const dayData = values[name][day];
+
+      const rawHours = Number(
+        dayData.rawHours || 0
+      );
+
+      if (rawHours >= 7.5) {
+        dayData.hours = Math.max(
+          0,
+          rawHours - 0.5
+        );
+
+        dayData.lunchDeducted = true;
+      } else {
+        dayData.hours = rawHours;
+        dayData.lunchDeducted = false;
+      }
+
+      dayData.rawHours = Number(
+        rawHours.toFixed(2)
+      );
+
+      dayData.hours = Number(
+        dayData.hours.toFixed(2)
+      );
+    });
+  });
+
+  return values;
+}
+
+
+  function renderHoursMatrix() {
+  const data = gatherScheduled();
+
+  const employees = Object.keys(data).filter(
+    name =>
+      state.availability[name] !== false ||
+      DAY_KEYS.some(
+        day => data[name][day].hours
+      )
+  );
+
+  let html = `
+    <thead>
+      <tr>
+        <th>Day</th>
+        ${
+          employees.map(
+            name => `<th>${escapeHtml(name)}</th>`
+          ).join('')
+        }
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  DAY_KEYS.forEach((day, index) => {
+    const total = employees.reduce(
+      (sum, name) =>
+        sum + data[name][day].hours,
+      0
+    );
+
+    html += `
+      <tr>
+        <td>${DAYS[index]}</td>
+
+        ${
+          employees.map(name => {
+            const dayData = data[name][day];
+
+            return `
+              <td class="${
+                dayData.modified
+                  ? 'temporary-hours'
+                  : ''
+              }">
+                ${dayData.hours.toFixed(2)}
+              </td>
+            `;
+          }).join('')
+        }
+
+        <td class="metric">
+          ${total.toFixed(2)}
+        </td>
+      </tr>
+    `;
+  });
+
+  html += `
+    <tr class="total-row">
+      <td>Total</td>
+
+      ${
+        employees.map(name => `
+          <td class="metric">
+            ${
+              DAY_KEYS.reduce(
+                (sum, day) =>
+                  sum + data[name][day].hours,
+                0
+              ).toFixed(2)
+            }
+          </td>
+        `).join('')
+      }
+
+      <td class="metric">
+        ${
+          employees.reduce(
+            (grandTotal, name) =>
+              grandTotal +
+              DAY_KEYS.reduce(
+                (sum, day) =>
+                  sum + data[name][day].hours,
+                0
+              ),
+            0
+          ).toFixed(2)
+        }
+      </td>
+    </tr>
+  </tbody>
+  `;
+
+  document.getElementById(
+    'hoursMatrix'
+  ).innerHTML = html;
+}
+function generateScheduleComments() {
+  const comments = [];
+
+  const coverageGroups = [
+    {
+      type: 'manager',
+      coverage: managerCoverage
+    },
+    {
+      type: 'associate',
+      coverage: associateCoverage
+    },
+    {
+      type: 'cashier',
+      coverage: cashierCoverage
+    }
+  ];
+
+  coverageGroups.forEach(group => {
+    Object.entries(
+      group.coverage
+    ).forEach(([shiftId, row]) => {
+      DAY_KEYS.forEach(day => {
+        const key =
+          scheduleCellKey(
+            group.type,
+            shiftId,
+            day
+          );
+
+        if (
+          !Object.prototype.hasOwnProperty.call(
+            temporaryShifts,
+            key
+          )
+        ) {
+          return;
+        }
+
+        const originalShift =
+          row[day] || '';
+
+        const newShift =
+          temporaryShifts[key];
+
+        const note =
+          temporaryShiftNotes[key] ||
+          'No explanation provided';
+
+        const shiftLabel =
+          row.label || shiftId;
+
+        const dayLabel =
+          DAYS[
+            DAY_KEYS.indexOf(day)
+          ] || day;
+
+        /*
+         * Existing preset shift changed to blank:
+         * the manager removed the shift.
+         */
+        if (
+          originalShift &&
+          !newShift
+        ) {
+          comments.push({
+            type:
+              'Removed Shift',
+
+            day:
+              dayLabel,
+
+            shift:
+              shiftLabel,
+
+            details:
+              `${originalShift} removed`,
+
+            reason:
+              note
+          });
+
+          return;
+        }
+
+        /*
+         * There was no preset shift, but a new shift
+         * was added.
+         */
+        if (
+          !originalShift &&
+          newShift
+        ) {
+          comments.push({
+            type:
+              'Added Shift',
+
+            day:
+              dayLabel,
+
+            shift:
+              shiftLabel,
+
+            details:
+              newShift,
+
+            reason:
+              note
+          });
+
+          return;
+        }
+
+        /*
+         * An existing shift time was changed.
+         */
+        if (
+          originalShift &&
+          newShift &&
+          originalShift !== newShift
+        ) {
+          comments.push({
+            type:
+              'Adjusted Shift',
+
+            day:
+              dayLabel,
+
+            shift:
+              shiftLabel,
+
+            details:
+              `${originalShift} to ${newShift}`,
+
+            reason:
+              note
+          });
+        }
+      });
+    });
+  });
+
+  return comments;
+}
+  function renderPrintSchedule() {
+  const data = gatherScheduled();
+
+  const employees = Object.keys(data).filter(
+    name =>
+      DAY_KEYS.some(
+        day => data[name][day].shifts.length
+      )
+  );
+
+  let bodyHtml = '';
+
+  employees.forEach(name => {
+    const total = DAY_KEYS.reduce(
+      (sum, day) =>
+        sum + data[name][day].hours,
+      0
+    );
+
+    const employeeHasChanges =
+      DAY_KEYS.some(
+        day => data[name][day].modified
+      );
+
+    const dayCells = DAY_KEYS.map(day => {
+      const dayData = data[name][day];
+
+      if (!dayData.shifts.length) {
+        return '<td></td>';
+      }
+
+      const shiftsHtml = dayData.shifts
+        .map(shift => `
+          <span class="${
+            shift.modified
+              ? 'temporary-shift'
+              : ''
+          }">
+            ${escapeHtml(shift.text)}
+          </span>
+        `)
+        .join('<br>');
+
+      return `
+        <td>
+          ${shiftsHtml}
+        </td>
+      `;
+    }).join('');
+
+    bodyHtml += `
+      <tr>
+        <td>${escapeHtml(name)}</td>
+
+        ${dayCells}
+
+        <td class="metric ${
+          employeeHasChanges
+            ? 'temporary-hours'
+            : ''
+        }">
+          ${total.toFixed(2)}
+        </td>
+      </tr>
+    `;
+  });
+
+  const dayTotals = DAY_KEYS.map(day =>
+    employees.reduce(
+      (sum, name) =>
+        sum + data[name][day].hours,
+      0
+    )
+  );
+
+  const grandTotal = dayTotals.reduce(
+    (sum, value) => sum + value,
+    0
+  );
+
+  bodyHtml += `
+    <tr class="total-row">
+      <td>Total</td>
+
+      ${dayTotals.map(value => `
+        <td class="metric">
+          ${value.toFixed(2)}
+        </td>
+      `).join('')}
+
+      <td class="metric">
+        ${grandTotal.toFixed(2)}
+      </td>
+    </tr>
+  `;
+
+  const comments = generateScheduleComments();
+
+  if (comments.length) {
+    bodyHtml += `
+      <tr>
+        <td colspan="${DAYS.length + 2}">
+          <div class="print-comments">
+            <h3>Schedule Adjustments</h3>
+
+            <table
+              style="
+                width:100%;
+                min-width:0;
+                border-collapse:collapse;
+              "
+            >
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Shift</th>
+                  <th>Change</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${comments.map(item => `
+                  <tr>
+                    <td>
+                      ${escapeHtml(item.day)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.shift)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.details)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(item.reason)}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  document.getElementById(
+    'printSchedule'
+  ).innerHTML = `
+    <thead>
+      <tr>
+        <th>Name</th>
+
+        ${DAYS.map(day => `
+          <th>${escapeHtml(day)}</th>
+        `).join('')}
+
+        <th>Hours</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${bodyHtml}
+    </tbody>
+  `;
+}
+  function renderAttendance() {
+  const buildScheduleNames = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates,
+      ...state.cashiers
+    ])
+  ];
+
+  const periods = [
+    'week',
+    'year',
+    'allTime'
+  ];
+
+  const fields = [
+    'absences',
+    'tardies',
+    'leftEarly'
+  ];
+
+  /*
+   * Only use employees listed on the Build Schedule.
+   * Find attendance using the employee number saved
+   * for that Build Schedule employee.
+   */
+  const employees = buildScheduleNames.map(buildName => {
+    const employeeNumber = String(
+      state.buildEmployeeIdentifiers?.[
+        buildName
+      ] || ''
+    ).trim();
+
+    const attendanceRecord = employeeNumber
+      ? state.attendance?.[employeeNumber]
+      : null;
+
+    /*
+     * The row still displays the Build Schedule name.
+     * Attendance only connects when the employee number
+     * exists and the uploaded name also matches.
+     */
+    const uploadedName = String(
+      attendanceRecord?.employeeName || ''
+    ).trim();
+
+    const numberMatches =
+      Boolean(employeeNumber) &&
+      Boolean(attendanceRecord);
+
+    const nameMatches =
+      normalizeEmployeeName(uploadedName) ===
+      normalizeEmployeeName(buildName);
+
+    const matched =
+      numberMatches &&
+      nameMatches;
+
+    return {
+      buildName,
+      employeeNumber,
+      attendance: matched
+        ? attendanceRecord
+        : null
+    };
+  });
+
+  document.querySelector(
+    '#attendanceTable tbody'
+  ).innerHTML = employees.map(employee => {
+    const {
+      buildName,
+      employeeNumber,
+      attendance
+    } = employee;
+
+    const cells = periods.flatMap(period =>
+      fields.map(field => {
+        const value = Number(
+          attendance?.[period]?.[field] || 0
+        );
+
+        return `
+          <td>
+            <input
+              type="number"
+              min="0"
+              value="${value}"
+              data-attendance-number="${
+                escapeHtml(employeeNumber)
+              }"
+              data-attendance-name="${
+                escapeHtml(buildName)
+              }"
+              data-attendance-period="${
+                escapeHtml(period)
+              }"
+              data-attendance-field="${
+                escapeHtml(field)
+              }"
+              ${
+                attendance
+                  ? ''
+                  : 'disabled'
+              }
+            >
+          </td>
+        `;
+      })
+    ).join('');
+
+    return `
+      <tr>
+        <td>
+          ${escapeHtml(buildName)}
+        </td>
+
+        ${cells}
+      </tr>
+    `;
+  }).join('');
+}
+
+function normalizeEmployeeName(value) {
+  let normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  if (normalized === 'thomas') {
+    normalized = 'thom';
+  }
+
+  return normalized;
+}
+
+
+function getMatchingUploadedName(buildName) {
+  const buildIdentifier = String(
+    state.buildEmployeeIdentifiers?.[
+      buildName
+    ] || ''
+  ).trim();
+
+  if (!buildIdentifier) {
+    return '';
+  }
+
+  return Object.keys(
+    state.employeeIdentifiers || {}
+  ).find(uploadedName => {
+    const uploadedIdentifier = String(
+      state.employeeIdentifiers?.[
+        uploadedName
+      ] || ''
+    ).trim();
+
+    return (
+      normalizeEmployeeName(uploadedName) ===
+        normalizeEmployeeName(buildName) &&
+      uploadedIdentifier === buildIdentifier
+    );
+  }) || '';
+}
+
+function minutesBetween(
+  firstTime,
+  secondTime
+) {
+  let difference =
+    Math.round(
+      (secondTime - firstTime) * 60
+    );
+
+  /*
+   * Handle a shift that crosses midnight.
+   */
+  if (difference < -720) {
+    difference += 1440;
+  }
+
+  if (difference > 720) {
+    difference -= 1440;
+  }
+
+  return difference;
+}
+
+function scheduledPaidHoursFromRanges(value) {
+  const shifts =
+    normalizeShiftValues(value);
+
+  const rawHours = shifts.reduce(
+    (total, shift) =>
+      total + shiftHours(shift),
+    0
+  );
+
+  /*
+   * Match the schedule calculation rule:
+   * deduct a 30-minute lunch when the employee
+   * is scheduled for at least 7.5 hours that day.
+   */
+  if (rawHours >= 7.5) {
+    return Math.max(
+      0,
+      rawHours - 0.5
+    );
+  }
+
+  return rawHours;
+}
+
+function getExceptionDate(dayIndex) {
+  if (!state.previousWeekStart) {
+    return '';
+  }
+
+  const startDate =
+    new Date(state.previousWeekStart);
+
+  if (
+    Number.isNaN(
+      startDate.getTime()
+    )
+  ) {
+    return '';
+  }
+
+  const infractionDate =
+    new Date(startDate);
+
+  infractionDate.setUTCDate(
+    infractionDate.getUTCDate() +
+    dayIndex
+  );
+
+  return infractionDate
+    .toISOString()
+    .slice(0, 10);
+}
+
+function createExceptionId(
+  type,
+  employeeNumber,
+  infractionDate
+) {
+  return [
+    state.store,
+    type,
+    employeeNumber,
+    infractionDate
+  ].join(':');
+}
+
+function getPreviousWeekExceptions() {
+  const exceptions = {
+    late: [],
+    early: [],
+    both: [],
+    absence: [],
+    overtime: []
+  };
+
+  
+
+  const buildScheduleNames = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates,
+      ...state.cashiers
+    ])
+  ];
+
+  buildScheduleNames.forEach(buildName => {
+    const uploadedName =
+      getMatchingUploadedName(buildName);
+
+    if (!uploadedName) {
+      return;
+    }
+
+    const employeeNumber = String(
+      state.buildEmployeeIdentifiers?.[
+        buildName
+      ] || ''
+    ).trim();
+
+    const scheduledShifts =
+      state.previousScheduledShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualShifts =
+      state.previousActualShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualHours =
+      state.previousActualHours?.[
+        uploadedName
+      ] || {};
+
+    DAY_KEYS.forEach((day, dayIndex) => {
+  const infractionDate =
+    getExceptionDate(dayIndex);
+
+  const plannedValues =
+    normalizeShiftValues(
+      scheduledShifts[day]
+    );
+
+  const actualValues =
+    normalizeShiftValues(
+      actualShifts[day]
+    );
+
+      const scheduledDayHours =
+  scheduledPaidHoursFromRanges(
+    plannedValues
+  );
+
+const actualDayHours =
+  Number(
+    actualHours[day] || 0
+  );
+
+
+
+      const baseRecord = {
+        buildName,
+        uploadedName,
+        employeeNumber,
+        day,
+        dayLabel: DAYS[dayIndex],
+        infractionDate,
+        plannedValues,
+        actualValues,
+        scheduledDayHours,
+        actualDayHours
+      };
+
+      /*
+       * A scheduled shift with no actual shift
+       * is considered an absence/no-time-worked
+       * exception.
+       */
+      if (
+        plannedValues.length > 0 &&
+        actualValues.length === 0
+      ) {
+        exceptions.absence.push({
+          ...baseRecord,
+
+          id: createExceptionId(
+            'absence',
+            employeeNumber,
+            infractionDate
+          ),
+
+          type: 'absence',
+
+          summary:
+            `${buildName} had no time worked ` +
+            `for a scheduled ${dayIndex >= 0
+              ? DAYS[dayIndex]
+              : day} shift.`
+        });
+
+        /*
+         * Do not calculate lateness, early departure,
+         * or overtime when no actual shift exists.
+         */
+        return;
+      }
+
+      if (
+        plannedValues.length > 0 &&
+        actualValues.length > 0
+      ) {
+        const scheduledParts =
+          plannedValues[0].split(' to ');
+
+        const actualParts =
+          actualValues[0].split(' to ');
+
+        if (
+          scheduledParts.length === 2 &&
+          actualParts.length === 2
+        ) {
+          const scheduledStart =
+            parseTime(
+              scheduledParts[0]
+            );
+
+          const scheduledEnd =
+            parseTime(
+              scheduledParts[1]
+            );
+
+          const actualStart =
+            parseTime(
+              actualParts[0]
+            );
+
+          const actualEnd =
+            parseTime(
+              actualParts[1]
+            );
+
+          if (
+            scheduledStart != null &&
+            scheduledEnd != null &&
+            actualStart != null &&
+            actualEnd != null
+          ) {
+            const lateMinutes =
+              minutesBetween(
+                scheduledStart,
+                actualStart
+              );
+
+            const earlyMinutes =
+              minutesBetween(
+                actualEnd,
+                scheduledEnd
+              );
+
+            const arrivedLate =
+              lateMinutes > 15;
+
+            const leftEarly =
+              earlyMinutes > 15;
+
+            if (
+              arrivedLate &&
+              leftEarly
+            ) {
+              exceptions.both.push({
+                ...baseRecord,
+
+                id: createExceptionId(
+                  'both',
+                  employeeNumber,
+                  infractionDate
+                ),
+
+                type: 'both',
+                lateMinutes,
+                earlyMinutes,
+
+                summary:
+                  `${buildName} arrived ` +
+                  `${lateMinutes} minutes late and ` +
+                  `left ${earlyMinutes} minutes early ` +
+                  `on ${DAYS[dayIndex]}.`
+              });
+            } else if (arrivedLate) {
+              exceptions.late.push({
+                ...baseRecord,
+
+                id: createExceptionId(
+                  'late',
+                  employeeNumber,
+                  infractionDate
+                ),
+
+                type: 'late',
+                lateMinutes,
+
+                summary:
+                  `${buildName} arrived ` +
+                  `${lateMinutes} minutes late ` +
+                  `on ${DAYS[dayIndex]}.`
+              });
+            } else if (leftEarly) {
+              exceptions.early.push({
+                ...baseRecord,
+
+                id: createExceptionId(
+                  'early',
+                  employeeNumber,
+                  infractionDate
+                ),
+
+                type: 'early',
+                earlyMinutes,
+
+                summary:
+                  `${buildName} left ` +
+                  `${earlyMinutes} minutes early ` +
+                  `on ${DAYS[dayIndex]}.`
+              });
+            }
+          }
+        }
+      }
+
+      /*
+       * Overtime threshold:
+       * actual hours are at least 0.50 hours
+       * greater than scheduled paid hours.
+       */
+      const overtimeHours =
+        actualDayHours -
+        scheduledDayHours;
+
+      if (
+        scheduledDayHours > 0 &&
+        actualDayHours >=
+          scheduledDayHours + 0.5
+      ) {
+        exceptions.overtime.push({
+          ...baseRecord,
+
+          id: createExceptionId(
+            'overtime',
+            employeeNumber,
+            infractionDate
+          ),
+
+          type: 'overtime',
+          overtimeHours,
+
+          summary:
+            `${buildName} worked ` +
+            `${overtimeHours.toFixed(2)} hours ` +
+            `over the scheduled hours on ` +
+            `${DAYS[dayIndex]}.`
+        });
+      }
+    });
+  });
+
+  return exceptions;
+}
+
+function buildExceptionTimesHtml(item) {
+  const scheduledText =
+    item.plannedValues.length
+      ? item.plannedValues.join(', ')
+      : 'None';
+
+  const actualText =
+    item.actualValues.length
+      ? item.actualValues.join(', ')
+      : 'No time worked';
+
+  let hoursText = '';
+
+  if (item.type === 'overtime') {
+    hoursText =
+      `<br>Scheduled hours: ` +
+      `${item.scheduledDayHours.toFixed(2)}` +
+      ` | Actual hours: ` +
+      `${item.actualDayHours.toFixed(2)}`;
+  }
+
+  return `
+    <span class="exception-times">
+      Scheduled: ${escapeHtml(scheduledText)}
+      <br>
+      Actual: ${escapeHtml(actualText)}
+      ${hoursText}
+    </span>
+  `;
+}
+
+function buildOvertimeReviewControls(item) {
+  const sourceExceptionId =
+    buildOvertimeSourceExceptionId(item);
+
+  const savedReview =
+    existingOvertimeReviews[
+      sourceExceptionId
+    ] || null;
+
+  const savedExplanation =
+    savedReview?.explanation ||
+    attendanceExceptionComments[
+      item.id
+    ] ||
+    '';
+
+  let buttonText =
+    'Save Overtime Explanation';
+
+  let buttonClass = '';
+
+  if (savedReview) {
+    buttonText =
+      'Update Overtime Explanation';
+
+    buttonClass =
+      'review-saved';
+  }
+
+  let statusText = '';
+
+  if (savedReview) {
+    const reviewDateValue =
+      savedReview.updatedAt ||
+      savedReview.createdAt;
+
+    const reviewDate =
+      reviewDateValue
+        ? new Date(
+            reviewDateValue
+          ).toLocaleString()
+        : 'an earlier date';
+
+    statusText =
+      `Explanation saved on ${reviewDate}.`;
+
+    if (savedReview.reviewedByName) {
+      statusText +=
+        ` Reviewed by ` +
+        `${savedReview.reviewedByName}.`;
+    }
+  }
+
+  return `
+    <div
+      class="overtime-review-controls"
+      data-overtime-panel="${escapeHtml(item.id)}"
+    >
+      <label class="overtime-comment-label">
+        Manager overtime explanation
+
+        <textarea
+          class="exception-comment overtime-explanation"
+          data-exception-id="${escapeHtml(item.id)}"
+          placeholder="Explain why the employee worked at least 30 minutes over schedule..."
+        >${escapeHtml(savedExplanation)}</textarea>
+      </label>
+
+      <button
+        type="button"
+        class="
+          save-overtime-review-button
+          ${buttonClass}
+        "
+        data-save-overtime-id="${escapeHtml(item.id)}"
+      >
+        ${buttonText}
+      </button>
+
+      <div
+        class="overtime-review-status"
+        data-overtime-status="${escapeHtml(item.id)}"
+      >
+        ${escapeHtml(statusText)}
+      </div>
+    </div>
+  `;
+}
+
+function renderExceptionSection(
+  title,
+  headingClass,
+  items
+) {
+  if (!items.length) {
+    return '';
+  }
+
+  return `
+    <div class="exception-section">
+      <div
+        class="exception-section-heading ${
+          escapeHtml(headingClass)
+        }"
+      >
+        ${escapeHtml(title)}
+        (${items.length})
+      </div>
+
+      ${items.map(item => `
+        <div class="exception-row">
+
+          <div class="exception-description">
+            <strong>
+              ${escapeHtml(item.summary)}
+            </strong>
+
+            ${buildExceptionTimesHtml(item)}
+          </div>
+
+          ${
+            item.type === 'overtime'
+              ? buildOvertimeReviewControls(item)
+              : buildPointAssignmentControls(item)
+          }
+
+        </div>
+      `).join('')}
+
+    </div>
+  `;
+}
+
+function renderAttendanceExceptionReview(
+  exceptions
+) {
+  const container =
+    document.getElementById(
+      'attendanceExceptionReview'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const totalExceptions =
+    exceptions.late.length +
+    exceptions.early.length +
+    exceptions.both.length +
+    exceptions.absence.length +
+    exceptions.overtime.length;
+
+  if (totalExceptions === 0) {
+    container.innerHTML = `
+      <div class="exception-section">
+        <div class="exception-section-heading">
+          Attendance and Labor Exceptions
+        </div>
+
+        <div class="no-exceptions">
+          No attendance or overtime exceptions
+          were detected for the previous week.
+        </div>
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML = `
+    ${renderExceptionSection(
+      'Late Arrivals',
+      '',
+      exceptions.late
+    )}
+
+    ${renderExceptionSection(
+      'Early Departures',
+      '',
+      exceptions.early
+    )}
+
+    ${renderExceptionSection(
+      'Late Arrival and Early Departure',
+      'both-heading',
+      exceptions.both
+    )}
+
+    ${renderExceptionSection(
+      'Absences / No Time Worked',
+      'absence-heading',
+      exceptions.absence
+    )}
+
+    ${renderExceptionSection(
+      'Daily Overtime of 30 Minutes or More',
+      'overtime-heading',
+      exceptions.overtime
+    )}
+  `;
+}
+  function renderPrevious() {
+  const table = document.getElementById(
+    'previousWeekComparisonTable'
+  );
+
+  if (!table) {
+    return;
+  }
+
+  /*
+   * Start only with employees currently listed
+   * on the Build Schedule page.
+   */
+  const buildScheduleNames = [
+    ...new Set([
+      ...state.managers,
+      ...state.associates,
+      ...state.cashiers
+    ])
+  ];
+
+  /*
+   * Find the corresponding uploaded employee.
+   * getMatchingUploadedName requires both:
+   *
+   * 1. Matching normalized name
+   * 2. Matching employee number
+   */
+  const matchedEmployees = buildScheduleNames
+    .map(buildName => {
+      const uploadedName =
+        getMatchingUploadedName(buildName);
+
+      if (!uploadedName) {
+        return null;
+      }
+
+      const hasReviewData =
+        Boolean(
+          state.previousScheduledShifts?.[
+            uploadedName
+          ]
+        ) ||
+        Boolean(
+          state.previousActualShifts?.[
+            uploadedName
+          ]
+        ) ||
+        Boolean(
+          state.previousActualHours?.[
+            uploadedName
+          ]
+        ) ||
+        state.previousScheduledHours?.[
+          uploadedName
+        ] !== undefined;
+
+      if (!hasReviewData) {
+        return null;
+      }
+
+      return {
+        buildName,
+        uploadedName
+      };
+    })
+    .filter(Boolean);
+
+  const dayTotals = Object.fromEntries(
+  DAY_KEYS.map(day => [
+    day,
+    {
+      scheduled: 0,
+      actual: 0
+    }
+  ])
+);
+
+  let totalScheduled = 0;
+  let totalWorked = 0;
+
+  const rows = matchedEmployees.map(employee => {
+    const {
+      buildName,
+      uploadedName
+    } = employee;
+
+    /*
+     * Display the employee number saved on
+     * the Build Schedule page.
+     */
+    const employeeIdentifier = String(
+      state.buildEmployeeIdentifiers?.[
+        buildName
+      ] || ''
+    ).trim();
+
+    /*
+     * Read previous-week information using
+     * the matching uploaded employee name.
+     */
+    const scheduledShifts =
+      state.previousScheduledShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualShifts =
+      state.previousActualShifts?.[
+        uploadedName
+      ] || {};
+
+    const actualHours =
+      state.previousActualHours?.[
+        uploadedName
+      ] || {};
+
+    const scheduledTotal = Number(
+      state.previousScheduledHours?.[
+        uploadedName
+      ] || 0
+    );
+
+    const workedTotal = DAY_KEYS.reduce(
+      (sum, day) =>
+        sum + Number(actualHours[day] || 0),
+      0
+    );
+
+    const difference =
+      workedTotal - scheduledTotal;
+
+    totalScheduled += scheduledTotal;
+    totalWorked += workedTotal;
+
+    DAY_KEYS.forEach(day => {
+
+  const actualDayHours =
+    Number(
+      actualHours[day] || 0
+    );
+
+  const scheduledDayHours =
+  scheduledPaidHoursFromRanges(
+    scheduledShifts[day]
+  );
+
+  dayTotals[day].scheduled +=
+    scheduledDayHours;
+
+  dayTotals[day].actual +=
+    actualDayHours;
+
+});
+
+    const differenceClass =
+      difference < 0
+        ? 'negative'
+        : difference > 0
+          ? 'positive'
+          : '';
+
+    const dayCells = DAY_KEYS.map(day => {
+  const plannedValues =
+    normalizeShiftValues(
+      scheduledShifts[day]
+    );
+
+  const actualValues =
+    normalizeShiftValues(
+      actualShifts[day]
+    );
+
+  const scheduledDayHours =
+    scheduledPaidHoursFromRanges(
+      plannedValues
+    );
+
+  const actualDayHours = Number(
+    actualHours[day] || 0
+  );
+
+  const hasDailyOvertime =
+    scheduledDayHours > 0 &&
+    actualDayHours >=
+      scheduledDayHours + 0.5;
+
+  const issue =
+    plannedValues.length &&
+    actualValues.length
+      ? hasAttendanceIssue(
+          plannedValues[0],
+          actualValues[0]
+        )
+      : null;
+
+  let cellClass =
+    'comparison-cell';
+
+  const noTimeWorked =
+    plannedValues.length > 0 &&
+    actualValues.length === 0;
+
+if (noTimeWorked) {
+  cellClass +=
+    ' no-time-worked-cell';
+} else if (issue) {
+  if (
+    issue.late &&
+    issue.early
+  ) {
+    cellClass +=
+      ' attendance-severe';
+  } else if (
+    issue.late ||
+    issue.early
+  ) {
+    cellClass +=
+      ' attendance-issue';
+  }
+}
+
+if (hasDailyOvertime) {
+  cellClass +=
+    ' overtime-issue';
+}
+
+      const plannedHtml = plannedValues.length
+  ? plannedValues
+      .map(value => escapeHtml(value))
+      .join('<br>')
+  : 'OFF';
+
+const actualHtml = actualValues.length
+  ? actualValues
+      .map(value => escapeHtml(value))
+      .join('<br>')
+  : 'No time worked';
+
+/*
+ * If schedule is OFF and no work was performed,
+ * leave the cell completely blank.
+ */
+if (
+  plannedHtml === 'OFF' &&
+  actualHtml === 'No time worked'
+) {
+  return `
+  <td class="${cellClass}"></td>`;
+}
+
+      return `
+        <td class="${cellClass}">
+
+          <span class="planned-shift">
+            ${plannedHtml}
+          </span>
+
+          <span class="actual-shift ${
+            actualValues.length
+              ? ''
+              : 'no-time-worked'
+          }">
+            ${actualHtml}
+          </span>
+
+        </td>
+      `;
+    }).join('');
+
+    return `
+      <tr>
+
+
+        <td>
+          ${escapeHtml(buildName)}
+        </td>
+
+        ${dayCells}
+
+        <td class="comparison-hours">
+          ${scheduledTotal.toFixed(2)}
+        </td>
+
+        <td class="comparison-hours">
+          ${workedTotal.toFixed(2)}
+        </td>
+
+        <td class="comparison-hours ${differenceClass}">
+          ${difference.toFixed(2)}
+        </td>
+
+      </tr>
+    `;
+  }).join('');
+
+  const grandDifference =
+    totalWorked - totalScheduled;
+
+  const grandDifferenceClass =
+    grandDifference < 0
+      ? 'negative'
+      : grandDifference > 0
+        ? 'positive'
+        : '';
+
+  const totalDayCells = DAY_KEYS.map(day => `
+  <td class="metric">
+
+    <div>
+      S: ${dayTotals[day].scheduled.toFixed(2)}
+    </div>
+
+    <div
+      style="
+        font-style:italic;
+        color:#64748b;
+        margin-top:2px;
+      "
+    >
+      A: ${dayTotals[day].actual.toFixed(2)}
+    </div>
+
+  </td>
+`).join('');
+
+  const totalRow = `
+    <tr class="total-row">
+
+      <td>
+        TOTAL
+      </td>
+
+      ${totalDayCells}
+
+      <td class="metric">
+        ${totalScheduled.toFixed(2)}
+      </td>
+
+      <td class="metric">
+        ${totalWorked.toFixed(2)}
+      </td>
+
+      <td class="metric ${grandDifferenceClass}">
+        ${grandDifference.toFixed(2)}
+      </td>
+
+    </tr>
+  `;
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+
+
+        <th>Employee Name</th>
+
+        ${DAYS.map(day => `
+          <th>${escapeHtml(day)}</th>
+        `).join('')}
+
+        <th>Scheduled</th>
+        <th>Worked</th>
+        <th>Difference</th>
+
+      </tr>
+    </thead>
+
+    <tbody>
+
+      ${
+        rows ||
+        `
+          <tr>
+            <td colspan="12">
+              No employees had matching names
+              and employee numbers.
+            </td>
+          </tr>
+        `
+      }
+
+      ${rows ? totalRow : ''}
+
+    </tbody>
+  `;
+
+  const attendanceExceptions =
+  getPreviousWeekExceptions();
+
+currentAttendanceExceptions =
+  Object.fromEntries(
+    [
+      ...attendanceExceptions.late,
+      ...attendanceExceptions.early,
+      ...attendanceExceptions.both,
+      ...attendanceExceptions.absence,
+      ...attendanceExceptions.overtime
+    ].map(item => [
+      item.id,
+      item
+    ])
+  );
+
+renderAttendanceExceptionReview(
+  attendanceExceptions
+);
+}
+
+function shiftHoursFromRanges(value) {
+
+  const shifts =
+    normalizeShiftValues(value);
+
+  let total = 0;
+
+  shifts.forEach(shift => {
+    total += shiftHours(shift);
+  });
+
+  return total;
+
+}
+
+function defaultPointsForException(type) {
+  const defaults = {
+    late: 1,
+    tardy: 1,
+
+    early: 1,
+    left_early: 1,
+
+    both: 2,
+    late_and_left_early: 2,
+
+    absence: 0,
+    no_call_no_show: 5
+  };
+
+  return defaults[type] ?? 0;
+}
+
+function getPointOptions(type) {
+  if (
+    type === 'late' ||
+    type === 'tardy'
+  ) {
+    return [0, 1];
+  }
+
+  if (
+    type === 'early' ||
+    type === 'left_early'
+  ) {
+    return [0, 1];
+  }
+
+  if (
+    type === 'both' ||
+    type === 'late_and_left_early'
+  ) {
+    return [0, 1, 2];
+  }
+
+  if (type === 'absence') {
+    return [0, 1, 2, 3, 4, 5];
+  }
+
+  if (type === 'no_call_no_show') {
+    return [0, 5];
+  }
+
+  return [0];
+}
+
+
+function apiInfractionType(type) {
+  const values = {
+    late: 'tardy',
+    early: 'left_early',
+    both: 'late_and_left_early',
+    absence: 'absence',
+    no_call_no_show:
+      'no_call_no_show'
+  };
+
+  return values[type] || type;
+}
+
+function buildOvertimeSourceExceptionId(
+  item
+) {
+  return [
+    state.store,
+    'overtime',
+    item.employeeNumber,
+    item.infractionDate
+  ].join(':');
+}
+
+function buildSourceExceptionId(
+  item,
+  selectedInfractionType = ''
+) {
+  const infractionType =
+    selectedInfractionType ||
+    apiInfractionType(item.type);
+
+  return [
+    state.store,
+    infractionType,
+    item.employeeNumber,
+    item.infractionDate
+  ].join(':');
+}
+
+async function loadExistingOvertimeReviews() {
+  const parameters =
+    new URLSearchParams({
+      store: state.store,
+      includeAll: 'true'
+    });
+
+  const response = await fetch(
+    `/api/overtime-reviews?${parameters.toString()}`,
+    {
+      method: 'GET',
+
+      credentials: 'same-origin',
+
+      headers: {
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const responseText =
+    await response.text();
+
+  let result = {};
+
+  try {
+    result = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch (parseError) {
+    throw new Error(
+      `Overtime reviews returned HTTP ` +
+      `${response.status}. The server returned ` +
+      `a non-JSON response.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Overtime reviews could not be loaded.'
+    );
+  }
+
+  const reviews =
+    Array.isArray(result.reviews)
+      ? result.reviews
+      : [];
+
+  existingOvertimeReviews =
+    Object.fromEntries(
+      reviews
+        .filter(review =>
+          review &&
+          review.sourceExceptionId &&
+          review.voided !== true
+        )
+        .map(review => [
+          review.sourceExceptionId,
+          review
+        ])
+    );
+
+  overtimeReviewsLoaded = true;
+
+  renderPrevious();
+}
+
+async function loadExistingAttendancePoints() {
+  const parameters =
+    new URLSearchParams({
+      store: state.store,
+      includeAll: 'true'
+    });
+
+  const response = await fetch(
+    `/api/attendance-points?${parameters.toString()}`,
+    {
+      method: 'GET',
+
+      credentials: 'same-origin',
+
+      headers: {
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const responseText =
+    await response.text();
+
+  let result = {};
+
+  try {
+    result = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch (parseError) {
+    throw new Error(
+      `Attendance point history returned HTTP ` +
+      `${response.status}. The server returned ` +
+      `a non-JSON response.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Existing attendance points could not be loaded.'
+    );
+  }
+
+  const pointRecords =
+    Array.isArray(result.pointRecords)
+      ? result.pointRecords
+      : [];
+
+  existingAttendancePoints =
+    Object.fromEntries(
+      pointRecords
+        .filter(record =>
+          record &&
+          record.sourceExceptionId &&
+          record.voided !== true
+        )
+        .map(record => [
+          record.sourceExceptionId,
+          record
+        ])
+    );
+
+  attendancePointsLoaded = true;
+
+  renderPrevious();
+}
+
+async function loadExistingPointRecommendations() {
+  const parameters =
+    new URLSearchParams({
+      store: state.store,
+      includeAll: 'true'
+    });
+
+  const response = await fetch(
+    `/api/attendance-point-recommendations?` +
+    `${parameters.toString()}`,
+    {
+      method: 'GET',
+
+      credentials: 'same-origin',
+
+      headers: {
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const responseText =
+    await response.text();
+
+  let result = {};
+
+  try {
+    result = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch (parseError) {
+    throw new Error(
+      `Point recommendations returned HTTP ` +
+      `${response.status}. The server returned ` +
+      `a non-JSON response.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Point recommendations could not be loaded.'
+    );
+  }
+
+  const recommendations =
+    Array.isArray(result.recommendations)
+      ? result.recommendations
+      : [];
+
+  existingPointRecommendations =
+    Object.fromEntries(
+      recommendations
+        .filter(recommendation =>
+          recommendation &&
+          recommendation.sourceExceptionId
+        )
+        .map(recommendation => [
+          recommendation.sourceExceptionId,
+          recommendation
+        ])
+    );
+
+  pointRecommendationsLoaded = true;
+}
+
+
+function buildPointAssignmentControls(item) {
+  const defaultInfractionType =
+    apiInfractionType(item.type);
+
+  const possibleSourceExceptionIds = [
+    buildSourceExceptionId(
+      item,
+      defaultInfractionType
+    )
+  ];
+
+  /*
+   * Absences may be classified as either a normal
+   * absence or a no-call/no-show.
+   */
+  if (item.type === 'absence') {
+    possibleSourceExceptionIds.push(
+      buildSourceExceptionId(
+        item,
+        'absence'
+      )
+    );
+
+    possibleSourceExceptionIds.push(
+      buildSourceExceptionId(
+        item,
+        'no_call_no_show'
+      )
+    );
+  }
+
+  const sourceExceptionIds = [
+    ...new Set(
+      possibleSourceExceptionIds.filter(Boolean)
+    )
+  ];
+
+  const savedPointRecord =
+    sourceExceptionIds
+      .map(sourceExceptionId =>
+        existingAttendancePoints[
+          sourceExceptionId
+        ]
+      )
+      .find(Boolean) ||
+    null;
+
+  const savedRecommendation =
+    sourceExceptionIds
+      .map(sourceExceptionId =>
+        existingPointRecommendations[
+          sourceExceptionId
+        ]
+      )
+      .find(Boolean) ||
+    null;
+
+  const pointsAssigned =
+    Boolean(savedPointRecord);
+
+  const recommendationSaved =
+    Boolean(savedRecommendation);
+
+  const savedInfractionType =
+    savedPointRecord?.infractionType ||
+    savedRecommendation?.infractionType ||
+    defaultInfractionType;
+
+  const selectedPointValue =
+    pointsAssigned
+      ? Number(
+          savedPointRecord.points || 0
+        )
+      : recommendationSaved
+        ? Number(
+            savedRecommendation.recommendedPoints || 0
+          )
+        : defaultPointsForException(
+            savedInfractionType
+          );
+
+  const optionValues = [
+    ...new Set([
+      ...getPointOptions(
+        savedInfractionType
+      ),
+      selectedPointValue
+    ])
+  ].sort((first, second) =>
+    first - second
+  );
+
+  const options =
+    optionValues
+      .map(value => `
+        <option
+          value="${value}"
+          ${
+            value === selectedPointValue
+              ? 'selected'
+              : ''
+          }
+        >
+          ${value} point${value === 1 ? '' : 's'}
+        </option>
+      `)
+      .join('');
+
+  const savedComment =
+    savedPointRecord?.managerComment ||
+    savedRecommendation?.managerComment ||
+    attendanceExceptionComments[
+      item.id
+    ] ||
+    '';
+
+  const pointsWereAssigned =
+    pointsAssigned &&
+    Number(savedPointRecord.points) > 0;
+
+  let recommendationButtonText =
+    'Save Recommendation';
+
+  let recommendationButtonClass = '';
+
+  if (
+    recommendationSaved &&
+    !pointsAssigned
+  ) {
+    recommendationButtonText =
+      'Update Recommendation';
+
+    recommendationButtonClass =
+      'recommendation-saved';
+  }
+
+  if (pointsAssigned) {
+    recommendationButtonText =
+      'Recommendation Complete';
+
+    recommendationButtonClass =
+      'recommendation-saved';
+  }
+
+  let assignmentButtonText =
+    recommendationSaved
+      ? 'Assign Recommended Points'
+      : 'Save Recommendation First';
+
+  let assignmentButtonClass = '';
+
+  if (pointsAssigned) {
+    if (pointsWereAssigned) {
+      assignmentButtonText =
+        'Points Assigned';
+
+      assignmentButtonClass =
+        'points-assigned';
+    } else {
+      assignmentButtonText =
+        'Points Not Assigned';
+
+      assignmentButtonClass =
+        'points-not-assigned';
+    }
+  }
+
+  const controlDisabledAttribute =
+    pointsAssigned
+      ? 'disabled'
+      : '';
+
+  const recommendationButtonDisabled =
+    pointsAssigned
+      ? 'disabled'
+      : '';
+
+  const assignmentButtonDisabled =
+    pointsAssigned ||
+    !recommendationSaved
+      ? 'disabled'
+      : '';
+
+  let recommendationStatus = '';
+
+  if (recommendationSaved) {
+    const recommendationDateValue =
+      savedRecommendation.updatedAt ||
+      savedRecommendation.createdAt;
+
+    const recommendationDate =
+      recommendationDateValue
+        ? new Date(
+            recommendationDateValue
+          ).toLocaleString()
+        : 'an earlier date';
+
+    const recommendedPoints =
+      Number(
+        savedRecommendation.recommendedPoints || 0
+      );
+
+    recommendationStatus =
+      `${recommendedPoints} point${
+        recommendedPoints === 1
+          ? ''
+          : 's'
+      } recommended on ` +
+      `${recommendationDate}.`;
+
+    const recommendedBy =
+      String(
+        savedRecommendation.recommendedByName ||
+        ''
+      ).trim();
+
+    if (recommendedBy) {
+      recommendationStatus +=
+        ` Recommended by ${recommendedBy}.`;
+    }
+  }
+
+  let assignedStatus = '';
+
+  if (pointsAssigned) {
+    const assignedDate =
+      savedPointRecord.createdAt
+        ? new Date(
+            savedPointRecord.createdAt
+          ).toLocaleString()
+        : 'an earlier date';
+
+    if (pointsWereAssigned) {
+      const assignedPoints =
+        Number(
+          savedPointRecord.points
+        );
+
+      assignedStatus =
+        `${assignedPoints} point${
+          assignedPoints === 1
+            ? ''
+            : 's'
+        } assigned on ${assignedDate}.`;
+    } else {
+      assignedStatus =
+        `No points were assigned. ` +
+        `The final decision was recorded ` +
+        `on ${assignedDate}.`;
+    }
+
+    const assignedBy =
+      String(
+        savedPointRecord.assignedByName ||
+        ''
+      ).trim();
+
+    if (assignedBy) {
+      assignedStatus +=
+        ` Assigned by ${assignedBy}.`;
+    }
+  }
+
+  const assignmentStatusClass =
+    pointsAssigned
+      ? pointsWereAssigned
+        ? 'point-save-success'
+        : 'point-not-assigned-status'
+      : '';
+
+  const absenceClassification =
+    item.type === 'absence'
+      ? `
+        <label>
+          Absence classification
+
+          <select
+            class="exception-infraction-type"
+            data-exception-id="${escapeHtml(item.id)}"
+            ${controlDisabledAttribute}
+          >
+            <option
+              value="absence"
+              ${
+                savedInfractionType ===
+                'absence'
+                  ? 'selected'
+                  : ''
+              }
+            >
+              Absence with notice
+            </option>
+
+            <option
+              value="no_call_no_show"
+              ${
+                savedInfractionType ===
+                'no_call_no_show'
+                  ? 'selected'
+                  : ''
+              }
+            >
+              No call / no show
+            </option>
+          </select>
+        </label>
+      `
+      : '';
+
+  return `
+    <div
+      class="point-assignment-controls ${
+        item.type === 'absence'
+          ? 'absence-point-controls'
+          : ''
+      }"
+      data-point-panel="${escapeHtml(item.id)}"
+      data-point-completed="${
+        pointsAssigned
+          ? 'true'
+          : 'false'
+      }"
+      data-recommendation-id="${escapeHtml(
+        savedRecommendation?._id || ''
+      )}"
+    >
+      ${absenceClassification}
+
+      <label>
+        Recommended Points
+
+        <select
+          class="exception-points"
+          data-exception-id="${escapeHtml(item.id)}"
+          ${controlDisabledAttribute}
+        >
+          ${options}
+        </select>
+      </label>
+
+      <label class="point-comment-label">
+        Manager recommendation explanation
+
+        <textarea
+          class="exception-comment"
+          data-exception-id="${escapeHtml(item.id)}"
+          placeholder="Explain the attendance infraction and recommended points..."
+          ${controlDisabledAttribute}
+        >${escapeHtml(savedComment)}</textarea>
+      </label>
+
+      <div class="point-action-buttons">
+        <button
+          type="button"
+          class="
+            recommend-points-button
+            ${recommendationButtonClass}
+          "
+          data-recommend-points-id="${escapeHtml(item.id)}"
+          ${recommendationButtonDisabled}
+        >
+          ${recommendationButtonText}
+        </button>
+
+        <button
+          type="button"
+          class="
+            primary
+            assign-points-button
+            ${assignmentButtonClass}
+          "
+          data-assign-recommended-points-id="${
+            escapeHtml(item.id)
+          }"
+          ${assignmentButtonDisabled}
+        >
+          ${assignmentButtonText}
+        </button>
+      </div>
+
+      <div
+        class="recommendation-status"
+        data-recommendation-status="${escapeHtml(item.id)}"
+      >
+        ${escapeHtml(recommendationStatus)}
+      </div>
+
+      <div
+        class="
+          point-assignment-status
+          ${assignmentStatusClass}
+        "
+        data-point-status="${escapeHtml(item.id)}"
+      >
+        ${escapeHtml(assignedStatus)}
+      </div>
+    </div>
+  `;
+}
+
+function normalizeShiftValues(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => String(item).trim())
+      .filter(Boolean);
+  }
+
+  if (
+    value !== undefined &&
+    value !== null &&
+    String(value).trim()
+  ) {
+    return [String(value).trim()];
+  }
+
+  return [];
+}
+
+  function renderAllTables() {
+  renderCoverage(
+    'managerTable',
+    managerCoverage,
+    'manager'
+  );
+
+  renderCoverage(
+    'associateTable',
+    associateCoverage,
+    'associate'
+  );
+
+  renderCoverage(
+    'cashierTable',
+    cashierCoverage,
+    'cashier'
+  );
+
+  renderAvailability();
+  recalculate();
+  renderAttendance();
+  renderPrevious();
+}
+  function recalculate(){ renderHoursMatrix(); renderPrintSchedule(); renderTemplateName(); }
+  function escapeHtml(v) {return String(v ?? '');}
+
+  
+
+  document.querySelectorAll('.module-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('.module-tabs button').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active'); document.getElementById(btn.dataset.module).classList.add('active');
+  }));
+
+
+  document
+  .getElementById('backToStoreMapBtn')
+  ?.addEventListener('click', () => {
+
+    const currentPath =
+      window.location.pathname;
+
+    const parentPath =
+      currentPath.replace(
+        /\/schedule$/i,
+        ''
+      );
+
+    window.location.href =
+      parentPath;
+
+  });
+``
+  document.addEventListener(
+  'input',
+  event => {
+    const input = event.target.closest(
+      '[data-attendance-number]'
+    );
+
+    if (!input) {
+      return;
+    }
+
+    const employeeNumber =
+      input.dataset.attendanceNumber;
+
+    const period =
+      input.dataset.attendancePeriod;
+
+    const field =
+      input.dataset.attendanceField;
+
+    if (
+      !state.attendance[
+        employeeNumber
+      ]
+    ) {
+      return;
+    }
+
+    if (
+      !state.attendance[
+        employeeNumber
+      ][period]
+    ) {
+      state.attendance[
+        employeeNumber
+      ][period] = {};
+    }
+
+    state.attendance[
+      employeeNumber
+    ][period][field] =
+      Math.max(
+        0,
+        Number(input.value || 0)
+      );
+  }
+);
+  document
+  .getElementById('attendanceUpload')
+  .addEventListener(
+    'change',
+    async event => {
+      const file = event.target.files[0];
+
+      if (!file) {
+        return;
+      }
+
+      if (
+        !file.name
+          .toLowerCase()
+          .endsWith('.json')
+      ) {
+        alert(
+          'The attendance upload must be a JSON file.'
+        );
+
+        event.target.value = '';
+        return;
+      }
+
+      try {
+        const attendance =
+          JSON.parse(
+            await file.text()
+          );
+
+        const response = await fetch(
+          '/api/attendance/upload',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            credentials: 'same-origin',
+
+            body: JSON.stringify({
+              store: state.store,
+              attendance
+            })
+          }
+        );
+
+        const result =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error ||
+            'Attendance could not be uploaded.'
+          );
+        }
+
+        state.attendance =
+          result.attendance || attendance;
+
+        renderAttendance();
+
+        alert(
+          `${result.employeeCount} attendance ` +
+          `record(s) uploaded successfully.`
+        );
+      } catch (err) {
+        console.error(
+          'Attendance upload failed:',
+          err
+        );
+
+        alert(
+          err.message ||
+          'The attendance JSON could not be read.'
+        );
+      } finally {
+        event.target.value = '';
+      }
+    }
+  );
+
+  document.addEventListener(
+  'click',
+  event => {
+    /*
+     * Add a shift to a coverage slot that currently
+     * has no preset or temporary shift.
+     */
+    const addButton =
+      event.target.closest(
+        '[data-add-shift-type]'
+      );
+
+    if (addButton) {
+      const type =
+        addButton.dataset.addShiftType;
+
+      const shiftId =
+        addButton.dataset.addShiftId;
+
+      const day =
+        addButton.dataset.addShiftDay;
+
+      const key =
+        scheduleCellKey(
+          type,
+          shiftId,
+          day
+        );
+
+      temporaryShifts[key] =
+        '9:00 AM to 5:00 PM';
+
+      /*
+       * Any previously stored deleted assignment for
+       * this cell is no longer applicable.
+       */
+      delete deletedShiftAssignments[key];
+
+      if (buildingNewTemplate) {
+        temporaryShiftNotes[key] = '';
+      } else {
+        const enteredReason =
+          window.prompt(
+            'Why is this shift being added?',
+            ''
+          );
+
+        if (enteredReason === null) {
+          delete temporaryShifts[key];
+          delete temporaryShiftNotes[key];
+
+          return;
+        }
+
+        const reason =
+          enteredReason.trim();
+
+        if (!reason) {
+          delete temporaryShifts[key];
+          delete temporaryShiftNotes[key];
+
+          alert(
+            'Enter an explanation before adding the shift.'
+          );
+
+          return;
+        }
+
+        temporaryShiftNotes[key] =
+          reason;
+      }
+
+      renderAllTables();
+
+      return;
+    }
+
+    /*
+     * Delete an existing preset or adjusted shift.
+     * The shift deletion remains a temporary schedule
+     * adjustment until the template is saved.
+     */
+    const deleteShiftButton =
+      event.target.closest(
+        '[data-delete-shift-type]'
+      );
+
+    if (deleteShiftButton) {
+      deleteScheduledShift(
+        deleteShiftButton.dataset
+          .deleteShiftType,
+
+        deleteShiftButton.dataset
+          .deleteShiftId,
+
+        deleteShiftButton.dataset
+          .deleteShiftDay,
+
+        deleteShiftButton.dataset
+          .deleteShiftPreset || ''
+      );
+
+      return;
+    }
+
+    /*
+     * Apply an edited start and end time.
+     */
+    const saveButton =
+      event.target.closest(
+        '[data-save-shift-type]'
+      );
+
+    if (saveButton) {
+      saveTemporaryShift(
+        saveButton.dataset
+          .saveShiftType,
+
+        saveButton.dataset
+          .saveShiftId,
+
+        saveButton.dataset
+          .saveShiftDay
+      );
+
+      return;
+    }
+
+    /*
+     * Reset a modified or deleted preset shift, or
+     * completely remove a newly added shift.
+     */
+    const clearButton =
+      event.target.closest(
+        '[data-clear-shift-type]'
+      );
+
+    if (clearButton) {
+      clearTemporaryShift(
+        clearButton.dataset
+          .clearShiftType,
+
+        clearButton.dataset
+          .clearShiftId,
+
+        clearButton.dataset
+          .clearShiftDay,
+
+        clearButton.dataset
+          .hasPreset === 'true'
+      );
+    }
+  }
+);
+
+
+function printPreviousWeek() {
+
+  document
+    .querySelectorAll('.module')
+    .forEach(module => {
+      module.classList.remove(
+        'print-previous'
+      );
+    });
+
+  document
+    .getElementById('module-5')
+    .classList.add(
+      'print-previous'
+    );
+
+  window.print();
+
+  setTimeout(() => {
+
+    document
+      .getElementById('module-5')
+      .classList.remove(
+        'print-previous'
+      );
+
+  }, 100);
+
+}
+
+function printWeeklySchedule() {
+
+  document
+    .querySelectorAll('.module')
+    .forEach(module => {
+      module.classList.remove(
+        'print-page',
+        'print-previous'
+      );
+    });
+
+  document
+    .getElementById('module-3')
+    .classList.add('print-page');
+
+  window.print();
+
+  setTimeout(() => {
+
+    document
+      .getElementById('module-3')
+      .classList.remove('print-page');
+
+  }, 100);
+}
+
+function cloneTemplateData(value) {
+  return JSON.parse(
+    JSON.stringify(value || {})
+  );
+}
+
+function captureCurrentTemplate() {
+  const savedManagerCoverage =
+    cloneTemplateData(managerCoverage);
+
+  const savedAssociateCoverage =
+    cloneTemplateData(associateCoverage);
+
+    const savedCashierCoverage =
+  cloneTemplateData(
+    cashierCoverage
+  );
+
+  /*
+   * Merge every temporary/adjusted shift into
+   * the permanent coverage saved in the template.
+   */
+  Object.entries(temporaryShifts)
+    .forEach(([key, shiftText]) => {
+      const [
+        type,
+        shiftId,
+        day
+      ] = key.split(':');
+
+      if (
+        type === 'manager' &&
+        savedManagerCoverage[shiftId]
+      ) {
+        savedManagerCoverage[
+          shiftId
+        ][day] = shiftText;
+      }
+
+      if (
+        type === 'associate' &&
+        savedAssociateCoverage[shiftId]
+      ) {
+        savedAssociateCoverage[
+          shiftId
+        ][day] = shiftText;
+      }
+
+      if (
+  type === 'cashier' &&
+  savedCashierCoverage[shiftId]
+) {
+  savedCashierCoverage[
+    shiftId
+  ][day] = shiftText;
+}
+    });
+
+  return {
+  assignments:
+    cloneTemplateData(
+      state.assignments
+    ),
+
+  managerCoverage:
+    savedManagerCoverage,
+
+  associateCoverage:
+    savedAssociateCoverage,
+
+  cashierCoverage:
+    savedCashierCoverage,
+
+  temporaryShifts: {},
+  temporaryShiftNotes: {}
+};
+
+}
+function createBlankCoverage(
+  existingCoverage
+) {
+  const blankCoverage = {};
+
+  Object.entries(existingCoverage)
+    .forEach(([shiftId, row]) => {
+      blankCoverage[shiftId] = {
+        label:
+          row.label ||
+          shiftId,
+
+        monday: '',
+        tuesday: '',
+        wednesday: '',
+        thursday: '',
+        friday: '',
+        saturday: '',
+        sunday: ''
+      };
+    });
+
+  return blankCoverage;
+}
+
+
+function replaceObjectContents(
+  target,
+  source
+) {
+  Object.keys(target).forEach(key => {
+    delete target[key];
+  });
+
+  Object.assign(
+    target,
+    cloneTemplateData(source)
+  );
+}
+
+function renderTemplateSelector(
+  selectedTemplateId = ''
+) {
+  const selector =
+    document.getElementById(
+      'templateSelector'
+    );
+
+  if (!selector) {
+    return;
+  }
+
+  selector.innerHTML = `
+    <option value="">
+      Select a template
+    </option>
+
+    ${state.templates.map(template => `
+      <option
+        value="${escapeHtml(template._id)}"
+        ${
+          template._id === selectedTemplateId
+            ? 'selected'
+            : ''
+        }
+      >
+        ${escapeHtml(template.templateName)}
+        ${
+          template.isDefault
+            ? ' (Default)'
+            : ''
+        }
+      </option>
+    `).join('')}
+  `;
+}
+
+async function loadTemplateList(
+  selectedTemplateId = ''
+) {
+  const response = await fetch(
+    `/api/schedule-templates?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'GET',
+      credentials: 'same-origin'
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Templates could not be loaded.'
+    );
+  }
+
+  state.templates =
+    Array.isArray(result.templates)
+      ? result.templates
+      : [];
+
+  renderTemplateSelector(
+    selectedTemplateId
+  );
+}
+
+async function saveCurrentAsTemplate() {
+  const enteredName = window.prompt(
+    'Template name:'
+  );
+
+  const templateName =
+    enteredName?.trim();
+
+  if (!templateName) {
+    return;
+  }
+
+  const makeDefault = window.confirm(
+    'Make this the default template ' +
+    `for ${state.store}?`
+  );
+
+  const templateData =
+    captureCurrentTemplate();
+
+  const response = await fetch(
+    '/api/schedule-templates',
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+
+      credentials: 'same-origin',
+
+      body: JSON.stringify({
+        store: state.store,
+        templateName,
+        isDefault: makeDefault,
+        templateData
+      })
+    }
+  );
+
+  const responseText =
+    await response.text();
+
+  let result = {};
+
+  try {
+    result = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch (parseError) {
+    console.error(
+      'Non-JSON template save response:',
+      {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        responseText
+      }
+    );
+
+    throw new Error(
+      `Template save returned HTTP ${response.status}. ` +
+      `The server returned HTML instead of JSON. ` +
+      `Server response: ${responseText.slice(0, 500)}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      `The template could not be saved. ` +
+      `HTTP ${response.status}`
+    );
+  }
+
+  if (!result.template) {
+    throw new Error(
+      'The server reported success but did not ' +
+      'return the saved template.'
+    );
+  }
+
+  state.currentTemplateName =
+    result.template.templateName ||
+    templateName;
+
+  buildingNewTemplate = false;
+
+  const savedTemplateData =
+    result.template.templateData ||
+    templateData;
+
+  replaceObjectContents(
+    managerCoverage,
+    savedTemplateData.managerCoverage ||
+    templateData.managerCoverage ||
+    {}
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    savedTemplateData.associateCoverage ||
+    templateData.associateCoverage ||
+    {}
+  );
+
+  replaceObjectContents(
+    cashierCoverage,
+    savedTemplateData.cashierCoverage ||
+    templateData.cashierCoverage ||
+    {}
+  );
+
+  replaceObjectContents(
+    state.assignments,
+    savedTemplateData.assignments ||
+    templateData.assignments ||
+    {}
+  );
+
+  /*
+   * Shifts saved in the template are now permanent,
+   * so they should no longer be marked temporary.
+   */
+  replaceObjectContents(
+  temporaryShifts,
+  {}
+);
+
+replaceObjectContents(
+  temporaryShiftNotes,
+  {}
+);
+
+replaceObjectContents(
+  deletedShiftAssignments,
+  {}
+);
+
+await loadTemplateList(
+  result.template._id || ''
+);
+
+  renderAllTables();
+
+  alert(
+    `"${state.currentTemplateName}" was saved ` +
+    `for ${state.store}.`
+  );
+}
+
+
+async function loadAttendancePointSummary() {
+  const parameters =
+    new URLSearchParams({
+      store: state.store
+    });
+
+  const response = await fetch(
+    `/api/attendance-points-summary?` +
+    `${parameters.toString()}`,
+    {
+      method: 'GET',
+
+      credentials: 'same-origin',
+
+      headers: {
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const responseText =
+    await response.text();
+
+  let result = {};
+
+  try {
+    result = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch (parseError) {
+    throw new Error(
+      `Attendance point summary returned HTTP ` +
+      `${response.status}. The server returned ` +
+      `a non-JSON response.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'Attendance point history could not be loaded.'
+    );
+  }
+
+  attendancePointSummary =
+    Array.isArray(result.employees)
+      ? result.employees
+      : [];
+
+  renderAttendancePointHistory();
+}
+``
+
+
+function formatPointHistoryDate(value) {
+  if (!value) {
+    return 'Date not recorded';
+  }
+
+  const parsedDate =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
+    return 'Date not recorded';
+  }
+
+  return parsedDate.toLocaleDateString(
+    'en-US',
+    {
+      timeZone: 'UTC',
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    }
+  );
+}
+
+function formatInfractionType(value) {
+  const infractionLabels = {
+    tardy:
+      'Tardy',
+
+    left_early:
+      'Left Early',
+
+    late_and_left_early:
+      'Late and Left Early',
+
+    absence:
+      'Absence',
+
+    no_call_no_show:
+      'No Call / No Show'
+  };
+
+  const cleanValue =
+    String(value || '').trim();
+
+  return (
+    infractionLabels[cleanValue] ||
+    cleanValue ||
+    'Not recorded'
+  );
+}
+
+function renderAttendancePointHistory() {
+  const container =
+    document.getElementById(
+      'attendancePointHistory'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const employeesWithPoints =
+    attendancePointSummary.filter(employee =>
+      Number(
+        employee.totalPoints || 0
+      ) > 0
+    );
+
+  if (!employeesWithPoints.length) {
+    container.innerHTML = `
+      <div class="no-exceptions">
+        No current Build Schedule employees have
+        attendance points within the last 365 days.
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML =
+    employeesWithPoints
+      .map((employee, employeeIndex) => {
+        const pointBearingInfractions =
+          Array.isArray(
+            employee.infractions
+          )
+            ? employee.infractions.filter(
+                record =>
+                  Number(
+                    record.points || 0
+                  ) > 0
+              )
+            : [];
+
+        if (!pointBearingInfractions.length) {
+          return '';
+        }
+
+        const safeEmployeeNumber =
+          String(
+            employee.employeeNumber || ''
+          ).replace(
+            /[^a-zA-Z0-9_-]/g,
+            ''
+          );
+
+        const detailsId =
+          `point-history-${employeeIndex}-` +
+          `${safeEmployeeNumber}`;
+
+        const totalPoints =
+          Number(
+            employee.totalPoints || 0
+          );
+
+        return `
+          <div class="point-history-employee">
+            <button
+              type="button"
+              class="point-history-toggle"
+              data-point-history-target="${escapeHtml(
+                detailsId
+              )}"
+              aria-expanded="false"
+              aria-controls="${escapeHtml(
+                detailsId
+              )}"
+            >
+              <span class="point-history-person">
+                <span
+                  class="point-history-arrow"
+                  aria-hidden="true"
+                >
+                  &#9654;
+                </span>
+
+                <span>
+                  ${escapeHtml(
+                    employee.employeeName
+                  )}
+
+                  <span class="point-history-number">
+                    Employee #${escapeHtml(
+                      employee.employeeNumber
+                    )}
+                  </span>
+                </span>
+              </span>
+
+              <span class="point-history-total">
+                ${totalPoints}
+                point${totalPoints === 1 ? '' : 's'}
+              </span>
+            </button>
+
+            <div
+              id="${escapeHtml(detailsId)}"
+              class="point-history-details"
+              hidden
+            >
+              <div
+                class="
+                  table-wrap
+                  point-history-table-wrap
+                "
+              >
+                <table class="point-history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Infraction</th>
+                      <th>Points</th>
+                      <th>Assigned By</th>
+                      <th>Explanation</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    ${pointBearingInfractions
+                      .map(record => {
+                        const dateText =
+                          formatPointHistoryDate(
+                            record.infractionDate
+                          );
+
+                        const infractionText =
+                          formatInfractionType(
+                            record.infractionType
+                          );
+
+                        const assignedBy =
+                          String(
+                            record.assignedByName ||
+                            ''
+                          ).trim() ||
+                          'Not recorded';
+
+                        const managerComment =
+                          String(
+                            record.managerComment ||
+                            ''
+                          ).trim() ||
+                          'No explanation recorded';
+
+                        const pointValue =
+                          Number(
+                            record.points || 0
+                          );
+
+                        return `
+                          <tr>
+                            <td>
+                              ${escapeHtml(
+                                dateText
+                              )}
+                            </td>
+
+                            <td>
+                              ${escapeHtml(
+                                infractionText
+                              )}
+                            </td>
+
+                            <td class="point-history-points">
+                              ${pointValue}
+                            </td>
+
+                            <td>
+                              ${escapeHtml(
+                                assignedBy
+                              )}
+                            </td>
+
+                            <td class="point-history-comment">
+                              ${escapeHtml(
+                                managerComment
+                              )}
+                            </td>
+                          </tr>
+                        `;
+                      })
+                      .join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+}
+
+function renderTemplateName() {
+
+  const label =
+    document.getElementById(
+      'printTemplateName'
+    );
+
+  if (!label) {
+    return;
+  }
+
+  label.textContent =
+    state.currentTemplateName
+      ? `Template: ${state.currentTemplateName}`
+      : '';
+}
+async function loadSelectedTemplate() {
+  const selector = document.getElementById(
+    'templateSelector'
+  );
+
+  const templateId = selector?.value || '';
+
+  if (!templateId) {
+    alert('Select a template first.');
+    return;
+  }
+
+  const response = await fetch(
+    `/api/schedule-templates/${
+      encodeURIComponent(templateId)
+    }?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'GET',
+      credentials: 'same-origin'
+    }
+  );
+
+  const responseText = await response.text();
+
+let result = {};
+
+try {
+  result = responseText
+    ? JSON.parse(responseText)
+    : {};
+} catch (parseError) {
+  console.error(
+    'Non-JSON template save response:',
+    {
+      status: response.status,
+      statusText: response.statusText,
+      url: response.url,
+      responseText
+    }
+  );
+
+  throw new Error(
+    `Template save returned HTTP ${response.status}. ` +
+    `The server returned HTML instead of JSON. ` +
+    `Check the browser console and Node terminal.`
+  );
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error ||
+    `The template could not be saved. HTTP ${response.status}`
+  );
+}
+
+  const template = result.template;
+  state.currentTemplateName =
+  template.templateName || '';
+
+  if (!template) {
+    throw new Error(
+      'The server did not return a template.'
+    );
+  }
+
+  const templateData =
+    template.templateData || {};
+
+  const loadedManagerCoverage =
+    cloneTemplateData(
+      templateData.managerCoverage || {}
+    );
+
+  const loadedAssociateCoverage =
+    cloneTemplateData(
+      templateData.associateCoverage || {}
+    );
+
+    const loadedCashierCoverage =
+  cloneTemplateData(
+    templateData.cashierCoverage || {}
+  );
+
+  /*
+   * Backward compatibility:
+   * Merge shifts stored in either the current
+   * lowercase property or the old uppercase property.
+   */
+  const legacyTemporaryShifts =
+    templateData.temporaryShifts ||
+    templateData.TemporaryShifts ||
+    {};
+
+  Object.entries(
+    legacyTemporaryShifts
+  ).forEach(([key, shiftText]) => {
+    const [
+      type,
+      shiftId,
+      day
+    ] = key.split(':');
+
+    /*
+     * Ignore malformed temporary-shift keys.
+     */
+    if (!DAY_KEYS.includes(day)) {
+      return;
+    }
+
+    if (
+      type === 'manager' &&
+      loadedManagerCoverage[shiftId]
+    ) {
+      loadedManagerCoverage[
+        shiftId
+      ][day] = shiftText;
+    }
+
+    if (
+      type === 'associate' &&
+      loadedAssociateCoverage[shiftId]
+    ) {
+      loadedAssociateCoverage[
+        shiftId
+      ][day] = shiftText;
+    }
+
+    if (
+  type === 'cashier' &&
+  loadedCashierCoverage[shiftId]
+) {
+  loadedCashierCoverage[
+    shiftId
+  ][day] = shiftText;
+}
+  });
+
+  /*
+   * Apply the assignments and permanent coverage
+   * from the selected template.
+   */
+  replaceObjectContents(
+    state.assignments,
+    templateData.assignments || {}
+  );
+
+  replaceObjectContents(
+    managerCoverage,
+    loadedManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    loadedAssociateCoverage
+  );
+
+  replaceObjectContents(
+  cashierCoverage,
+  loadedCashierCoverage
+);
+
+  /*
+   * A loaded template contains permanent shifts,
+   * so nothing should remain marked temporary.
+   */
+  replaceObjectContents(
+  temporaryShifts,
+  {}
+);
+
+replaceObjectContents(
+  temporaryShiftNotes,
+  {}
+);
+
+replaceObjectContents(
+  deletedShiftAssignments,
+  {}
+);
+
+buildingNewTemplate = false;
+
+renderAllTables();
+
+  alert(
+    `"${template.templateName || 'Template'}" was loaded.`
+  );
+}
+
+function beginNewTemplate() {
+  const confirmed = window.confirm(
+    'Start a new blank template? ' +
+    'All current shift times, assignments, ' +
+    'and unsaved schedule changes will be cleared.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  /*
+   * Preserve the coverage row labels but clear
+   * every shift time from Monday through Sunday.
+   */
+  state.currentTemplateName =
+  'New Unsaved Template';
+  const blankManagerCoverage =
+    createBlankCoverage(
+      managerCoverage
+    );
+
+  const blankAssociateCoverage =
+    createBlankCoverage(
+      associateCoverage
+    );
+
+    const blankCashierCoverage =
+  createBlankCoverage(
+    cashierCoverage
+  );
+
+  replaceObjectContents(
+    managerCoverage,
+    blankManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    blankAssociateCoverage
+  );
+
+  replaceObjectContents(
+  cashierCoverage,
+  blankCashierCoverage
+);
+
+  /*
+   * Clear all employee assignments.
+   */
+  replaceObjectContents(
+    state.assignments,
+    {}
+  );
+
+  /*
+   * Clear all temporary shifts and adjustment notes.
+   */
+  replaceObjectContents(
+  temporaryShifts,
+  {}
+);
+
+replaceObjectContents(
+  temporaryShiftNotes,
+  {}
+);
+
+replaceObjectContents(
+  deletedShiftAssignments,
+  {}
+);
+
+const selector =
+  document.getElementById(
+    'templateSelector'
+  );
+
+  if (selector) {
+    selector.value = '';
+  }
+  buildingNewTemplate = true;
+  renderAllTables();
+}
+
+async function deleteSelectedTemplate() {
+  const selector =
+    document.getElementById(
+      'templateSelector'
+    );
+
+  const templateId =
+    selector?.value || '';
+
+  if (!templateId) {
+    alert('Select a template first.');
+    return;
+  }
+
+  const selectedOption =
+    selector.options[
+      selector.selectedIndex
+    ];
+
+  const templateName =
+    selectedOption?.textContent?.trim() ||
+    'this template';
+
+  const confirmed = window.confirm(
+    `Delete "${templateName}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const response = await fetch(
+    `/api/schedule-templates/${
+      encodeURIComponent(templateId)
+    }?store=${
+      encodeURIComponent(state.store)
+    }`,
+    {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+      'The template could not be deleted.'
+    );
+  }
+
+  await loadTemplateList();
+
+  alert('Template deleted.');
+}
+
+document
+  .getElementById('loadTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await loadSelectedTemplate();
+      } catch (err) {
+        console.error(
+          'Template load error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+
+document
+  .getElementById('saveTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await saveCurrentAsTemplate();
+      } catch (err) {
+        console.error(
+          'Template save error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+
+document
+  .getElementById('newTemplateBtn')
+  .addEventListener(
+    'click',
+    beginNewTemplate
+  );
+
+document
+  .getElementById('deleteTemplateBtn')
+  .addEventListener(
+    'click',
+    async () => {
+      try {
+        await deleteSelectedTemplate();
+      } catch (err) {
+        console.error(
+          'Template delete error:',
+          err
+        );
+
+        alert(err.message);
+      }
+    }
+  );
+function restoreDefaultTemplate() {
+
+  replaceObjectContents(
+    managerCoverage,
+    defaultManagerCoverage
+  );
+
+  replaceObjectContents(
+    associateCoverage,
+    defaultAssociateCoverage
+  );
+
+  replaceObjectContents(
+    state.assignments,
+    {}
+  );
+
+  replaceObjectContents(
+  temporaryShifts,
+  {}
+);
+
+replaceObjectContents(
+  temporaryShiftNotes,
+  {}
+);
+
+replaceObjectContents(
+  deletedShiftAssignments,
+  {}
+);
+
+buildingNewTemplate = false;
+
+  renderAllTables();
+}
+
+document.addEventListener(
+  'click',
+  async event => {
+    const button =
+      event.target.closest(
+        '[data-save-overtime-id]'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    const exceptionId =
+      button.dataset.saveOvertimeId;
+
+    const item =
+      currentAttendanceExceptions[
+        exceptionId
+      ];
+
+    if (!item) {
+      alert(
+        'The overtime exception could not be found.'
+      );
+
+      return;
+    }
+
+    if (!item.infractionDate) {
+      alert(
+        'The overtime date is missing. ' +
+        'Upload the previous-week review again.'
+      );
+
+      return;
+    }
+
+    if (!item.employeeNumber) {
+      alert(
+        'The employee number is missing.'
+      );
+
+      return;
+    }
+
+    const panel =
+      button.closest(
+        '.overtime-review-controls'
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    const explanationBox =
+      panel.querySelector(
+        '.overtime-explanation'
+      );
+
+    const status =
+      panel.querySelector(
+        '.overtime-review-status'
+      );
+
+    const explanation =
+      explanationBox.value.trim();
+
+    if (!explanation) {
+      alert(
+        'Enter a manager explanation before saving.'
+      );
+
+      explanationBox.focus();
+      return;
+    }
+
+    if (explanation.length > 2000) {
+      alert(
+        'The overtime explanation cannot exceed ' +
+        '2,000 characters.'
+      );
+
+      explanationBox.focus();
+      return;
+    }
+
+    const originalButtonText =
+      button.textContent;
+
+    button.disabled = true;
+    button.textContent =
+      'Saving...';
+
+    if (status) {
+      status.textContent =
+        'Saving overtime explanation...';
+
+      status.className =
+        'overtime-review-status';
+    }
+
+    try {
+      const sourceExceptionId =
+        buildOvertimeSourceExceptionId(
+          item
+        );
+
+      const response = await fetch(
+        '/api/overtime-reviews',
+        {
+          method: 'POST',
+
+          credentials: 'same-origin',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            store:
+              state.store,
+
+            employeeNumber:
+              item.employeeNumber,
+
+            employeeName:
+              item.buildName,
+
+            workDate:
+              item.infractionDate,
+
+            dayLabel:
+              item.dayLabel,
+
+            scheduledShift:
+              item.plannedValues.join(
+                ', '
+              ),
+
+            actualShift:
+              item.actualValues.join(
+                ', '
+              ),
+
+            scheduledHours:
+              item.scheduledDayHours,
+
+            actualHours:
+              item.actualDayHours,
+
+            overtimeHours:
+              item.overtimeHours,
+
+            explanation,
+
+            sourceExceptionId
+          })
+        }
+      );
+
+      const responseText =
+        await response.text();
+
+      let result = {};
+
+      try {
+        result = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch (parseError) {
+        throw new Error(
+          `Overtime review returned HTTP ` +
+          `${response.status}. The server returned ` +
+          `a non-JSON response.`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          'The overtime explanation could not be saved.'
+        );
+      }
+
+      if (!result.review) {
+        throw new Error(
+          'The server reported success but did not ' +
+          'return the overtime review.'
+        );
+      }
+
+      existingOvertimeReviews[
+        result.review.sourceExceptionId
+      ] = result.review;
+
+      attendanceExceptionComments[
+        item.id
+      ] = result.review.explanation;
+
+      renderPrevious();
+    } catch (err) {
+      console.error(
+        'Overtime explanation save error:',
+        err
+      );
+
+      button.disabled = false;
+      button.textContent =
+        originalButtonText;
+
+      if (status) {
+        status.textContent =
+          err.message;
+
+        status.className =
+          'overtime-review-status ' +
+          'point-save-error';
+      }
+    }
+  }
+);
+
+
+document.addEventListener(
+  'click',
+  event => {
+    const toggleButton =
+      event.target.closest(
+        '[data-point-history-target]'
+      );
+
+    if (!toggleButton) {
+      return;
+    }
+
+    const targetId =
+      toggleButton.dataset
+        .pointHistoryTarget;
+
+    const details =
+      document.getElementById(
+        targetId
+      );
+
+    if (!details) {
+      return;
+    }
+
+    const isOpen =
+      toggleButton.getAttribute(
+        'aria-expanded'
+      ) === 'true';
+
+    const shouldOpen =
+      !isOpen;
+
+    toggleButton.setAttribute(
+      'aria-expanded',
+      String(shouldOpen)
+    );
+
+    details.hidden =
+      !shouldOpen;
+
+    const arrow =
+      toggleButton.querySelector(
+        '.point-history-arrow'
+      );
+
+    if (arrow) {
+      arrow.innerHTML =
+        shouldOpen
+          ? '&#9660;'
+          : '&#9654;';
+    }
+  }
+);
+
+document.addEventListener(
+  'input',
+  event => {
+    const commentBox =
+      event.target.closest(
+        '.exception-comment'
+      );
+
+    if (!commentBox) {
+      return;
+    }
+
+    const exceptionId =
+      commentBox.dataset.exceptionId;
+
+    attendanceExceptionComments[
+      exceptionId
+    ] = commentBox.value;
+  }
+);
+  window.removeEmployee = removeEmployee;
+
+  window.addEmployee = addEmployee;
+
+  window.toggleAvailability = toggleAvailability;
+
+  window.setAssignment = setAssignment;
+  async function initializeSchedulePage() {
+  /*
+   * Render the page immediately so the normal schedule
+   * is not delayed while point records are downloaded.
+   */
+  renderAllTables();
+
+  try {
+    await Promise.all([
+      loadTemplateList(),
+      loadAttendancePointSummary(),
+      loadExistingAttendancePoints(),
+      loadExistingPointRecommendations(),
+      loadExistingOvertimeReviews()
+    ]);
+
+    const defaultTemplate =
+      state.templates.find(
+        template =>
+          template.isDefault === true
+      );
+
+    if (defaultTemplate) {
+      const selector =
+        document.getElementById(
+          'templateSelector'
+        );
+
+      if (selector) {
+        selector.value =
+          defaultTemplate._id;
+      }
+
+      await loadSelectedTemplate();
+    }
+  } catch (err) {
+    console.error(
+      'Schedule initialization error:',
+      err
+    );
+  }
+}
+
+initializeSchedulePage();
+</script>
+</body>
+</html>
