@@ -70,7 +70,11 @@ const AttendanceOvertimeReview = require(
   './models/AttendanceOvertimeReview'
 );
 const cron = require('node-cron');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+
+const resend = new Resend(
+  process.env.RESEND_API_KEY
+);
 
 
 // ------------------------
@@ -3704,13 +3708,24 @@ async function sendNextMonthRequestsSummaryEmail() {
     <p>- link to webpage https://floor-space-requests-app.onrender.com/ </p>
   `;
 
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
-    to: process.env.NEXT_MONTH_REQUESTS_TO,
-    subject,
-    text,
-    html
-  });
+  await resend.emails.send({
+  from: 'Delaney App <onboarding@resend.dev>',
+  to: [user.email],
+  subject: 'Reset your password',
+  html: `
+    <p>Click the link below to reset your password:</p>
+
+    <p>
+      ${resetLink}
+        Reset Password
+      </a>
+    </p>
+
+    <p>
+      This link expires in 1 hour.
+    </p>
+  `
+});
 
   console.log(`[next-month-email] Sent summary for ${nextMonth} to ${process.env.NEXT_MONTH_REQUESTS_TO}`);
 }
