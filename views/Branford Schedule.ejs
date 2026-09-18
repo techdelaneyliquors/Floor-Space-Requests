@@ -36,7 +36,7 @@
     .section-title small { color:var(--muted); }
     .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
     table { width:100%; border-collapse:collapse; min-width:980px; background:#fff; }
-    th, td { border-bottom:1px solid var(--line); border-right:1px solid #e8edf4; padding:9px; text-align:center; vertical-align:middle; }
+    th, td { border-bottom:1px solid var(--line); border-right:1px solid #e8edf4; padding:6px; text-align:center; vertical-align:middle; }
     th { background:#e9f0fa; color:var(--navy); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
     td:first-child, th:first-child { text-align:left; font-weight:700; position:sticky; left:0; background:inherit; z-index:2; }
     tr:last-child td { border-bottom:0; }
@@ -65,38 +65,14 @@
     @media(max-width:850px){ .availability-grid{grid-template-columns:1fr;} .topbar{align-items:flex-start;flex-direction:column;} }
     @media print {
 
-       * {-webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-        }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 
-        /* Previous Week print table */
-#previousWeekComparisonTable {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: fixed !important;
-}
-
-#previousWeekComparisonTable th,
-#previousWeekComparisonTable td {
-  padding: 3px 2px !important;
-  font-size: 10px !important;
-  word-wrap: break-word;
-}
-
-#previousWeekComparisonTable .comparison-cell {
-  font-size: 10px !important;
-  line-height: 1.1 !important;
-}
-
-#previousWeekComparisonTable .planned-shift,
-#previousWeekComparisonTable .actual-shift {
-  font-size: 10px !important;
-  white-space: nowrap;
-}
-
-.table-wrap {
-  overflow: visible !important;
-}
+  .table-wrap {
+    overflow: visible !important;
+  }
 
   body {
     background:#fff;
@@ -143,20 +119,18 @@
     border:0;
   }
 
+  /*
+   * Use the same table styling as the screen view.
+   * Do not override Previous Week font sizes.
+   */
   table {
     min-width:0;
-    font-size:10px;
-  }
-
-  th,
-  td {
-    padding:6px 4px;
   }
 
   @page {
-  size: landscape;
-  margin: 0.2in;
-}
+    size: landscape;
+    margin: 0.2in;
+  }
 }
 
     .person-controls {
@@ -366,30 +340,31 @@
   padding:6px 8px;
 }
 
-#previousWeekComparisonTable .comparison-cell {
-  font-size: 11px;
-  line-height: 1.15;
-  white-space: nowrap;
-}
-
 #previousWeekComparisonTable .planned-shift {
   display: block;
-  font-size: 14px;
+  font-size: 9px;
 }
 
 #previousWeekComparisonTable .actual-shift {
   display: block;
-  font-size: 14px;
+  font-size: 9px;
   font-style: italic;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 #previousWeekComparisonTable th:first-child,
 #previousWeekComparisonTable td:first-child {
-  width: 90px;
-  min-width: 90px;
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  font-size: 9px !important;
+  line-height: 1.1;
+  padding: 2px !important;
 }
+
+
+
 .attendance-issue {
   background: #f7a7a7 !important;
 }
@@ -411,6 +386,18 @@
   margin-top:20px;
   display:grid;
   gap:18px;
+}
+
+.overtime-approved {
+  background:#dcfce7;
+  color:#166534;
+  font-weight:700;
+}
+
+.overtime-over-limit {
+  background:#fee2e2;
+  color:#991b1b;
+  font-weight:700;
 }
 
 .exception-section {
@@ -1045,6 +1032,84 @@
   white-space:normal;
 }
 
+/* Force equal-width day columns */
+#previousWeekComparisonTable {
+  table-layout: fixed !important;
+}
+
+/* Employee column */
+#previousWeekComparisonTable th:first-child,
+#previousWeekComparisonTable td:first-child {
+  width: 50px !important;
+  min-width: 50px !important;
+  max-width: 70px !important;
+  font-size: 9px !important;
+  line-height: 1.1;
+  padding: 2px !important;
+}
+
+
+/* Monday through Sunday */
+#previousWeekComparisonTable th:nth-child(n+2):nth-child(-n+8),
+#previousWeekComparisonTable td:nth-child(n+2):nth-child(-n+8) {
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
+}
+
+/* Scheduled / Worked columns */
+#previousWeekComparisonTable th:nth-last-child(5),
+#previousWeekComparisonTable td:nth-last-child(5),
+#previousWeekComparisonTable th:nth-last-child(4),
+#previousWeekComparisonTable td:nth-last-child(4) {
+  width: 40px !important;
+  min-width: 40px !important;
+  font-size: 9px !important;
+}
+
+/* Delta column */
+#previousWeekComparisonTable th:nth-last-child(3),
+#previousWeekComparisonTable td:nth-last-child(3) {
+  width: 38px !important;
+  min-width: 38px !important;
+  font-size: 9px !important;
+}
+
+/* OT column */
+#previousWeekComparisonTable th:nth-last-child(2),
+#previousWeekComparisonTable td:nth-last-child(2) {
+  width: 30px !important;
+  min-width: 30px !important;
+  font-size: 9px !important;
+}
+
+/* OT Status */
+#previousWeekComparisonTable th:last-child,
+#previousWeekComparisonTable td:last-child {
+  width: 35px !important;
+  min-width: 35px !important;
+  font-size: 9px !important;
+}
+
+#previousWeekComparisonTable th:first-child {
+  background: #e9f0fa !important;
+  color: #17365d !important;
+}
+
+#previousWeekComparisonTable .total-row td {
+  font-size: 9px !important;
+}
+
+#previousWeekComparisonTable .total-row .metric {
+  font-size: 9px !important;
+}
+
+#previousWeekComparisonTable .total-row div {
+  font-size: 9px !important;
+  line-height: 1.15;
+}
+
+
   </style>
 </head>
 <body>
@@ -1405,6 +1470,11 @@ let buildingNewTemplate = false;
 
     cashiers:
     <%- JSON.stringify(incoming.cashiers || []) %>,
+
+    approvedOvertimeHours:
+  <%- JSON.stringify(
+    incoming.approvedOvertimeHours || {}
+  ) %>,
 
     buildEmployeeIdentifiers:
   <%- JSON.stringify(
@@ -1985,6 +2055,94 @@ function saveTemporaryShift(
   renderAllTables();
 }
 
+function getApprovedOvertimeHours(
+  employeeNumber
+) {
+  const cleanEmployeeNumber =
+    String(
+      employeeNumber || ''
+    ).trim();
+
+  if (!cleanEmployeeNumber) {
+    return 0;
+  }
+
+  const approvedHours =
+    Number(
+      state.approvedOvertimeHours?.[
+        cleanEmployeeNumber
+      ] || 0
+    );
+
+  if (
+    !Number.isFinite(approvedHours) ||
+    approvedHours < 0
+  ) {
+    return 0;
+  }
+
+  return approvedHours;
+}
+
+function getApprovedWeeklyHours(
+  employeeNumber
+) {
+  return (
+    40 +
+    getApprovedOvertimeHours(
+      employeeNumber
+    )
+  );
+}
+
+function calculateOvertimeApproval(
+  employeeNumber,
+  weeklyHours
+) {
+  const hours =
+    Math.max(
+      0,
+      Number(weeklyHours || 0)
+    );
+
+  const approvedOvertimeHours =
+    getApprovedOvertimeHours(
+      employeeNumber
+    );
+
+  const approvedWeeklyHours =
+    40 + approvedOvertimeHours;
+
+  const overtimeHours =
+    Math.max(
+      0,
+      hours - 40
+    );
+
+  const unapprovedOvertimeHours =
+    Math.max(
+      0,
+      overtimeHours -
+        approvedOvertimeHours
+    );
+
+  return {
+    weeklyHours:
+      hours,
+
+    approvedOvertimeHours,
+
+    approvedWeeklyHours,
+
+    overtimeHours,
+
+    unapprovedOvertimeHours,
+
+    withinApproval:
+      unapprovedOvertimeHours === 0
+  };
+}
+
 function clearTemporaryShift(
   type,
   shiftId,
@@ -2366,6 +2524,23 @@ function deleteScheduledShift(
     .join('');
 }
 
+function shortenEmployeeName(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/);
+
+  if (parts.length <= 1) {
+    return parts[0] || '';
+  }
+
+  return (
+    parts[0] +
+    ' ' +
+    parts[parts.length - 1][0] +
+    '.'
+  );
+}
+
   function renderAvailability() {
   renderPeople(
     'managerAvailability',
@@ -2392,6 +2567,11 @@ function deleteScheduledShift(
       const employeeIdentifier =
         state.buildEmployeeIdentifiers?.[name] || '';
 
+        const approvedOvertimeHours =
+        getApprovedOvertimeHours(
+        employeeIdentifier
+       );
+
       return `
         <div class="person-row">
 
@@ -2406,7 +2586,7 @@ function deleteScheduledShift(
           <div class="person-controls">
 
             <label class="employee-number-control">
-              Employee #
+              ID#
               
               <input
                 type="text"
@@ -2417,6 +2597,24 @@ function deleteScheduledShift(
                 autocomplete="off"
               >
             </label>
+
+            <label class="approved-overtime-control">
+  AOT
+
+  <input
+    type="number"
+    class="approved-overtime-input"
+    data-employee-name="${escapeHtml(name)}"
+    data-employee-number="${escapeHtml(
+      employeeIdentifier
+    )}"
+    value="${approvedOvertimeHours}"
+    min="0"
+    max="40"
+    step="0.25"
+    placeholder="0"
+  >
+</label>
 
             <label>
               <input
@@ -2448,6 +2646,91 @@ function deleteScheduledShift(
       `;
     }).join('');
 }
+
+document.addEventListener(
+  'change',
+  async event => {
+    const input =
+      event.target.closest(
+        '.approved-overtime-input'
+      );
+
+    if (!input) {
+      return;
+    }
+
+    const employeeName =
+      String(
+        input.dataset.employeeName || ''
+      ).trim();
+
+    const employeeNumber =
+      String(
+        state.buildEmployeeIdentifiers?.[
+          employeeName
+        ] || ''
+      ).trim();
+
+    if (!employeeNumber) {
+      alert(
+        'Enter and save an employee number ' +
+        'before setting approved overtime.'
+      );
+
+      input.value = '0';
+
+      return;
+    }
+
+    const approvedHours =
+      Number(input.value || 0);
+
+    if (
+      !Number.isFinite(approvedHours) ||
+      approvedHours < 0 ||
+      approvedHours > 40
+    ) {
+      alert(
+        'Approved overtime must be between ' +
+        '0 and 40 hours.'
+      );
+
+      input.value =
+        getApprovedOvertimeHours(
+          employeeNumber
+        );
+
+      return;
+    }
+
+    state.approvedOvertimeHours[
+      employeeNumber
+    ] = Number(
+      approvedHours.toFixed(2)
+    );
+
+    input.value =
+      state.approvedOvertimeHours[
+        employeeNumber
+      ];
+
+    try {
+      await saveEmployeeSettings();
+
+      renderAllTables();
+    } catch (err) {
+      console.error(
+        'Approved overtime save error:',
+        err
+      );
+
+      alert(
+        'The approved overtime changed on the page, ' +
+        'but it could not be saved.'
+      );
+    }
+  }
+);
 
 document.addEventListener('change', event => {
   const checkbox = event.target.closest(
@@ -3373,6 +3656,8 @@ document.addEventListener('click', event => {
         associates: state.associates,
         cashiers: state.cashiers,
         buildEmployeeIdentifiers: state.buildEmployeeIdentifiers,
+        approvedOvertimeHours:
+        state.approvedOvertimeHours,
         availability: state.availability
       })
     }
@@ -3851,11 +4136,25 @@ function generateScheduleComments() {
   let bodyHtml = '';
 
   employees.forEach(name => {
+
     const total = DAY_KEYS.reduce(
       (sum, day) =>
         sum + data[name][day].hours,
       0
     );
+
+    const employeeNumber =
+      String(
+        state.buildEmployeeIdentifiers?.[
+          name
+        ] || ''
+      ).trim();
+
+    const overtimeApproval =
+      calculateOvertimeApproval(
+        employeeNumber,
+        total
+      );
 
     const employeeHasChanges =
       DAY_KEYS.some(
@@ -3863,23 +4162,28 @@ function generateScheduleComments() {
       );
 
     const dayCells = DAY_KEYS.map(day => {
-      const dayData = data[name][day];
+
+      const dayData =
+        data[name][day];
 
       if (!dayData.shifts.length) {
         return '<td></td>';
       }
 
-      const shiftsHtml = dayData.shifts
-        .map(shift => `
-          <span class="${
-            shift.modified
-              ? 'temporary-shift'
-              : ''
-          }">
-            ${escapeHtml(shift.text)}
-          </span>
-        `)
-        .join('<br>');
+      const shiftsHtml =
+        dayData.shifts
+          .map(shift => `
+            <span class="${
+              shift.modified
+                ? 'temporary-shift'
+                : ''
+            }">
+              ${escapeHtml(
+                shift.text
+              )}
+            </span>
+          `)
+          .join('<br>');
 
       return `
         <td>
@@ -3890,7 +4194,10 @@ function generateScheduleComments() {
 
     bodyHtml += `
       <tr>
-        <td>${escapeHtml(name)}</td>
+
+        <td>
+          ${escapeHtml(name)}
+        </td>
 
         ${dayCells}
 
@@ -3901,6 +4208,36 @@ function generateScheduleComments() {
         }">
           ${total.toFixed(2)}
         </td>
+
+        <td class="metric">
+          ${
+            overtimeApproval
+              .approvedOvertimeHours
+              .toFixed(2)
+          }
+        </td>
+
+        <td class="${
+          overtimeApproval
+            .withinApproval
+              ? 'overtime-approved'
+              : 'overtime-over-limit'
+        }">
+
+          ${
+            overtimeApproval
+              .withinApproval
+                ? 'Within Approval'
+                : (
+                    overtimeApproval
+                      .unapprovedOvertimeHours
+                      .toFixed(2) +
+                    ' Over'
+                  )
+          }
+
+        </td>
+
       </tr>
     `;
   });
@@ -3913,14 +4250,19 @@ function generateScheduleComments() {
     )
   );
 
-  const grandTotal = dayTotals.reduce(
-    (sum, value) => sum + value,
-    0
-  );
+  const grandTotal =
+    dayTotals.reduce(
+      (sum, value) =>
+        sum + value,
+      0
+    );
 
   bodyHtml += `
     <tr class="total-row">
-      <td>Total</td>
+
+      <td>
+        Total
+      </td>
 
       ${dayTotals.map(value => `
         <td class="metric">
@@ -3931,17 +4273,30 @@ function generateScheduleComments() {
       <td class="metric">
         ${grandTotal.toFixed(2)}
       </td>
+
+      <td></td>
+      <td></td>
+
     </tr>
   `;
 
-  const comments = generateScheduleComments();
+  const comments =
+    generateScheduleComments();
 
   if (comments.length) {
+
     bodyHtml += `
       <tr>
-        <td colspan="${DAYS.length + 2}">
+
+        <td colspan="${
+          DAYS.length + 4
+        }">
+
           <div class="print-comments">
-            <h3>Schedule Adjustments</h3>
+
+            <h3>
+              Schedule Adjustments
+            </h3>
 
             <table
               style="
@@ -3950,39 +4305,58 @@ function generateScheduleComments() {
                 border-collapse:collapse;
               "
             >
+
               <thead>
+
                 <tr>
                   <th>Day</th>
                   <th>Shift</th>
                   <th>Change</th>
                   <th>Reason</th>
                 </tr>
+
               </thead>
 
               <tbody>
+
                 ${comments.map(item => `
                   <tr>
+
                     <td>
-                      ${escapeHtml(item.day)}
+                      ${escapeHtml(
+                        item.day
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(item.shift)}
+                      ${escapeHtml(
+                        item.shift
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(item.details)}
+                      ${escapeHtml(
+                        item.details
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(item.reason)}
+                      ${escapeHtml(
+                        item.reason
+                      )}
                     </td>
+
                   </tr>
                 `).join('')}
+
               </tbody>
+
             </table>
+
           </div>
+
         </td>
+
       </tr>
     `;
   }
@@ -3990,20 +4364,37 @@ function generateScheduleComments() {
   document.getElementById(
     'printSchedule'
   ).innerHTML = `
+
     <thead>
+
       <tr>
+
         <th>Name</th>
 
         ${DAYS.map(day => `
-          <th>${escapeHtml(day)}</th>
+          <th>
+            ${escapeHtml(day)}
+          </th>
         `).join('')}
 
         <th>Hours</th>
+
+        <th>
+          Approved OT
+        </th>
+
+        <th>
+          OT Status
+        </th>
+
       </tr>
+
     </thead>
 
     <tbody>
+
       ${bodyHtml}
+
     </tbody>
   `;
 }
@@ -4776,16 +5167,17 @@ function renderAttendanceExceptionReview(
   `;
 }
   function renderPrevious() {
-  const table = document.getElementById(
-    'previousWeekComparisonTable'
-  );
+  const table =
+    document.getElementById(
+      'previousWeekComparisonTable'
+    );
 
   if (!table) {
     return;
   }
 
   /*
-   * Start only with employees currently listed
+   * Only include employees currently listed
    * on the Build Schedule page.
    */
   const buildScheduleNames = [
@@ -4797,281 +5189,395 @@ function renderAttendanceExceptionReview(
   ];
 
   /*
-   * Find the corresponding uploaded employee.
-   * getMatchingUploadedName requires both:
-   *
-   * 1. Matching normalized name
-   * 2. Matching employee number
+   * Match each Build Schedule employee to the
+   * previous-week upload by both employee name
+   * and employee number.
    */
-  const matchedEmployees = buildScheduleNames
-    .map(buildName => {
-      const uploadedName =
-        getMatchingUploadedName(buildName);
+  const matchedEmployees =
+    buildScheduleNames
+      .map(buildName => {
+        const uploadedName =
+          getMatchingUploadedName(
+            buildName
+          );
 
-      if (!uploadedName) {
-        return null;
-      }
+        if (!uploadedName) {
+          return null;
+        }
 
-      const hasReviewData =
-        Boolean(
-          state.previousScheduledShifts?.[
+        const hasReviewData =
+          Boolean(
+            state.previousScheduledShifts?.[
+              uploadedName
+            ]
+          ) ||
+          Boolean(
+            state.previousActualShifts?.[
+              uploadedName
+            ]
+          ) ||
+          Boolean(
+            state.previousActualHours?.[
+              uploadedName
+            ]
+          ) ||
+          state.previousScheduledHours?.[
             uploadedName
-          ]
-        ) ||
-        Boolean(
-          state.previousActualShifts?.[
-            uploadedName
-          ]
-        ) ||
-        Boolean(
-          state.previousActualHours?.[
-            uploadedName
-          ]
-        ) ||
-        state.previousScheduledHours?.[
+          ] !== undefined;
+
+        if (!hasReviewData) {
+          return null;
+        }
+
+        return {
+          buildName,
           uploadedName
-        ] !== undefined;
+        };
+      })
+      .filter(Boolean);
 
-      if (!hasReviewData) {
-        return null;
-      }
-
-      return {
-        buildName,
-        uploadedName
-      };
-    })
-    .filter(Boolean);
-
-  const dayTotals = Object.fromEntries(
-  DAY_KEYS.map(day => [
-    day,
-    {
-      scheduled: 0,
-      actual: 0
-    }
-  ])
-);
+  const dayTotals =
+    Object.fromEntries(
+      DAY_KEYS.map(day => [
+        day,
+        {
+          scheduled: 0,
+          actual: 0
+        }
+      ])
+    );
 
   let totalScheduled = 0;
   let totalWorked = 0;
 
-  const rows = matchedEmployees.map(employee => {
-    const {
-      buildName,
-      uploadedName
-    } = employee;
+  /*
+   * These values are used in the final TOTAL row.
+   */
+  let totalActualOvertime = 0;
+  let totalApprovedOvertime = 0;
+  let totalOverApproval = 0;
 
-    /*
-     * Display the employee number saved on
-     * the Build Schedule page.
-     */
-    const employeeIdentifier = String(
-      state.buildEmployeeIdentifiers?.[
-        buildName
-      ] || ''
-    ).trim();
+  const rows =
+    matchedEmployees
+      .map(employee => {
+        const {
+          buildName,
+          uploadedName
+        } = employee;
 
-    /*
-     * Read previous-week information using
-     * the matching uploaded employee name.
-     */
-    const scheduledShifts =
-      state.previousScheduledShifts?.[
-        uploadedName
-      ] || {};
+        /*
+         * Approved overtime is stored by employee
+         * number, not employee name.
+         */
+        const employeeIdentifier =
+          String(
+            state.buildEmployeeIdentifiers?.[
+              buildName
+            ] || ''
+          ).trim();
 
-    const actualShifts =
-      state.previousActualShifts?.[
-        uploadedName
-      ] || {};
+        const scheduledShifts =
+          state.previousScheduledShifts?.[
+            uploadedName
+          ] || {};
 
-    const actualHours =
-      state.previousActualHours?.[
-        uploadedName
-      ] || {};
+        const actualShifts =
+          state.previousActualShifts?.[
+            uploadedName
+          ] || {};
 
-    const scheduledTotal = Number(
-      state.previousScheduledHours?.[
-        uploadedName
-      ] || 0
-    );
+        const actualHours =
+          state.previousActualHours?.[
+            uploadedName
+          ] || {};
 
-    const workedTotal = DAY_KEYS.reduce(
-      (sum, day) =>
-        sum + Number(actualHours[day] || 0),
-      0
-    );
+        const scheduledTotal =
+          Number(
+            state.previousScheduledHours?.[
+              uploadedName
+            ] || 0
+          );
 
-    const difference =
-      workedTotal - scheduledTotal;
+        const workedTotal =
+          DAY_KEYS.reduce(
+            (sum, day) =>
+              sum +
+              Number(
+                actualHours[day] || 0
+              ),
+            0
+          );
 
-    totalScheduled += scheduledTotal;
-    totalWorked += workedTotal;
+        const difference =
+          workedTotal -
+          scheduledTotal;
 
-    DAY_KEYS.forEach(day => {
+        /*
+         * Compare the employee's actual weekly
+         * hours against the approved overtime
+         * allowance.
+         *
+         * Example:
+         *
+         * Worked = 45
+         * Approved OT = 3
+         * Actual OT = 5
+         * Over approval = 2
+         */
+        const overtimeApproval =
+          calculateOvertimeApproval(
+            employeeIdentifier,
+            workedTotal
+          );
 
-  const actualDayHours =
-    Number(
-      actualHours[day] || 0
-    );
+        totalScheduled +=
+          scheduledTotal;
 
-  const scheduledDayHours =
-  scheduledPaidHoursFromRanges(
-    scheduledShifts[day]
-  );
+        totalWorked +=
+          workedTotal;
 
-  dayTotals[day].scheduled +=
-    scheduledDayHours;
+        totalActualOvertime +=
+          overtimeApproval.overtimeHours;
 
-  dayTotals[day].actual +=
-    actualDayHours;
+        totalApprovedOvertime +=
+          overtimeApproval
+            .approvedOvertimeHours;
 
-});
+        totalOverApproval +=
+          overtimeApproval
+            .unapprovedOvertimeHours;
 
-    const differenceClass =
-      difference < 0
-        ? 'negative'
-        : difference > 0
-          ? 'positive'
-          : '';
+        DAY_KEYS.forEach(day => {
+          const actualDayHours =
+            Number(
+              actualHours[day] || 0
+            );
 
-    const dayCells = DAY_KEYS.map(day => {
-  const plannedValues =
-    normalizeShiftValues(
-      scheduledShifts[day]
-    );
+          const scheduledDayHours =
+            scheduledPaidHoursFromRanges(
+              scheduledShifts[day]
+            );
 
-  const actualValues =
-    normalizeShiftValues(
-      actualShifts[day]
-    );
+          dayTotals[day].scheduled +=
+            scheduledDayHours;
 
-  const scheduledDayHours =
-    scheduledPaidHoursFromRanges(
-      plannedValues
-    );
+          dayTotals[day].actual +=
+            actualDayHours;
+        });
 
-  const actualDayHours = Number(
-    actualHours[day] || 0
-  );
+        const differenceClass =
+          difference < 0
+            ? 'negative'
+            : difference > 0
+              ? 'positive'
+              : '';
 
-  const hasDailyOvertime =
-    scheduledDayHours > 0 &&
-    actualDayHours >=
-      scheduledDayHours + 0.5;
+        const dayCells =
+          DAY_KEYS.map(day => {
+            const plannedValues =
+              normalizeShiftValues(
+                scheduledShifts[day]
+              );
 
-  const issue =
-    plannedValues.length &&
-    actualValues.length
-      ? hasAttendanceIssue(
-          plannedValues[0],
-          actualValues[0]
-        )
-      : null;
+            const actualValues =
+              normalizeShiftValues(
+                actualShifts[day]
+              );
 
-  let cellClass =
-    'comparison-cell';
+            const scheduledDayHours =
+              scheduledPaidHoursFromRanges(
+                plannedValues
+              );
 
-  const noTimeWorked =
-    plannedValues.length > 0 &&
-    actualValues.length === 0;
+            const actualDayHours =
+              Number(
+                actualHours[day] || 0
+              );
 
-if (noTimeWorked) {
-  cellClass +=
-    ' no-time-worked-cell';
-} else if (issue) {
-  if (
-    issue.late &&
-    issue.early
-  ) {
-    cellClass +=
-      ' attendance-severe';
-  } else if (
-    issue.late ||
-    issue.early
-  ) {
-    cellClass +=
-      ' attendance-issue';
-  }
-}
+            const hasDailyOvertime =
+              scheduledDayHours > 0 &&
+              actualDayHours >=
+                scheduledDayHours + 0.5;
 
-if (hasDailyOvertime) {
-  cellClass +=
-    ' overtime-issue';
-}
+            const issue =
+              plannedValues.length &&
+              actualValues.length
+                ? hasAttendanceIssue(
+                    plannedValues[0],
+                    actualValues[0]
+                  )
+                : null;
 
-      const plannedHtml = plannedValues.length
+            let cellClass =
+              'comparison-cell';
+
+            const noTimeWorked =
+              plannedValues.length > 0 &&
+              actualValues.length === 0;
+
+            if (noTimeWorked) {
+              cellClass +=
+                ' no-time-worked-cell';
+            } else if (issue) {
+              if (
+                issue.late &&
+                issue.early
+              ) {
+                cellClass +=
+                  ' attendance-severe';
+              } else if (
+                issue.late ||
+                issue.early
+              ) {
+                cellClass +=
+                  ' attendance-issue';
+              }
+            }
+
+            if (hasDailyOvertime) {
+              cellClass +=
+                ' overtime-issue';
+            }
+
+            const plannedHtml = plannedValues.length
   ? plannedValues
-      .map(value => escapeHtml(value))
+      .map(value =>
+        escapeHtml(
+          value.replace(
+            ' to ',
+            ' - '
+          )
+        )
+      )
       .join('<br>')
   : 'OFF';
 
-const actualHtml = actualValues.length
+            const actualHtml = actualValues.length
   ? actualValues
-      .map(value => escapeHtml(value))
+      .map(value =>
+        escapeHtml(
+          value.replace(
+            ' to ',
+            ' - '
+          )
+        )
+      )
       .join('<br>')
   : 'No time worked';
 
-/*
- * If schedule is OFF and no work was performed,
- * leave the cell completely blank.
- */
-if (
-  plannedHtml === 'OFF' &&
-  actualHtml === 'No time worked'
-) {
-  return `
-  <td class="${cellClass}"></td>`;
-}
+            /*
+             * If the employee was off and did not
+             * work, leave the day empty.
+             */
+            if (
+              plannedHtml === 'OFF' &&
+              actualHtml ===
+                'No time worked'
+            ) {
+              return `
+                <td class="${cellClass}">
+                </td>
+              `;
+            }
 
-      return `
-        <td class="${cellClass}">
+            return `
+              <td class="${cellClass}">
+                <span class="planned-shift">
+                  ${plannedHtml}
+                </span>
 
-          <span class="planned-shift">
-            ${plannedHtml}
-          </span>
+                <span class="actual-shift ${
+                  actualValues.length
+                    ? ''
+                    : 'no-time-worked'
+                }">
+                  ${actualHtml}
+                </span>
+              </td>
+            `;
+          }).join('');
 
-          <span class="actual-shift ${
-            actualValues.length
-              ? ''
-              : 'no-time-worked'
-          }">
-            ${actualHtml}
-          </span>
+        /*
+         * The employee is within approval when the
+         * actual overtime does not exceed their
+         * approved overtime allowance.
+         */
+        const overtimeStatusClass =
+          overtimeApproval.withinApproval
+            ? 'overtime-approved'
+            : 'overtime-over-limit';
 
-        </td>
-      `;
-    }).join('');
+        let overtimeStatusText = '';
 
-    return `
-      <tr>
+        if (
+          overtimeApproval.overtimeHours ===
+          0
+        ) {
+          overtimeStatusText =
+            'No OT';
+        } else if (
+          overtimeApproval.withinApproval
+        ) {
+          overtimeStatusText =
+            'Appr.';
+        } else {
+          overtimeStatusText =
+            `${overtimeApproval
+              .unapprovedOvertimeHours
+              .toFixed(2)} Over`;
+        }
+
+        return `
+          <tr>
+            <td>
+  ${escapeHtml(
+    shortenEmployeeName(
+      buildName
+    )
+  )}
+</td>
 
 
-        <td>
-          ${escapeHtml(buildName)}
-        </td>
+            ${dayCells}
 
-        ${dayCells}
+            <td class="comparison-hours">
+              ${scheduledTotal.toFixed(2)}
+            </td>
 
-        <td class="comparison-hours">
-          ${scheduledTotal.toFixed(2)}
-        </td>
+            <td class="comparison-hours">
+              ${workedTotal.toFixed(2)}
+            </td>
 
-        <td class="comparison-hours">
-          ${workedTotal.toFixed(2)}
-        </td>
+            <td class="
+              comparison-hours
+              ${differenceClass}
+            ">
+              ${difference.toFixed(2)}
+            </td>
 
-        <td class="comparison-hours ${differenceClass}">
-          ${difference.toFixed(2)}
-        </td>
+            <td class="comparison-hours">
+              ${
+                overtimeApproval
+                  .overtimeHours
+                  .toFixed(2)
+              }
+            </td>
 
-      </tr>
-    `;
-  }).join('');
+            <td class="${overtimeStatusClass}">
+              ${escapeHtml(
+                overtimeStatusText
+              )}
+
+              
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
 
   const grandDifference =
-    totalWorked - totalScheduled;
+    totalWorked -
+    totalScheduled;
 
   const grandDifferenceClass =
     grandDifference < 0
@@ -5080,29 +5586,60 @@ if (
         ? 'positive'
         : '';
 
-  const totalDayCells = DAY_KEYS.map(day => `
-  <td class="metric">
+  const totalDayCells =
+    DAY_KEYS.map(day => `
+      <td class="metric">
+        <div>
+          S:
+          ${
+            dayTotals[
+              day
+            ].scheduled.toFixed(2)
+          }
+        </div>
 
-    <div>
-      S: ${dayTotals[day].scheduled.toFixed(2)}
-    </div>
+        <div
+          style="
+            font-style:italic;
+            color:#64748b;
+            margin-top:2px;
+          "
+        >
+          A:
+          ${
+            dayTotals[
+              day
+            ].actual.toFixed(2)
+          }
+        </div>
+      </td>
+    `).join('');
 
-    <div
-      style="
-        font-style:italic;
-        color:#64748b;
-        margin-top:2px;
-      "
-    >
-      A: ${dayTotals[day].actual.toFixed(2)}
-    </div>
+  let overallOvertimeStatus = '';
 
-  </td>
-`).join('');
+  let overallOvertimeClass =
+    'overtime-approved';
+
+  if (totalActualOvertime === 0) {
+  overallOvertimeStatus =
+    'No OT';
+}
+else if (totalOverApproval > 0) {
+  overallOvertimeStatus =
+    `${Number(
+      totalOverApproval.toFixed(2)
+    )} Over`;
+
+  overallOvertimeClass =
+    'overtime-over-limit';
+}
+else {
+  overallOvertimeStatus =
+    'Approved';
+}
 
   const totalRow = `
     <tr class="total-row">
-
       <td>
         TOTAL
       </td>
@@ -5117,70 +5654,100 @@ if (
         ${totalWorked.toFixed(2)}
       </td>
 
-      <td class="metric ${grandDifferenceClass}">
+      <td class="
+        metric
+        ${grandDifferenceClass}
+      ">
         ${grandDifference.toFixed(2)}
       </td>
 
+      <td class="metric">
+        ${totalActualOvertime.toFixed(2)}
+      </td>
+
+      <td class="
+        metric
+        ${overallOvertimeClass}
+      ">
+        ${overallOvertimeStatus}
+
+        
+      </td>
     </tr>
   `;
 
   table.innerHTML = `
     <thead>
       <tr>
-
-
-        <th>Employee Name</th>
+        <th>
+          Employee
+        </th>
 
         ${DAYS.map(day => `
-          <th>${escapeHtml(day)}</th>
+          <th>
+            ${escapeHtml(day)}
+          </th>
         `).join('')}
 
-        <th>Scheduled</th>
-        <th>Worked</th>
-        <th>Difference</th>
+        <th>
+          Sched.
+        </th>
 
+        <th>
+          Worked
+        </th>
+
+        <th>
+          Δ
+        </th>
+
+        <th>
+          OT
+        </th>
+
+        <th>
+          OT Status
+        </th>
       </tr>
     </thead>
 
     <tbody>
-
       ${
         rows ||
         `
           <tr>
-            <td colspan="12">
-              No employees had matching names
-              and employee numbers.
+            <td colspan="13">
+              No employees had matching names,
+              employee numbers, and previous-week data.
             </td>
           </tr>
         `
       }
 
       ${rows ? totalRow : ''}
-
     </tbody>
   `;
 
   const attendanceExceptions =
-  getPreviousWeekExceptions();
+    getPreviousWeekExceptions();
 
-currentAttendanceExceptions =
-  Object.fromEntries(
-    [
-      ...attendanceExceptions.late,
-      ...attendanceExceptions.early,
-      ...attendanceExceptions.both,
-      ...attendanceExceptions.absence,
-      ...attendanceExceptions.overtime
-    ].map(item => [
-      item.id,
-      item
-    ])
+  currentAttendanceExceptions =
+    Object.fromEntries(
+      [
+        ...attendanceExceptions.late,
+        ...attendanceExceptions.early,
+        ...attendanceExceptions.both,
+        ...attendanceExceptions.absence,
+        ...attendanceExceptions.overtime
+      ].map(item => [
+        item.id,
+        item
+      ])
+    );
+
+  renderAttendanceExceptionReview(
+    attendanceExceptions
   );
-
-renderAttendanceExceptionReview(
-  attendanceExceptions
-);
 }
 
 function shiftHoursFromRanges(value) {

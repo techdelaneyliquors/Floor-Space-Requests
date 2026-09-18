@@ -69,6 +69,12 @@ previousWeekEnd: {
   default: null
 },
 
+approvedOvertimeHours: {
+  type: Map,
+  of: Number,
+  default: {}
+},
+
 employeeIdentifiers: {
   type: Object,
   default: {}

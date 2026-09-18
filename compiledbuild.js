@@ -2710,6 +2710,9 @@ app.get(
             cashiers:
               settings.cashiers || [],
 
+              approvedOvertimeHours:
+  settings.approvedOvertimeHours || {},
+
             availability:
               settings.availability || {},
 
@@ -3895,39 +3898,86 @@ app.post(
         managers,
         associates,
         cashiers = [],
-        buildEmployeeIdentifiers,
-        availability
-      } = req.body
+        buildEmployeeIdentifiers = {},
+        approvedOvertimeHours = {},
+        availability = {}
+      } = req.body;
 
       const cleanStore =
-        String(store || '').trim()
+        getCanonicalStoreName(store);
 
       if (!cleanStore) {
         return res.status(400).json({
           success: false,
-          error: 'store is required'
-        })
+          error:
+            'A valid store is required.'
+        });
       }
 
       if (!Array.isArray(managers)) {
         return res.status(400).json({
           success: false,
-          error: 'managers must be an array'
-        })
+          error:
+            'managers must be an array.'
+        });
       }
 
       if (!Array.isArray(associates)) {
         return res.status(400).json({
           success: false,
-          error: 'associates must be an array'
-        })
+          error:
+            'associates must be an array.'
+        });
       }
 
       if (!Array.isArray(cashiers)) {
         return res.status(400).json({
           success: false,
-          error: 'cashiers must be an array'
-        })
+          error:
+            'cashiers must be an array.'
+        });
+      }
+
+      if (
+        !buildEmployeeIdentifiers ||
+        typeof buildEmployeeIdentifiers !==
+          'object' ||
+        Array.isArray(
+          buildEmployeeIdentifiers
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'buildEmployeeIdentifiers must be an object.'
+        });
+      }
+
+      if (
+        !approvedOvertimeHours ||
+        typeof approvedOvertimeHours !==
+          'object' ||
+        Array.isArray(
+          approvedOvertimeHours
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'approvedOvertimeHours must be an object.'
+        });
+      }
+
+      if (
+        !availability ||
+        typeof availability !== 'object' ||
+        Array.isArray(availability)
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'availability must be an object.'
+        });
       }
 
       const cleanManagers = [
@@ -3938,7 +3988,7 @@ app.post(
             )
             .filter(Boolean)
         )
-      ]
+      ];
 
       const cleanAssociates = [
         ...new Set(
@@ -3948,7 +3998,7 @@ app.post(
             )
             .filter(Boolean)
         )
-      ]
+      ];
 
       const cleanCashiers = [
         ...new Set(
@@ -3958,12 +4008,16 @@ app.post(
             )
             .filter(Boolean)
         )
-      ]
+      ];
 
+      /*
+       * Prevent the same employee name from appearing
+       * in more than one role.
+       */
       const roleByNormalizedName =
-        new Map()
+        new Map();
 
-      const roleDuplicates = []
+      const roleDuplicates = [];
 
       const employeeGroups = [
         {
@@ -3978,24 +4032,24 @@ app.post(
           role: 'cashier',
           names: cleanCashiers
         }
-      ]
+      ];
 
       for (const group of employeeGroups) {
         for (const name of group.names) {
           const normalizedName =
-            name.toLowerCase()
+            name.toLowerCase();
 
           if (
             roleByNormalizedName.has(
               normalizedName
             )
           ) {
-            roleDuplicates.push(name)
+            roleDuplicates.push(name);
           } else {
             roleByNormalizedName.set(
               normalizedName,
               group.role
-            )
+            );
           }
         }
       }
@@ -4009,51 +4063,160 @@ app.post(
             [
               ...new Set(roleDuplicates)
             ].join(', ')
-        })
+        });
       }
 
       const validEmployees = [
         ...cleanManagers,
         ...cleanAssociates,
         ...cleanCashiers
-      ]
+      ];
 
-      const cleanAvailability = {}
+      const cleanAvailability = {};
 
       const cleanBuildEmployeeIdentifiers =
-        {}
+        {};
+
+      /*
+       * Approved overtime is stored by employee number:
+       *
+       * {
+       *   "243": 3,
+       *   "191": 0,
+       *   "184": 2.5
+       * }
+       */
+      const cleanApprovedOvertimeHours = {};
+
+      const employeeNameByNumber =
+        new Map();
 
       for (const employee of validEmployees) {
         cleanAvailability[employee] =
-          availability?.[employee] !== false
+          availability[employee] !== false;
+
+        const employeeNumber =
+          String(
+            buildEmployeeIdentifiers[
+              employee
+            ] || ''
+          ).trim();
 
         cleanBuildEmployeeIdentifiers[
           employee
-        ] = String(
-          buildEmployeeIdentifiers?.[
-            employee
-          ] || ''
-        ).trim()
+        ] = employeeNumber;
+
+        /*
+         * Employees without an employee number cannot
+         * have an overtime setting keyed by number.
+         * Their frontend default remains zero.
+         */
+        if (!employeeNumber) {
+          continue;
+        }
+
+        const normalizedEmployeeNumber =
+          employeeNumber.toLowerCase();
+
+        /*
+         * Prevent two current employees from sharing
+         * the same employee number.
+         */
+        if (
+          employeeNameByNumber.has(
+            normalizedEmployeeNumber
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `Employee number ${employeeNumber} is ` +
+              `assigned to both ` +
+              `${employeeNameByNumber.get(
+                normalizedEmployeeNumber
+              )} and ${employee}.`
+          });
+        }
+
+        employeeNameByNumber.set(
+          normalizedEmployeeNumber,
+          employee
+        );
+
+        const suppliedApprovedHours =
+          Number(
+            approvedOvertimeHours[
+              employeeNumber
+            ] ?? 0
+          );
+
+        if (
+          !Number.isFinite(
+            suppliedApprovedHours
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `Approved overtime for ${employee} ` +
+              `must be a valid number.`
+          });
+        }
+
+        if (
+          suppliedApprovedHours < 0 ||
+          suppliedApprovedHours > 40
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `Approved overtime for ${employee} ` +
+              `must be between 0 and 40 hours.`
+          });
+        }
+
+        /*
+         * Store a maximum of two decimal places.
+         * A missing value is stored as zero.
+         */
+        cleanApprovedOvertimeHours[
+          employeeNumber
+        ] = Number(
+          suppliedApprovedHours.toFixed(2)
+        );
       }
 
       console.log(
         'Schedule settings request:',
         {
-          store: cleanStore,
-          managers: cleanManagers,
-          associates: cleanAssociates,
-          cashiers: cleanCashiers,
+          store:
+            cleanStore,
+
+          managers:
+            cleanManagers,
+
+          associates:
+            cleanAssociates,
+
+          cashiers:
+            cleanCashiers,
+
           buildEmployeeIdentifiers:
             cleanBuildEmployeeIdentifiers,
+
+          approvedOvertimeHours:
+            cleanApprovedOvertimeHours,
+
           availability:
             cleanAvailability
         }
-      )
+      );
 
       const settings =
         await ScheduleSettings.findOneAndUpdate(
           {
-            store: cleanStore
+            store:
+              cleanStore
           },
           {
             $set: {
@@ -4069,37 +4232,51 @@ app.post(
               buildEmployeeIdentifiers:
                 cleanBuildEmployeeIdentifiers,
 
+              approvedOvertimeHours:
+                cleanApprovedOvertimeHours,
+
               availability:
                 cleanAvailability
             }
           },
           {
-            upsert: true,
-            new: true,
-            runValidators: true,
-            setDefaultsOnInsert: true
+            upsert:
+              true,
+
+            new:
+              true,
+
+            runValidators:
+              true,
+
+            setDefaultsOnInsert:
+              true
           }
-        ).lean()
+        ).lean();
 
       return res.json({
         success: true,
+
+        message:
+          'Schedule settings saved successfully.',
+
         settings
-      })
+      });
     } catch (err) {
       console.error(
         'Schedule settings save error:',
         err
-      )
+      );
 
       return res.status(500).json({
         success: false,
         error:
           err.message ||
           'Schedule settings could not be saved.'
-      })
+      });
     }
   }
-)
+);
 
 function cleanAttendancePeriod(period) {
   const source =
