@@ -58,6 +58,7 @@ const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
 
 const app = express()
+app.set('trust proxy', 1);
 const mongoose = require('mongoose')
 const User = require('./models/User')
 const ItemMonthStatus = require('./models/ItemMonthStatus')
@@ -75,6 +76,84 @@ const { Resend } = require('resend');
 const resend = new Resend(
   process.env.RESEND_API_KEY
 );
+
+async function sendEmail({
+  to,
+  subject,
+  text,
+  html
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error(
+      'RESEND_API_KEY is not configured.'
+    );
+  }
+
+  const recipients =
+    Array.isArray(to)
+      ? to
+      : [to];
+
+  const cleanRecipients =
+    recipients
+      .map(value =>
+        String(value || '').trim()
+      )
+      .filter(Boolean);
+
+  if (!cleanRecipients.length) {
+    throw new Error(
+      'At least one email recipient is required.'
+    );
+  }
+
+  const {
+    data,
+    error
+  } = await resend.emails.send({
+    from:
+      'Delaney App <onboarding@resend.dev>',
+
+    to:
+      cleanRecipients,
+
+    subject:
+      String(subject || '').trim(),
+
+    text:
+      String(text || ''),
+
+    html:
+      String(html || '')
+  });
+
+  if (error) {
+    console.error(
+      'Resend email error:',
+      error
+    );
+
+    throw new Error(
+      error.message ||
+      'The email provider rejected the message.'
+    );
+  }
+
+  console.log(
+    'Resend email accepted:',
+    {
+      id:
+        data?.id || '',
+
+      to:
+        cleanRecipients,
+
+      subject
+    }
+  );
+
+  return data;
+}
 
 
 // ------------------------
@@ -3612,15 +3691,6 @@ app.get("/debug-db", async (req, res) => {
 });
 
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
 
 
 function getNextMonthKey() {
@@ -3636,25 +3706,39 @@ function getNextMonthKey() {
 }
 
 async function sendNextMonthRequestsSummaryEmail() {
-  const nextMonth = getNextMonthKey();
+  const nextMonth =
+    getNextMonthKey();
 
-  // exact map ids used in your app / DB
-  const mapOrder = ['branford', 'Hamden', 'New Haven', 'New Milford', 'stratford'];
+  const mapOrder = [
+    'branford',
+    'Hamden',
+    'New Haven',
+    'New Milford',
+    'stratford'
+  ];
 
-  const summary = await ItemRequest.aggregate([
-    {
-      $match: {
-        status: 'requested',
-        month: nextMonth
+  const summary =
+    await ItemRequest.aggregate([
+      {
+        $match: {
+          status:
+            'requested',
+
+          month:
+            nextMonth
+        }
+      },
+      {
+        $group: {
+          _id:
+            '$map_id',
+
+          count: {
+            $sum: 1
+          }
+        }
       }
-    },
-    {
-      $group: {
-        _id: '$map_id',
-        count: { $sum: 1 }
-      }
-    }
-  ]);
+    ]);
 
   const counts = {
     branford: 0,
@@ -3665,70 +3749,176 @@ async function sendNextMonthRequestsSummaryEmail() {
   };
 
   for (const row of summary) {
-    if (counts.hasOwnProperty(row._id)) {
-      counts[row._id] = row.count;
+    if (
+      Object.prototype.hasOwnProperty.call(
+        counts,
+        row._id
+      )
+    ) {
+      counts[row._id] =
+        Number(row.count || 0);
     }
   }
 
-  const totalPending = mapOrder.reduce((sum, map) => sum + (counts[map] || 0), 0);
+  const totalPending =
+    mapOrder.reduce(
+      (sum, map) =>
+        sum +
+        Number(counts[map] || 0),
+      0
+    );
 
-  // only send if there is at least one pending request
   if (totalPending === 0) {
-    console.log(`[next-month-email] No pending requested spots for ${nextMonth}; email not sent.`);
-    return;
+    console.log(
+      `[next-month-email] No pending ` +
+      `requests for ${nextMonth}; ` +
+      `email not sent.`
+    );
+
+    return {
+      sent: false,
+      reason:
+        'NO_PENDING_REQUESTS'
+    };
   }
 
-  const subject = `Pending requests for ${nextMonth}`;
+  const recipient =
+    String(
+      process.env
+        .NEXT_MONTH_REQUESTS_TO || ''
+    ).trim();
+
+  if (!recipient) {
+    throw new Error(
+      'NEXT_MONTH_REQUESTS_TO is not configured.'
+    );
+  }
+
+  const subject =
+    `Pending requests for ${nextMonth}`;
+
+  const applicationUrl =
+    process.env.APP_BASE_URL ||
+    'https://floor-space-requests-app.onrender.com';
 
   const text = [
-    `Hi Zach,`,
-    ``,
-    `There are currently ${totalPending} pending request${totalPending === 1 ? '' : 's'} for next month (${nextMonth}).`,
-    ``,
-    `Branford: ${counts['branford']}`,
-    `Hamden: ${counts['Hamden']}`,
+    'Hi Zach,',
+    '',
+    `There are currently ${totalPending} ` +
+      `pending request${
+        totalPending === 1
+          ? ''
+          : 's'
+      } for next month (${nextMonth}).`,
+    '',
+    `Branford: ${counts.branford}`,
+    `Hamden: ${counts.Hamden}`,
     `New Haven: ${counts['New Haven']}`,
     `New Milford: ${counts['New Milford']}`,
-    `Stratford: ${counts['stratford']}`,
-    ``,
-    `- Sent automatically from tech@delaneyliquors.com`
+    `Stratford: ${counts.stratford}`,
+    '',
+    `Open the application: ${applicationUrl}`,
+    '',
+    'Sent automatically from the Delaney App.'
   ].join('\n');
 
   const html = `
-    <p>Hi Zach,</p>
-    <p>There are currently <strong>${totalPending}</strong> pending request${totalPending === 1 ? '' : 's'} for next month (<strong>${nextMonth}</strong>).</p>
-    <ul>
-      <li><strong>Branford:</strong> ${counts['branford']}</li>
-      <li><strong>Hamden:</strong> ${counts['Hamden']}</li>
-      <li><strong>New Haven:</strong> ${counts['New Haven']}</li>
-      <li><strong>New Milford:</strong> ${counts['New Milford']}</li>
-      <li><strong>Stratford:</strong> ${counts['stratford']}</li>
-    </ul>
-    <p>- Sent automatically from tech@delaneyliquors.com</p>
-    <p>- link to webpage https://floor-space-requests-app.onrender.com/ </p>
+    <div
+      style="
+        max-width:600px;
+        margin:0 auto;
+        padding:24px;
+        font-family:Arial,Helvetica,sans-serif;
+        color:#172033;
+      "
+    >
+      <h2 style="color:#17365d;">
+        Pending requests for ${nextMonth}
+      </h2>
+
+      <p>
+        Hi Zach,
+      </p>
+
+      <p>
+        There are currently
+        <strong>${totalPending}</strong>
+        pending request${
+          totalPending === 1
+            ? ''
+            : 's'
+        } for next month.
+      </p>
+
+      <ul>
+        <li>
+          <strong>Branford:</strong>
+          ${counts.branford}
+        </li>
+
+        <li>
+          <strong>Hamden:</strong>
+          ${counts.Hamden}
+        </li>
+
+        <li>
+          <strong>New Haven:</strong>
+          ${counts['New Haven']}
+        </li>
+
+        <li>
+          <strong>New Milford:</strong>
+          ${counts['New Milford']}
+        </li>
+
+        <li>
+          <strong>Stratford:</strong>
+          ${counts.stratford}
+        </li>
+      </ul>
+
+      <p>
+        ${applicationUrl}
+          Open Application
+        </a>
+      </p>
+
+      <p
+        style="
+          margin-top:24px;
+          color:#64748b;
+          font-size:13px;
+        "
+      >
+        Sent automatically from the Delaney App.
+      </p>
+    </div>
   `;
 
-  await resend.emails.send({
-  from: 'Delaney App <onboarding@resend.dev>',
-  to: [user.email],
-  subject: 'Reset your password',
-  html: `
-    <p>Click the link below to reset your password:</p>
+  const emailResult =
+    await sendEmail({
+      to:
+        recipient,
 
-    <p>
-      ${resetLink}
-        Reset Password
-      </a>
-    </p>
+      subject,
 
-    <p>
-      This link expires in 1 hour.
-    </p>
-  `
-});
+      text,
 
-  console.log(`[next-month-email] Sent summary for ${nextMonth} to ${process.env.NEXT_MONTH_REQUESTS_TO}`);
+      html
+    });
+
+  console.log(
+    `[next-month-email] Sent summary ` +
+    `for ${nextMonth} to ${recipient}.`
+  );
+
+  return {
+    sent: true,
+    emailId:
+      emailResult?.id || ''
+  };
 }
+
 
 
 function startNextMonthRequestsEmailJob() {
@@ -3766,49 +3956,225 @@ app.get('/admin/test-next-month-email', requireAuth, requireAdmin, async (req, r
 });
 
 
-app.get('/forgot-password', (req, res) => {
-  res.render('forgot-password.ejs', { success: false });
-});
-
-
-app.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-
-  const user = await User.findOne({ email });
-
-  // ✅ Never reveal if email exists
-  if (!user) {
-    return res.send("If that email exists, a reset link was sent.");
+app.get(
+  '/forgot-password',
+  requireGuest,
+  (req, res) => {
+    return res.render(
+      'forgot-password.ejs',
+      {
+        success: false,
+        error: null
+      }
+    );
   }
+);
 
-  
-let token = user.resetToken;
+app.post(
+  '/forgot-password',
+  requireGuest,
+  async (req, res) => {
+    const genericSuccessMessage =
+      'If that email address is registered, ' +
+      'a password reset link was sent.';
 
-  if (
-    !user.resetToken ||
-    !user.resetTokenExpiry ||
-    user.resetTokenExpiry <= new Date()
-  ) {
-    token = crypto.randomBytes(32).toString('hex');
+    try {
+      const email =
+        String(
+          req.body.email || ''
+        )
+          .trim()
+          .toLowerCase();
 
-    user.resetToken = token;
-    user.resetTokenExpiry = new Date(Date.now() + (1000 * 60 * 60));
-    //console.log("EXPIRY IN DB:", user.resetTokenExpiry);
-    await user.save();
+      const user =
+        email
+          ? await User.findOne({
+              email
+            })
+          : null;
+
+      /*
+       * Never reveal whether an account exists.
+       */
+      if (!user) {
+        return res.render(
+          'forgot-password.ejs',
+          {
+            success: true,
+            error: null,
+            message:
+              genericSuccessMessage
+          }
+        );
+      }
+
+      /*
+       * Always create a fresh token. This invalidates
+       * any previously issued reset link.
+       */
+      const token =
+        crypto
+          .randomBytes(32)
+          .toString('hex');
+
+      user.resetToken =
+        token;
+
+      user.resetTokenExpiry =
+        new Date(
+          Date.now() +
+          60 * 60 * 1000
+        );
+
+      await user.save();
+
+      /*
+       * Local:
+       * http://localhost:3301/reset-password/token
+       *
+       * Render:
+       * https://floor-space-requests-app.onrender.com/
+       * reset-password/token
+       */
+      const resetLink =
+        `${req.protocol}://` +
+        `${req.get('host')}` +
+        `/reset-password/` +
+        `${encodeURIComponent(token)}`;
+
+      const subject =
+        'Reset your password';
+
+      const text = [
+        'A password reset was requested for your account.',
+        '',
+        'Use this link to reset your password:',
+        resetLink,
+        '',
+        'This link expires in one hour.',
+        '',
+        'If you did not request this reset, ' +
+          'you can ignore this message.'
+      ].join('\n');
+
+      const html = `
+        <div
+          style="
+            max-width:600px;
+            margin:0 auto;
+            padding:24px;
+            font-family:Arial,Helvetica,sans-serif;
+            color:#172033;
+          "
+        >
+          <h2 style="color:#17365d;">
+            Reset your password
+          </h2>
+
+          <p>
+            A password reset was requested
+            for your account.
+          </p>
+
+          <p style="margin:28px 0;">
+            ${resetLink}
+              Reset Password
+            </a>
+          </p>
+
+          <p>
+            This link expires in one hour.
+          </p>
+
+          <p
+            style="
+              color:#64748b;
+              font-size:13px;
+            "
+          >
+            If the button does not work,
+            copy and paste this link into
+            your browser:
+          </p>
+
+          <p
+            style="
+              overflow-wrap:anywhere;
+              color:#2f5597;
+              font-size:13px;
+            "
+          >
+            ${resetLink}
+          </p>
+
+          <p
+            style="
+              margin-top:24px;
+              color:#64748b;
+              font-size:13px;
+            "
+          >
+            If you did not request this reset,
+            you can ignore this message.
+          </p>
+        </div>
+      `;
+
+      try {
+        await sendEmail({
+          to:
+            user.email,
+
+          subject,
+
+          text,
+
+          html
+        });
+      } catch (emailError) {
+        /*
+         * If email delivery fails, remove the unusable
+         * token from the database.
+         */
+        user.resetToken =
+          undefined;
+
+        user.resetTokenExpiry =
+          undefined;
+
+        await user.save();
+
+        throw emailError;
+      }
+
+      return res.render(
+        'forgot-password.ejs',
+        {
+          success: true,
+          error: null,
+          message:
+            genericSuccessMessage
+        }
+      );
+    } catch (err) {
+      console.error(
+        'Forgot password error:',
+        err
+      );
+
+      return res.status(500).render(
+        'forgot-password.ejs',
+        {
+          success: false,
+          error:
+            'The reset email could not be sent. ' +
+            'Please try again.'
+        }
+      );
+    }
   }
-
-
-  const resetLink = `http://${req.headers.host}/reset-password/${token}`;
-  //console.log("TOKEN IN DB:", user?.resetToken);
-  await transporter.sendMail({
-    from: process.env.SMTP_USER,
-    to: user.email,
-    subject: "Reset your password",
-    text: `Reset your password:\n${resetLink}`
-  });
-
-  res.render('forgot-password.ejs', { success: true });
-});
+);
+``
 
 
 
