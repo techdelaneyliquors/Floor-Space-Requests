@@ -105,6 +105,15 @@
       margin-bottom: 10px;
     }
 
+    .notice {
+      background: #e7f8ef;
+      border: 1px solid #9fdcbc;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
   </style>
 </head>
 
@@ -119,6 +128,10 @@
 
     <% if (error) { %>
       <div class="error"><%= error %></div>
+    <% } %>
+
+    <% if (typeof notice !== 'undefined' && notice) { %>
+      <div class="notice"><%= notice %></div>
     <% } %>
 
     <form action="/login" method="POST">

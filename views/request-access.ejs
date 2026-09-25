@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request Access</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 40px 16px;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      box-sizing: border-box;
+
+      background-image: url('/Images/Enjoy Logo w Text.png');
+      background-size: 40%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #f6f6f6;
+    }
+
+    .container {
+      background: rgba(255,255,255,0.95);
+      padding: 30px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .status {
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+
+    .status-pending {
+      background: #fff8e1;
+      border: 1px solid #f3d27a;
+    }
+
+    .status-denied {
+      background: #fdecec;
+      border: 1px solid #f1a9a9;
+    }
+
+    .error {
+      color: #c62828;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label.field-label {
+      font-size: 14px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .checks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+      font-size: 14px;
+    }
+
+    .checks label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .checks .all {
+      grid-column: span 2;
+      font-weight: 600;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
+      margin-bottom: 2px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .btn-submit {
+      background: #2120ba;
+      color: white;
+    }
+
+    .btn-submit:hover {
+      background: #1b1aa1;
+    }
+
+    .btn-submit:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .status-wait {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+    }
+
+    .btn-logout {
+      margin-top: 12px;
+      background: #eee;
+      color: #333;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <h1>Request Access</h1>
+    <div class="subtitle">
+      Hi <%= user.name %>. Your account needs approval before you can use the app.
+    </div>
+
+    <% if (user.accessStatus === 'pending' && user.accessRequest) { %>
+      <div class="status status-pending">
+        <strong>Request pending.</strong>
+        You asked for <%= roleLabels[user.accessRequest.role] || user.accessRequest.role %>
+        access for <%= formatStores(user.accessRequest.stores) %>.
+        You'll get an email when it's reviewed.
+      </div>
+    <% } else if (user.accessStatus === 'denied') { %>
+      <div class="status status-denied">
+        <strong>Your last request was denied.</strong>
+        <% if (user.accessReview && user.accessReview.reason) { %>
+          Reason: <%= user.accessReview.reason %>
+        <% } %>
+        You can submit a new request.
+      </div>
+    <% } %>
+
+    <% if (error) { %>
+      <div class="error"><%= error %></div>
+    <% } %>
+
+    <% if (nextRequestWait) { %>
+      <div class="status status-wait">
+        Requests can be submitted once every 6 hours.
+        You can submit <%= user.accessStatus === 'pending' ? 'a change' : 'a new request' %>
+        in <%= nextRequestWait %>.
+      </div>
+    <% } %>
+
+    <%
+      const current = user.accessRequest || {}
+      const currentStores = current.stores || []
+      const allChecked = currentStores.includes('all')
+    %>
+
+    <form action="/request-access" method="POST">
+
+      <div class="form-group">
+        <label class="field-label" for="role">Role</label>
+        <select id="role" name="role" required>
+          <option value="">Choose a role…</option>
+          <% roles.forEach(role => { %>
+            <option value="<%= role %>" <%= current.role === role ? 'selected' : '' %>>
+              <%= roleLabels[role] %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <span class="field-label">Stores</span>
+        <div class="checks">
+          <label class="all">
+            <input type="checkbox" id="allStores" name="stores" value="all" <%= allChecked ? 'checked' : '' %>>
+            All stores
+          </label>
+          <% storeList.forEach(store => { %>
+            <label>
+              <input type="checkbox" class="store-box" name="stores" value="<%= store %>"
+                <%= !allChecked && currentStores.includes(store) ? 'checked' : '' %>>
+              <%= store %>
+            </label>
+          <% }) %>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" for="note">Note (optional)</label>
+        <textarea id="note" name="note" rows="3" maxlength="500"
+          placeholder="e.g. company name, or who hired you"><%= current.note || '' %></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-submit" <%= nextRequestWait ? 'disabled' : '' %>>
+        <%= user.accessStatus === 'pending' ? 'Update Request' : 'Submit Request' %>
+      </button>
+    </form>
+
+    <form action="/logout" method="POST">
+      <button type="submit" class="btn btn-logout">Logout</button>
+    </form>
+
+  </div>
+
+<script>
+  const allBox = document.getElementById('allStores')
+  const storeBoxes = document.querySelectorAll('.store-box')
+
+  function syncAll() {
+    storeBoxes.forEach(box => {
+      box.disabled = allBox.checked
+      if (allBox.checked) box.checked = false
+    })
+  }
+
+  allBox.addEventListener('change', syncAll)
+  syncAll()
+
+  document.querySelector('form[action="/request-access"]')
+    .addEventListener('submit', event => {
+      const anyStore = allBox.checked ||
+        Array.from(storeBoxes).some(box => box.checked)
+
+      if (!anyStore) {
+        event.preventDefault()
+        alert('Choose at least one store.')
+      }
+    })
+</script>
+</body>
+</html>

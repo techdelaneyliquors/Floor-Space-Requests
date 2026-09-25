@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Branford Weekly Schedule</title>
+  <title><%= storeName %> Weekly Schedule</title>
   <style>
     :root {
       --navy:#17365d; --blue:#2f5597; --light:#eaf1fb; --line:#cbd5e1;
@@ -223,6 +223,252 @@
   font-weight:800;
 }
 
+.add-row-button {
+  margin-top: 10px;
+}
+
+.previous-week-dates {
+  margin: 2px 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.row-label {
+  display: block;
+  font-weight: 700;
+}
+
+.remove-row-button {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 11px;
+}
+
+.removed-row td {
+  background: #fef2f2;
+  color: #7f1d1d;
+  text-align: left;
+  font-size: 13px;
+}
+
+.removed-row .shift-clear-button {
+  margin-left: 8px;
+}
+
+.post-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+  background: #f8fafc;
+}
+
+.post-panel h3 {
+  margin: 0 0 4px;
+}
+
+.post-panel p {
+  margin: 0 0 12px;
+  color: #475569;
+  font-size: 14px;
+}
+
+/* Links styled like the header's buttons */
+.link-button {
+  display: inline-block;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 13.333px;
+  font-family: inherit;
+  line-height: normal;
+  text-decoration: none;
+}
+
+/* "Me" menu in the header: the manager's own schedule and time off */
+.me-menu {
+  position: relative;
+}
+
+.me-menu summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.me-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.me-menu-items {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 250px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
+  padding: 6px;
+}
+
+.me-menu-items a {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.me-menu-items a:hover {
+  background: #eef2ff;
+}
+
+.time-off-panel {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #1e1b4b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.time-off-panel h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.time-off-panel ul {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.time-off-panel .muted {
+  color: #6366f1;
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.build-week-select {
+  width: auto;
+  min-width: 0;
+  display: inline-block;
+  margin: 0 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* A shift whose assigned person has time off or is outside availability */
+td.conflict-cell {
+  background: #fef2f2 !important;
+  box-shadow: inset 0 0 0 2px #fca5a5;
+}
+
+.conflict-note {
+  display: block;
+  margin-top: 4px;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rejection-note {
+  margin-top: 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.load-rejected-button {
+  margin-left: 6px;
+  padding: 4px 9px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.schedule-warnings {
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.schedule-warnings.has-warnings {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #78350f;
+}
+
+.schedule-warnings.no-warnings {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.schedule-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.schedule-warnings li {
+  margin: 2px 0;
+}
+
+.post-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.post-controls select {
+  width: auto;
+  min-width: 260px;
+  max-width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.post-controls label {
+  display: inline;
+  margin: 0;
+}
+
+#postedWeeksTable {
+  margin-top: 14px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#postedWeeksTable th,
+#postedWeeksTable td {
+  border: 1px solid #e2e8f0;
+  padding: 7px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.post-status-live { color: #047857; font-weight: 700; }
+.post-status-pending { color: #b45309; font-weight: 700; }
+.post-status-rejected { color: #b91c1c; font-weight: 700; }
+
 .temporary-note {
   display:block;
   color:#dc2626;
@@ -398,6 +644,47 @@
   background:#fee2e2;
   color:#991b1b;
   font-weight:700;
+}
+
+/*
+ * Printable schedule: every shift stays on one line. The text scales with
+ * the window so the whole week plus hours and OT columns fit; names, OT
+ * status and the adjustments table may wrap.
+ */
+#printSchedule {
+  min-width: 0;
+  font-size: clamp(9px, 0.8vw, 13px);
+}
+
+#printSchedule th,
+#printSchedule td {
+  padding: 0.5em 0.45em;
+}
+
+#printSchedule .total-row td.overtime-approved { background: #dcfce7; }
+#printSchedule .total-row td.overtime-over-limit { background: #fee2e2; }
+
+#printSchedule > tbody > tr > td {
+  white-space: nowrap;
+}
+
+#printSchedule > tbody > tr > td:first-child,
+#printSchedule > tbody > tr > td:last-child,
+#printSchedule .print-comments,
+#printSchedule .print-comments td,
+#printSchedule .print-comments th {
+  white-space: normal;
+}
+
+@media print {
+  #printSchedule {
+    font-size: 7.5pt;
+  }
+
+  #printSchedule th,
+  #printSchedule td {
+    padding: 3px 3px;
+  }
 }
 
 .exception-section {
@@ -1117,7 +1404,7 @@
 <div class="page-shell">
   <header class="topbar">
     <div>
-      <h1>Branford Weekly Scheduling Center</h1>
+      <h1><%= storeName %> Weekly Scheduling Center</h1>
       <p>Build next week, compare hours, print the schedule, and review prior-week attendance.</p>
     </div>
     <div class="actions no-print">
@@ -1132,6 +1419,20 @@
 >
   Print weekly schedule
 </button>
+
+      <a class="secondary link-button" href="/time-off-requests">
+        Time off requests<%= pendingTimeOffCount ? ` (${pendingTimeOffCount})` : '' %>
+      </a>
+
+      <% if (user && user.role === 'manager') { %>
+        <details class="me-menu">
+          <summary class="secondary link-button">Me ▾</summary>
+          <div class="me-menu-items">
+            <a href="<%= myScheduleUrl %>">📅 My schedule</a>
+            <a href="/time-off">🗓 My time off &amp; availability</a>
+          </div>
+        </details>
+      <% } %>
     </div>
   </header>
 
@@ -1194,16 +1495,21 @@
   </button>
 
 </div>
-        <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Coverage windows are based on the manager-hours area in Branford.pdf.</small></div></div>
+        <div id="timeOffPanel" class="time-off-panel"></div>
+        <div id="buildWarnings" class="schedule-warnings"></div>
+        <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Preset coverage windows for <%= storeName %>. Add or remove rows as needed.</small></div></div>
         <div class="table-wrap"><table id="managerTable"><thead><tr><th>Manager coverage</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+        <button type="button" class="secondary add-row-button no-print" onclick="addCoverageRow('manager')">+ Add manager row</button>
       </div>
 
       <!-- MODULE 1, SECTION 2 -->
       <div class="section">
         <div class="section-title"><div><h3>Section 2 of 8: Associate Shift Assignment</h3><small>Assign each recurring coverage shift to an available associate.</small></div></div>
         <div class="table-wrap"><table id="associateTable"><thead><tr><th>Associate shift</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
+        <button type="button" class="secondary add-row-button no-print" onclick="addCoverageRow('associate')">+ Add associate row</button>
       </div>
 
+<% if (scheduleSetup.hasCashiers) { %>
       <div class="section">
   <div class="section-title">
     <div>
@@ -1234,11 +1540,13 @@
       <tbody></tbody>
     </table>
   </div>
+  <button type="button" class="secondary add-row-button no-print" onclick="addCoverageRow('cashier')">+ Add cashier row</button>
 </div>
+<% } %>
 
       <!-- MODULE 1, SECTION 3 -->
       <div class="section">
-        <div class="section-title"><div><h3>Section 3 of 8: Available Employees</h3><small>Turn managers and associates on or off for next week's assignment lists.</small></div></div>
+        <div class="section-title"><div><h3>Section 3 of 8: Available Employees</h3><small>Turn managers and associates on or off for next week's assignment lists. AOT Stands for Approved Overtime</small></div></div>
         <div class="availability-grid">
   <div class="people-box">
     <h4>Managers</h4>
@@ -1266,6 +1574,7 @@
     </button>
   </div>
 
+<% if (scheduleSetup.hasCashiers) { %>
   <div class="people-box">
     <h4>Cashiers</h4>
     <div id="cashierAvailability"></div>
@@ -1278,6 +1587,7 @@
       Add cashier
     </button>
   </div>
+<% } %>
 </div>
       </div>
     </div>
@@ -1298,9 +1608,31 @@
   <section class="module" id="module-3">
     <div class="module-card">
       <div class="module-heading"><h2>Module 3: Printable Weekly Schedule</h2><p>A clean employee-by-day schedule modeled on the bottom table in the PDF.</p></div>
+      <div class="section no-print">
+        <div class="post-panel">
+          <h3>Post this schedule for employees</h3>
+          <p>
+            Submits the schedule below for the week you choose. An admin has to
+            approve it before employees can see it. Employees see shift times only,
+            not the adjustment reasons.
+          </p>
+
+          <div id="scheduleWarnings" class="schedule-warnings"></div>
+
+          <div class="post-controls">
+            <label for="postWeekSelect">Week</label>
+            <select id="postWeekSelect"></select>
+            <button type="button" class="primary" id="postScheduleBtn">
+              Submit for approval
+            </button>
+          </div>
+
+          <table id="postedWeeksTable"></table>
+        </div>
+      </div>
       <div class="section print-sheet">
         <div class="no-print-note">Use the Print button above. Printing is set to landscape and only this schedule is included.</div>
-        <h2>Branford Weekly Schedule</h2>
+        <h2><%= storeName %> Weekly Schedule</h2>
 
 <div class="period" id="printPeriod">
   Next week
@@ -1316,6 +1648,7 @@
   "
 ></div>
         <div class="table-wrap"><table id="printSchedule"></table></div>
+        <div id="rejectionNote" class="rejection-note no-print" hidden></div>
       </div>
     </div>
   </section>
@@ -1363,6 +1696,8 @@
       <h3>
         Section 7 of 8: Previous Week Schedule Comparison
       </h3>
+
+      <div id="previousWeekDates" class="previous-week-dates"></div>
 
       <small>
         Planned shifts are shown first. Actual shifts are
@@ -1457,278 +1792,88 @@ let pointRecommendationsLoaded = false;
 
 let buildingNewTemplate = false;
 
+// Managers recommend attendance points; only admins assign them (the
+// server enforces this too)
+const IS_ADMIN = <%- safeJson(Boolean(user && user.role === 'admin')) %>;
+
 
   const state = {
-  store: 'Branford',
+  store: <%- safeJson(storeName) %>,
  templates: [],
  currentTemplateName: '',
   managers:
-    <%- JSON.stringify(incoming.managers || []) %>,
+    <%- safeJson(incoming.managers || []) %>,
 
   associates:
-    <%- JSON.stringify(incoming.associates || []) %>,
+    <%- safeJson(incoming.associates || []) %>,
 
     cashiers:
-    <%- JSON.stringify(incoming.cashiers || []) %>,
+    <%- safeJson(incoming.cashiers || []) %>,
 
     approvedOvertimeHours:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.approvedOvertimeHours || {}
   ) %>,
 
     buildEmployeeIdentifiers:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.buildEmployeeIdentifiers || {}
   ) %>,
 
   availability:
-    <%- JSON.stringify(incoming.availability || {}) %>,
+    <%- safeJson(incoming.availability || {}) %>,
 
   assignments:
-    <%- JSON.stringify(incoming.assignments || {}) %>,
+    <%- safeJson(incoming.assignments || {}) %>,
 
   attendance:
-  <%- JSON.stringify(incoming.attendance || {}) %>,
+  <%- safeJson(incoming.attendance || {}) %>,
 
 employeeIdentifiers:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.employeeIdentifiers || {}
   ) %>,
 
 previousScheduledShifts:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.previousScheduledShifts || {}
   ) %>,
 
 
 
   previousActualShifts:
-    <%- JSON.stringify(
+    <%- safeJson(
       incoming.previousActualShifts || {}
     ) %>,
 
   previousActualHours:
-    <%- JSON.stringify(
+    <%- safeJson(
       incoming.previousActualHours || {}
     ) %>,
 
     previousWeekStart:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.previousWeekStart || null
   ) %>,
 
 previousWeekEnd:
-  <%- JSON.stringify(
+  <%- safeJson(
     incoming.previousWeekEnd || null
   ) %>,
 
   previousScheduledHours:
-    <%- JSON.stringify(
+    <%- safeJson(
       incoming.previousScheduledHours || {}
     ) %>,
   };
 
-  // Coverage transcribed from Branford.pdf. Blank means no preset coverage window.
-  const managerCoverage = {
-  manager1: {
-    label: 'Manager 1',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
+  // Preset coverage rows for this store (config/scheduleStores.js). Blank means
+  // no preset window; a loaded template replaces these.
+  const managerCoverage = <%- safeJson(scheduleSetup.managerCoverage) %>;
 
-  manager2: {
-    label: 'Manager 2',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
+const associateCoverage = <%- safeJson(scheduleSetup.associateCoverage) %>;
 
-  manager3: {
-    label: 'Manager 3',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  manager4: {
-    label: 'Manager 4',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  }
-};
-
-const associateCoverage = {
-  associate1: {
-    label: 'Associate 1',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  associate2: {
-    label: 'Associate 2',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  associate3: {
-    label: 'Associate 3',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  associate4: {
-    label: 'Associate 4',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-  associate5: {
-    label: 'Associate 5',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-  associate6: {
-    label: 'Associate 6',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  associate7: {
-    label: 'Associate 7',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  associate8: {
-    label: 'Associate 8',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  }
-
-};
-
-const cashierCoverage = {
-  cashier1: {
-    label: 'Cashier 1',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  cashier2: {
-    label: 'Cashier 2',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  cashier3: {
-    label: 'Cashier 3',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-
-  cashier4: {
-    label: 'Cashier 4',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-  cashier5: {
-    label: 'Cashier 5',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  },
-  cashier6: {
-    label: 'Cashier 6',
-    monday: '',
-    tuesday: '',
-    wednesday: '',
-    thursday: '',
-    friday: '',
-    saturday: '',
-    sunday: ''
-  }
-};
+const cashierCoverage = <%- safeJson(scheduleSetup.cashierCoverage) %>;
 
   function employeeKey(type, name){
   return `${type}:${name}`;
@@ -1815,9 +1960,12 @@ const cashierCoverage = {
   return '';
 }
 
+// cell (optional): { day, dayIndex, shift } marks people who are off or
+// unavailable for that shift, e.g. "Ann Employee (Associate) — time off (all day)"
 function employeeOptions(
   type,
-  selected = ''
+  selected = '',
+  cell = null
 ) {
   const options = available(type)
     .map(name => {
@@ -1829,10 +1977,17 @@ function employeeOptions(
       const role =
         getEmployeeRole(name);
 
+      const conflicts = cell
+        ? timeOffConflicts(name, cell.day, cell.dayIndex, cell.shift)
+        : [];
+
       const displayText =
-        role
+        (role
           ? `${name} (${role})`
-          : name;
+          : name) +
+        (conflicts.length
+          ? ` — ⚠ ${conflicts.map(conflict => conflict.short).join('; ')}`
+          : '');
 
       return `
         <option
@@ -2295,6 +2450,250 @@ function deleteScheduledShift(
   renderAllTables();
 }
 
+/*
+ * Adding and removing whole coverage rows (e.g. a 5th manager, or new
+ * cashier coverage). Outside "New Template" mode these are this-week
+ * changes that need a reason, like shift changes; they become permanent
+ * when the schedule is saved as a template.
+ */
+const ROW_TYPE_LABELS = {
+  manager: 'Manager',
+  associate: 'Associate',
+  cashier: 'Cashier'
+};
+
+// 'type:shiftId' -> reason, for rows added this week
+const addedRows = {};
+
+// 'type:shiftId' -> { type, shiftId, row, index, reason, cells }
+const removedRows = {};
+
+function coverageFor(type) {
+  if (type === 'manager') return managerCoverage;
+  if (type === 'associate') return associateCoverage;
+  if (type === 'cashier') return cashierCoverage;
+  return null;
+}
+
+function rowKey(type, shiftId) {
+  return `${type}:${shiftId}`;
+}
+
+function nextRowId(type) {
+  const taken = [
+    ...Object.keys(coverageFor(type)),
+    ...Object.values(removedRows)
+      .filter(item => item.type === type)
+      .map(item => item.shiftId)
+  ];
+
+  let highest = 0;
+
+  taken.forEach(id => {
+    const match = new RegExp(`^${type}(\\d+)$`).exec(id);
+    if (match) highest = Math.max(highest, Number(match[1]));
+  });
+
+  return `${type}${highest + 1}`;
+}
+
+// Moves every per-cell value for a row out of the page state and
+// returns it, so a removed row can be restored exactly
+function takeRowCells(type, shiftId) {
+  const cells = {
+    assignments: {},
+    temporaryShifts: {},
+    temporaryShiftNotes: {},
+    deletedShiftAssignments: {}
+  };
+
+  const stores = {
+    assignments: state.assignments,
+    temporaryShifts,
+    temporaryShiftNotes,
+    deletedShiftAssignments
+  };
+
+  DAY_KEYS.forEach(day => {
+    const keys = [
+      scheduleCellKey(type, shiftId, day),
+      legacyAssignmentKey(shiftId, day)
+    ];
+
+    keys.forEach(key => {
+      Object.entries(stores).forEach(([name, store]) => {
+        if (Object.prototype.hasOwnProperty.call(store, key)) {
+          cells[name][key] = store[key];
+          delete store[key];
+        }
+      });
+    });
+  });
+
+  return cells;
+}
+
+function addCoverageRow(type) {
+  const coverage = coverageFor(type);
+  if (!coverage) return;
+
+  const shiftId = nextRowId(type);
+  const defaultLabel =
+    `${ROW_TYPE_LABELS[type]} ${shiftId.slice(type.length)}`;
+
+  const enteredLabel = window.prompt(
+    `Name for the new ${ROW_TYPE_LABELS[type].toLowerCase()} row:`,
+    defaultLabel
+  );
+
+  if (enteredLabel === null) return;
+
+  const label = enteredLabel.trim().slice(0, 60) || defaultLabel;
+
+  let reason = '';
+
+  if (!buildingNewTemplate) {
+    const enteredReason = window.prompt(
+      `Why is the "${label}" row being added? ` +
+      'This explanation will appear on the printable schedule.',
+      ''
+    );
+
+    if (enteredReason === null) return;
+
+    reason = enteredReason.trim();
+
+    if (!reason) {
+      alert('Enter an explanation before adding the row.');
+      return;
+    }
+  }
+
+  coverage[shiftId] = {
+    label,
+    monday: '',
+    tuesday: '',
+    wednesday: '',
+    thursday: '',
+    friday: '',
+    saturday: '',
+    sunday: ''
+  };
+
+  if (reason) {
+    addedRows[rowKey(type, shiftId)] = reason;
+  }
+
+  renderAllTables();
+}
+
+function removeCoverageRow(type, shiftId) {
+  const coverage = coverageFor(type);
+  const row = coverage && coverage[shiftId];
+  if (!row) return;
+
+  const key = rowKey(type, shiftId);
+  const label = row.label || shiftId;
+
+  const confirmed = window.confirm(
+    `Remove the "${label}" row? Its shifts and assignments ` +
+    'will be cleared from this schedule.'
+  );
+
+  if (!confirmed) return;
+
+  const addedThisWeek =
+    Object.prototype.hasOwnProperty.call(addedRows, key);
+
+  // Undoing a row added this week, or editing a new template,
+  // needs no explanation
+  if (addedThisWeek || buildingNewTemplate) {
+    takeRowCells(type, shiftId);
+    delete coverage[shiftId];
+    delete addedRows[key];
+    renderAllTables();
+    return;
+  }
+
+  const enteredReason = window.prompt(
+    `Why is the "${label}" row being removed? ` +
+    'This explanation will appear on the printable schedule.',
+    ''
+  );
+
+  if (enteredReason === null) return;
+
+  const reason = enteredReason.trim();
+
+  if (!reason) {
+    alert('Enter an explanation before removing the row.');
+    return;
+  }
+
+  removedRows[key] = {
+    type,
+    shiftId,
+    row: cloneTemplateData(row),
+    index: Object.keys(coverage).indexOf(shiftId),
+    reason,
+    cells: takeRowCells(type, shiftId)
+  };
+
+  delete coverage[shiftId];
+
+  renderAllTables();
+}
+
+function restoreCoverageRow(key) {
+  const removed = removedRows[key];
+  if (!removed) return;
+
+  const coverage = coverageFor(removed.type);
+
+  // Put the row back in its original position
+  const entries = Object.entries(coverage);
+  entries.splice(
+    Math.min(removed.index, entries.length),
+    0,
+    [removed.shiftId, removed.row]
+  );
+  replaceObjectContents(coverage, Object.fromEntries(entries));
+
+  Object.assign(state.assignments, removed.cells.assignments);
+  Object.assign(temporaryShifts, removed.cells.temporaryShifts);
+  Object.assign(temporaryShiftNotes, removed.cells.temporaryShiftNotes);
+  Object.assign(deletedShiftAssignments, removed.cells.deletedShiftAssignments);
+
+  delete removedRows[key];
+
+  renderAllTables();
+}
+
+// Row changes are this-week adjustments; loading, saving or starting a
+// template makes the current rows the baseline
+function clearRowChanges() {
+  replaceObjectContents(addedRows, {});
+  replaceObjectContents(removedRows, {});
+}
+
+document.addEventListener('click', event => {
+  const removeButton = event.target.closest('[data-remove-row-type]');
+
+  if (removeButton) {
+    removeCoverageRow(
+      removeButton.dataset.removeRowType,
+      removeButton.dataset.removeRowId
+    );
+    return;
+  }
+
+  const restoreButton = event.target.closest('[data-restore-row]');
+
+  if (restoreButton) {
+    restoreCoverageRow(restoreButton.dataset.restoreRow);
+  }
+});
+
   function renderCoverage(
   tableId,
   coverage,
@@ -2303,6 +2702,11 @@ function deleteScheduledShift(
   const tbody = document.querySelector(
     `#${tableId} tbody`
   );
+
+  // Stores without cashiers have no cashier table on the page
+  if (!tbody) {
+    return;
+  }
 
   tbody.innerHTML = Object.entries(coverage)
     .map(([shiftId, row]) => {
@@ -2411,8 +2815,18 @@ function deleteScheduledShift(
           day
         );
 
+        const dayIndex = DAY_KEYS.indexOf(day);
+
+        // Assigned person has time off or is outside their availability
+        const cellConflicts = timeOffConflicts(
+          selectedEmployee,
+          day,
+          dayIndex,
+          shift
+        );
+
         return `
-          <td>
+          <td class="${cellConflicts.length ? 'conflict-cell' : ''}">
             <span class="shift-label ${
               temporary
                 ? 'temporary-shift'
@@ -2503,25 +2917,78 @@ function deleteScheduledShift(
             }"
             data-assignment="${assignmentKey}"
             data-type="${escapeHtml(type)}"
+            data-shift-id="${escapeHtml(shiftId)}"
+            data-day="${escapeHtml(day)}"
             onchange="setAssignment(this)"
             >
               ${employeeOptions(
                 type,
-                selectedEmployee
+                selectedEmployee,
+                { day, dayIndex, shift }
               )}
             </select>
+
+            ${cellConflicts.map(conflict => `
+              <span class="conflict-note">
+                ⚠ ${escapeHtml(conflict.short.charAt(0).toUpperCase() + conflict.short.slice(1))}
+              </span>
+            `).join('')}
           </td>
         `;
       }).join('');
 
+      const addedReason =
+        addedRows[rowKey(type, shiftId)];
+
       return `
         <tr>
-          <td>${escapeHtml(row.label)}</td>
+          <td class="row-label-cell">
+            <span class="row-label">${escapeHtml(row.label)}</span>
+
+            ${
+              addedReason !== undefined
+                ? `
+                  <span class="temporary-note">
+                    Row added: ${escapeHtml(addedReason)}
+                  </span>
+                `
+                : ''
+            }
+
+            <button
+              type="button"
+              class="remove-row-button no-print"
+              data-remove-row-type="${escapeHtml(type)}"
+              data-remove-row-id="${escapeHtml(shiftId)}"
+            >
+              Remove row
+            </button>
+          </td>
           ${cells}
         </tr>
       `;
     })
-    .join('');
+    .join('') +
+    Object.entries(removedRows)
+      .filter(([, removed]) => removed.type === type)
+      .map(([key, removed]) => `
+        <tr class="removed-row">
+          <td colspan="${DAY_KEYS.length + 1}">
+            <strong>${escapeHtml(removed.row.label || removed.shiftId)}</strong>
+            row removed for this schedule:
+            ${escapeHtml(removed.reason)}
+
+            <button
+              type="button"
+              class="shift-clear-button no-print"
+              data-restore-row="${escapeHtml(key)}"
+            >
+              Restore row
+            </button>
+          </td>
+        </tr>
+      `)
+      .join('');
 }
 
 function shortenEmployeeName(name) {
@@ -2562,6 +3029,11 @@ function shortenEmployeeName(name) {
 }
 
   function renderPeople(target, type, names) {
+  // Stores without cashiers have no cashier list on the page
+  if (!document.getElementById(target)) {
+    return;
+  }
+
   document.getElementById(target).innerHTML =
     names.map(name => {
       const employeeIdentifier =
@@ -3055,6 +3527,11 @@ document.addEventListener(
       );
 
     if (!button) {
+      return;
+    }
+
+    if (!IS_ADMIN) {
+      alert('Only an admin can assign attendance points.');
       return;
     }
 
@@ -3678,9 +4155,33 @@ document.addEventListener('click', event => {
 
   function setAssignment(el) {
 
-  state.assignments[
-    el.dataset.assignment
-  ] = el.value;
+  const key = el.dataset.assignment;
+  const name = el.value;
+
+  // Warn right away if this person is off or unavailable for the shift
+  if (name) {
+    const type = el.dataset.type;
+    const shiftId = el.dataset.shiftId;
+    const day = el.dataset.day;
+    const row = coverageFor(type)?.[shiftId] || {};
+    const shift = getEffectiveShift(type, shiftId, day, row[day] || '');
+    const conflicts = timeOffConflicts(name, day, DAY_KEYS.indexOf(day), shift);
+
+    if (conflicts.length) {
+      const assignAnyway = window.confirm(
+        conflicts.map(conflict => conflict.message).join('\n') +
+        '\n\nAssign anyway?'
+      );
+
+      if (!assignAnyway) {
+        // Put back what was there before
+        el.value = state.assignments[key] || '';
+        return;
+      }
+    }
+  }
+
+  state.assignments[key] = name;
 
   renderCoverage(
     'managerTable',
@@ -3692,6 +4193,12 @@ document.addEventListener('click', event => {
     'associateTable',
     associateCoverage,
     'associate'
+  );
+
+  renderCoverage(
+    'cashierTable',
+    cashierCoverage,
+    'cashier'
   );
 
   recalculate();
@@ -3982,6 +4489,29 @@ document.addEventListener('click', event => {
 function generateScheduleComments() {
   const comments = [];
 
+  Object.entries(addedRows).forEach(([key, reason]) => {
+    const [type, shiftId] = key.split(':');
+    const row = coverageFor(type)?.[shiftId];
+
+    comments.push({
+      type: 'Added Row',
+      day: 'All week',
+      shift: row?.label || shiftId,
+      details: `New ${ROW_TYPE_LABELS[type].toLowerCase()} row added`,
+      reason
+    });
+  });
+
+  Object.values(removedRows).forEach(removed => {
+    comments.push({
+      type: 'Removed Row',
+      day: 'All week',
+      shift: removed.row.label || removed.shiftId,
+      details: `${ROW_TYPE_LABELS[removed.type]} row removed`,
+      reason: removed.reason
+    });
+  });
+
   const coverageGroups = [
     {
       type: 'manager',
@@ -4257,6 +4787,31 @@ function generateScheduleComments() {
       0
     );
 
+  // Store-wide overtime: total approved OT hours, and total hours over
+  // approval across everyone scheduled
+  const overtimeTotals = employees.reduce(
+    (totals, name) => {
+      const employeeNumber = String(
+        state.buildEmployeeIdentifiers?.[name] || ''
+      ).trim();
+
+      const weeklyHours = DAY_KEYS.reduce(
+        (sum, day) => sum + data[name][day].hours,
+        0
+      );
+
+      const approval = calculateOvertimeApproval(
+        employeeNumber,
+        weeklyHours
+      );
+
+      totals.approved += approval.approvedOvertimeHours;
+      totals.over += approval.unapprovedOvertimeHours;
+      return totals;
+    },
+    { approved: 0, over: 0 }
+  );
+
   bodyHtml += `
     <tr class="total-row">
 
@@ -4274,8 +4829,21 @@ function generateScheduleComments() {
         ${grandTotal.toFixed(2)}
       </td>
 
-      <td></td>
-      <td></td>
+      <td class="metric">
+        ${overtimeTotals.approved.toFixed(2)}
+      </td>
+
+      <td class="${
+        overtimeTotals.over > 0
+          ? 'overtime-over-limit'
+          : 'overtime-approved'
+      }">
+        ${
+          overtimeTotals.over > 0
+            ? `${overtimeTotals.over.toFixed(2)} Over`
+            : 'Within Approval'
+        }
+      </td>
 
     </tr>
   `;
@@ -5166,7 +5734,47 @@ function renderAttendanceExceptionReview(
     )}
   `;
 }
+// "Monday, Sep 14 – Sunday, Sep 20, 2026" for the uploaded previous week.
+// Dates are stored at noon UTC, so format them in UTC to keep the day.
+function renderPreviousWeekDates() {
+  const label = document.getElementById('previousWeekDates');
+  if (!label) return;
+
+  const start = state.previousWeekStart
+    ? new Date(state.previousWeekStart)
+    : null;
+
+  if (!start || Number.isNaN(start.getTime())) {
+    label.textContent = 'No previous week has been uploaded yet.';
+    return;
+  }
+
+  let end = state.previousWeekEnd
+    ? new Date(state.previousWeekEnd)
+    : null;
+
+  if (!end || Number.isNaN(end.getTime())) {
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+  }
+
+  const format = (date, withYear) =>
+    date.toLocaleDateString('en-US', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+      ...(withYear ? { year: 'numeric' } : {})
+    });
+
+  label.textContent =
+    `Week of ${format(start, start.getUTCFullYear() !== end.getUTCFullYear())} – ` +
+    format(end, true);
+}
+
   function renderPrevious() {
+  renderPreviousWeekDates();
+
   const table =
     document.getElementById(
       'previousWeekComparisonTable'
@@ -6205,9 +6813,11 @@ function buildPointAssignmentControls(item) {
   }
 
   let assignmentButtonText =
-    recommendationSaved
-      ? 'Assign Recommended Points'
-      : 'Save Recommendation First';
+    !recommendationSaved
+      ? 'Save Recommendation First'
+      : IS_ADMIN
+        ? 'Assign Recommended Points'
+        : 'Waiting for Admin to Assign';
 
   let assignmentButtonClass = '';
 
@@ -6239,7 +6849,8 @@ function buildPointAssignmentControls(item) {
 
   const assignmentButtonDisabled =
     pointsAssigned ||
-    !recommendationSaved
+    !recommendationSaved ||
+    !IS_ADMIN
       ? 'disabled'
       : '';
 
@@ -6502,8 +7113,16 @@ function normalizeShiftValues(value) {
   renderAttendance();
   renderPrevious();
 }
-  function recalculate(){ renderHoursMatrix(); renderPrintSchedule(); renderTemplateName(); }
-  function escapeHtml(v) {return String(v ?? '');}
+  function recalculate(){ renderHoursMatrix(); renderPrintSchedule(); renderTemplateName(); renderScheduleWarnings(); }
+  // Every call passes plain text (names, shift times, reasons) into HTML
+  function escapeHtml(v) {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
   
 
@@ -6874,6 +7493,780 @@ function printWeeklySchedule() {
   }, 100);
 }
 
+/*
+ * Posting a week's schedule for employees (admin approval required).
+ */
+let currentMondayForPosting = '';
+
+function addDaysToYmd(ymd, days) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function formatYmdForPosting(ymd, options) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d))
+    .toLocaleDateString('en-US', { timeZone: 'UTC', ...options });
+}
+
+function postingWeekLabel(weekStart) {
+  const range =
+    `${formatYmdForPosting(weekStart, { month: 'short', day: 'numeric' })} – ` +
+    formatYmdForPosting(addDaysToYmd(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' });
+
+  if (weekStart === currentMondayForPosting) return `Current week (${range})`;
+  if (weekStart === addDaysToYmd(currentMondayForPosting, 7)) return `Next week (${range})`;
+  return `Week of ${range}`;
+}
+
+function renderPostWeekOptions() {
+  const select = document.getElementById('postWeekSelect');
+  if (!select || !currentMondayForPosting) return;
+
+  const previous = select.value;
+  const options = [];
+
+  // Last week through 8 weeks ahead; next week by default, since this
+  // page builds next week's schedule
+  for (let offset = -1; offset <= 8; offset++) {
+    const weekStart = addDaysToYmd(currentMondayForPosting, offset * 7);
+    options.push(`
+      <option value="${weekStart}">
+        ${escapeHtml(postingWeekLabel(weekStart))}
+      </option>
+    `);
+  }
+
+  select.innerHTML = options.join('');
+  select.value = previous || addDaysToYmd(currentMondayForPosting, 7);
+}
+
+function renderPostedWeeks(weeks) {
+  const table = document.getElementById('postedWeeksTable');
+  if (!table) return;
+
+  if (!weeks.length) {
+    table.innerHTML = '';
+    return;
+  }
+
+  const when = value => value
+    ? new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+
+  table.innerHTML = `
+    <thead>
+      <tr><th>Week</th><th>Employees see</th><th>Waiting for approval</th></tr>
+    </thead>
+    <tbody>
+      ${weeks.map(week => `
+        <tr>
+          <td>${escapeHtml(postingWeekLabel(week.weekStart))}</td>
+          <td>
+            ${week.approved
+              ? `<span class="post-status-live">Approved</span>
+                 by ${escapeHtml(week.approved.approvedBy || 'an admin')},
+                 ${escapeHtml(when(week.approved.approvedAt))}`
+              : 'Not posted yet'}
+          </td>
+          <td>
+            ${week.pending
+              ? `<span class="post-status-pending">Pending</span>,
+                 submitted by ${escapeHtml(week.pending.submittedBy || '')}
+                 ${escapeHtml(when(week.pending.submittedAt))}`
+              : week.lastRejection
+                ? `<span class="post-status-rejected">Rejected</span>
+                   by ${escapeHtml(week.lastRejection.rejectedBy || 'an admin')}
+                   ${escapeHtml(when(week.lastRejection.rejectedAt))}${
+                     week.lastRejection.reason
+                       ? `: ${escapeHtml(week.lastRejection.reason)}`
+                       : ''
+                   }${
+                     week.lastRejection.canLoad
+                       ? `<button type="button" class="load-rejected-button"
+                            data-load-rejected-week="${escapeHtml(week.weekStart)}">
+                            Load rejected schedule
+                          </button>`
+                       : ''
+                   }`
+                : '—'}
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+}
+
+async function loadPostedWeeks() {
+  const response = await fetch(
+    `/api/posted-schedules?store=${encodeURIComponent(state.store)}`,
+    { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || 'Posted schedules could not be loaded.');
+  }
+
+  currentMondayForPosting = result.currentMonday;
+  renderPostWeekOptions();
+  renderPostedWeeks(result.weeks || []);
+
+  const selectedWeek = document.getElementById('postWeekSelect')?.value;
+  if (selectedWeek && selectedWeek !== timeOffData.week) {
+    await loadTimeOffForWeek(selectedWeek);
+  }
+}
+
+// The schedule employees will see (each employee's shifts by day, grouped
+// by role), plus what the admin reviewing it needs, matching the printable
+// schedule: which shifts changed this week, daily/weekly hours, overtime,
+// and the adjustment list with reasons. Employees are kept in the same
+// order as the printable schedule.
+function buildPostSnapshot() {
+  const data = gatherScheduled();
+  const groups = { manager: [], associate: [], cashier: [] };
+
+  Object.keys(data)
+    .filter(name => DAY_KEYS.some(day => data[name][day].shifts.length))
+    .forEach(name => {
+      const type = getEmployeeRole(name).toLowerCase() || 'associate';
+
+      const totalHours = DAY_KEYS.reduce(
+        (sum, day) => sum + data[name][day].hours,
+        0
+      );
+
+      const employeeNumber = String(
+        state.buildEmployeeIdentifiers?.[name] || ''
+      ).trim();
+
+      const overtime = calculateOvertimeApproval(
+        employeeNumber,
+        totalHours
+      );
+
+      groups[type].push({
+        name,
+        // Lets the employee page find a linked employee's own row
+        employeeNumber,
+        days: Object.fromEntries(
+          DAY_KEYS.map(day => [
+            day,
+            data[name][day].shifts.map(shift => shift.text)
+          ])
+        ),
+        changed: Object.fromEntries(
+          DAY_KEYS.map(day => [
+            day,
+            data[name][day].shifts.map(shift => Boolean(shift.modified))
+          ])
+        ),
+        hours: Object.fromEntries(
+          DAY_KEYS.map(day => [day, data[name][day].hours])
+        ),
+        totalHours: Number(totalHours.toFixed(2)),
+        approvedOvertimeHours: overtime.approvedOvertimeHours,
+        withinApproval: overtime.withinApproval,
+        unapprovedOvertimeHours: overtime.unapprovedOvertimeHours
+      });
+    });
+
+  return {
+    templateName: state.currentTemplateName || '',
+    groups: Object.entries(groups)
+      .filter(([, employees]) => employees.length)
+      .map(([type, employees]) => ({ type, employees })),
+    adjustments: generateScheduleComments().map(item => ({
+      day: item.day,
+      shift: item.shift,
+      details: item.details,
+      reason: item.reason
+    }))
+  };
+}
+
+/*
+ * Checks for common scheduling problems before a week is submitted.
+ * They warn rather than block: submitting anyway needs a reason, which the
+ * admin sees with the warnings on the approval page.
+ */
+const MIN_REST_HOURS = 8;
+
+// { start, end } in hours from midnight; end > start (overnight adds 24)
+function shiftRange(shiftText) {
+  if (!shiftText || !shiftText.includes(' to ')) return null;
+  const [start, end] = shiftText.split(' to ').map(parseTime);
+  if (start == null || end == null) return null;
+  return { start, end: end <= start ? end + 24 : end };
+}
+
+function formatGap(hours) {
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  return minutes ? `${whole}h ${minutes}m` : `${whole}h`;
+}
+
+function checkScheduleWarnings() {
+  const warnings = [];
+  const add = (type, message) => warnings.push({ type, message });
+  const data = gatherScheduled();
+
+  const coverageGroups = [
+    { type: 'manager', coverage: managerCoverage },
+    { type: 'associate', coverage: associateCoverage },
+    { type: 'cashier', coverage: cashierCoverage }
+  ];
+
+  // Per day: whether any shift / any manager shift is assigned, and the
+  // shifts nobody is assigned to
+  const dayHasShift = {};
+  const dayHasManager = {};
+  const unassigned = [];
+
+  coverageGroups.forEach(group => {
+    Object.entries(group.coverage).forEach(([shiftId, row]) => {
+      DAY_KEYS.forEach((day, index) => {
+        const shift = getEffectiveShift(group.type, shiftId, day, row[day] || '');
+        if (!shift) return;
+
+        const name = getAssignment(group.type, shiftId, day);
+
+        if (!name) {
+          unassigned.push(`${DAYS[index]} ${row.label || shiftId} (${shift})`);
+          return;
+        }
+
+        dayHasShift[day] = true;
+        if (group.type === 'manager') dayHasManager[day] = true;
+
+        if (state.availability[name] === false) {
+          add('unavailable', `${name} is assigned on ${DAYS[index]} (${shift}) but is marked unavailable.`);
+        }
+
+        timeOffWarningsFor(name, day, index, shift)
+          .forEach(warning => add(warning.type, warning.message));
+      });
+    });
+  });
+
+  DAY_KEYS.forEach((day, index) => {
+    if (dayHasShift[day] && !dayHasManager[day]) {
+      add('no-manager', `No manager is scheduled on ${DAYS[index]}.`);
+    }
+  });
+
+  if (unassigned.length) {
+    add(
+      'unassigned',
+      `${unassigned.length} shift${unassigned.length === 1 ? ' has' : 's have'} no one assigned: ` +
+      unassigned.slice(0, 6).join('; ') +
+      (unassigned.length > 6 ? `; and ${unassigned.length - 6} more` : '') + '.'
+    );
+  }
+
+  Object.keys(data).forEach(name => {
+    const ranges = DAY_KEYS.map(day =>
+      data[name][day].shifts
+        .map(shift => ({ text: shift.text, ...shiftRange(shift.text) }))
+        .filter(range => range.start !== undefined)
+        .sort((a, b) => a.start - b.start)
+    );
+
+    ranges.forEach((dayRanges, index) => {
+      // Overlapping shifts on the same day
+      for (let i = 1; i < dayRanges.length; i++) {
+        if (dayRanges[i].start < dayRanges[i - 1].end) {
+          add('double-booked', `${name} is double-booked on ${DAYS[index]}: ${dayRanges[i - 1].text} and ${dayRanges[i].text}.`);
+        }
+      }
+
+      // Rest between the last shift of this day and the first of the next
+      const next = ranges[index + 1];
+      if (dayRanges.length && next && next.length) {
+        const lastEnd = Math.max(...dayRanges.map(range => range.end));
+        const gap = next[0].start + 24 - lastEnd;
+
+        if (gap < MIN_REST_HOURS) {
+          add(
+            'short-rest',
+            `${name} has only ${formatGap(Math.max(gap, 0))} between ${DAYS[index]} ` +
+            `(ends ${dayRanges.find(range => range.end === lastEnd).text.split(' to ')[1]}) and ` +
+            `${DAYS[index + 1]} (starts ${next[0].text.split(' to ')[0]}).`
+          );
+        }
+      }
+    });
+
+    if (DAY_KEYS.every(day => data[name][day].shifts.length)) {
+      add('no-day-off', `${name} is scheduled all 7 days with no day off.`);
+    }
+
+    const totalHours = DAY_KEYS.reduce((sum, day) => sum + data[name][day].hours, 0);
+    const overtime = calculateOvertimeApproval(
+      String(state.buildEmployeeIdentifiers?.[name] || '').trim(),
+      totalHours
+    );
+
+    if (!overtime.withinApproval) {
+      add(
+        'overtime',
+        `${name} is ${overtime.unapprovedOvertimeHours.toFixed(2)} hours over approved overtime ` +
+        `(${totalHours.toFixed(2)} scheduled, ${overtime.approvedWeeklyHours.toFixed(2)} approved).`
+      );
+    }
+  });
+
+  return warnings;
+}
+
+/*
+ * Rejected weeks: the page's full working state is sent with every
+ * submission, so a rejected week can be loaded back exactly as submitted,
+ * fixed and resubmitted. While fixing it, the rejection reason is shown
+ * below the schedule and goes along with the resubmission.
+ */
+let loadedRejection = null;
+
+function captureBuilderState() {
+  return {
+    managerCoverage: cloneTemplateData(managerCoverage),
+    associateCoverage: cloneTemplateData(associateCoverage),
+    cashierCoverage: cloneTemplateData(cashierCoverage),
+    assignments: cloneTemplateData(state.assignments),
+    temporaryShifts: cloneTemplateData(temporaryShifts),
+    temporaryShiftNotes: cloneTemplateData(temporaryShiftNotes),
+    deletedShiftAssignments: cloneTemplateData(deletedShiftAssignments),
+    addedRows: cloneTemplateData(addedRows),
+    removedRows: cloneTemplateData(removedRows),
+    currentTemplateName: state.currentTemplateName || ''
+  };
+}
+
+function restoreBuilderState(saved) {
+  buildingNewTemplate = false;
+
+  replaceObjectContents(managerCoverage, saved.managerCoverage || {});
+  replaceObjectContents(associateCoverage, saved.associateCoverage || {});
+  replaceObjectContents(cashierCoverage, saved.cashierCoverage || {});
+  replaceObjectContents(state.assignments, saved.assignments || {});
+  replaceObjectContents(temporaryShifts, saved.temporaryShifts || {});
+  replaceObjectContents(temporaryShiftNotes, saved.temporaryShiftNotes || {});
+  replaceObjectContents(deletedShiftAssignments, saved.deletedShiftAssignments || {});
+  replaceObjectContents(addedRows, saved.addedRows || {});
+  replaceObjectContents(removedRows, saved.removedRows || {});
+  state.currentTemplateName = saved.currentTemplateName || '';
+
+  const selector = document.getElementById('templateSelector');
+  if (selector) selector.value = '';
+
+  renderAllTables();
+}
+
+function renderRejectionNote() {
+  const note = document.getElementById('rejectionNote');
+  if (!note) return;
+
+  if (!loadedRejection) {
+    note.hidden = true;
+    note.innerHTML = '';
+    return;
+  }
+
+  const when = loadedRejection.rejectedAt
+    ? new Date(loadedRejection.rejectedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+
+  note.hidden = false;
+  note.innerHTML = `
+    <strong>Rejected</strong> by ${escapeHtml(loadedRejection.rejectedBy || 'an admin')}
+    ${when ? `on ${escapeHtml(when)}` : ''}:
+    ${escapeHtml(loadedRejection.reason)}
+    <br><small>This is the schedule that was rejected for ${escapeHtml(postingWeekLabel(loadedRejection.weekStart))}.
+    Fix it and submit again; the admin will see this reason with your resubmission.</small>
+  `;
+}
+
+async function loadRejectedSchedule(weekStart) {
+  const confirmed = window.confirm(
+    `Load the rejected schedule for ${postingWeekLabel(weekStart)}?\n\n` +
+    'This replaces what is on the page now, including any unsaved changes.'
+  );
+
+  if (!confirmed) return;
+
+  const response = await fetch(
+    `/api/posted-schedules/rejected?store=${encodeURIComponent(state.store)}` +
+    `&week=${encodeURIComponent(weekStart)}`,
+    { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+  );
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.error || 'The rejected schedule could not be loaded.');
+  }
+
+  restoreBuilderState(result.builderState || {});
+
+  loadedRejection = { weekStart, ...result.rejection };
+
+  const select = document.getElementById('postWeekSelect');
+  if (select) select.value = weekStart;
+
+  renderRejectionNote();
+
+  if (timeOffData.week !== weekStart) {
+    await loadTimeOffForWeek(weekStart);
+  }
+}
+
+// Close the header's "Me" menu when clicking anywhere else
+document.addEventListener('click', event => {
+  document.querySelectorAll('.me-menu[open]').forEach(menu => {
+    if (!menu.contains(event.target)) menu.removeAttribute('open');
+  });
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-load-rejected-week]');
+  if (!button) return;
+
+  loadRejectedSchedule(button.dataset.loadRejectedWeek).catch(err => {
+    console.error('Load rejected schedule failed:', err);
+    alert(err.message);
+  });
+});
+
+/*
+ * Approved time off and weekly availability for the week selected under
+ * "Post this schedule", by roster name. Shown at the top of the Build tab
+ * and used by the warnings.
+ */
+let timeOffData = { week: '', timeOff: [], availability: {} };
+
+// '16:30' -> 16.5
+function hhmmToHours(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value || ''));
+  return match ? Number(match[1]) + Number(match[2]) / 60 : null;
+}
+
+function describeTimeOffEntry(entry) {
+  return entry.allDay
+    ? 'all day'
+    : `${inputTimeToDisplay(entry.startTime)} – ${inputTimeToDisplay(entry.endTime)}`;
+}
+
+async function loadTimeOffForWeek(weekStart) {
+  if (!weekStart) return;
+
+  try {
+    const response = await fetch(
+      `/api/time-off-schedule?store=${encodeURIComponent(state.store)}&week=${encodeURIComponent(weekStart)}`,
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+    );
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Time off could not be loaded.');
+
+    timeOffData = {
+      week: weekStart,
+      timeOff: result.timeOff || [],
+      availability: result.availability || {}
+    };
+  } catch (err) {
+    console.error('Time off could not be loaded:', err);
+    timeOffData = { week: weekStart, timeOff: [], availability: {}, failed: true };
+  }
+
+  renderTimeOffPanel();
+
+  // Redraw the shift tables so conflicts (including ones from a template
+  // that was just loaded) are marked; this also refreshes the warnings
+  renderAllTables();
+}
+
+// The week being checked can be changed from the Build tab too; it stays
+// in step with the "Post this schedule" week
+document.addEventListener('change', event => {
+  if (event.target.id !== 'buildWeekSelect') return;
+
+  const postSelect = document.getElementById('postWeekSelect');
+  if (postSelect) postSelect.value = event.target.value;
+
+  loadTimeOffForWeek(event.target.value);
+});
+
+function renderTimeOffPanel() {
+  const panel = document.getElementById('timeOffPanel');
+  if (!panel) return;
+
+  if (!timeOffData.week) {
+    panel.innerHTML = '<span class="muted">Loading time off…</span>';
+    return;
+  }
+
+  const byDay = DAY_KEYS
+    .map((day, index) => ({
+      label: DAYS[index],
+      entries: timeOffData.timeOff.filter(entry => entry.day === day)
+    }))
+    .filter(group => group.entries.length);
+
+  const restricted = Object.entries(timeOffData.availability)
+    .map(([name, pattern]) => {
+      const limits = DAY_KEYS
+        .map((day, index) => {
+          const entry = pattern && pattern[day];
+          if (!entry || entry.mode === 'all') return '';
+          return entry.mode === 'none'
+            ? `not ${DAYS[index].slice(0, 3)}`
+            : `${DAYS[index].slice(0, 3)} ${inputTimeToDisplay(entry.start)}–${inputTimeToDisplay(entry.end)}`;
+        })
+        .filter(Boolean);
+      return limits.length ? { name, limits } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Same week choices as "Post this schedule"
+  const postSelect = document.getElementById('postWeekSelect');
+  const weekOptions = postSelect
+    ? [...postSelect.options].map(option => `
+        <option value="${escapeHtml(option.value)}" ${option.value === timeOffData.week ? 'selected' : ''}>
+          ${escapeHtml(option.textContent.trim())}
+        </option>`).join('')
+    : '';
+
+  panel.innerHTML = `
+    <h4>
+      Scheduling for
+      ${weekOptions
+        ? `<select id="buildWeekSelect" class="build-week-select">${weekOptions}</select>`
+        : escapeHtml(postingWeekLabel(timeOffData.week))}
+      <span class="muted">Time off, availability and warnings are checked against this week.</span>
+    </h4>
+    ${timeOffData.failed ? '<div>Time off could not be loaded.</div>' : ''}
+    <strong>Approved time off:</strong>
+    ${byDay.length
+      ? `<ul>${byDay.map(group => `
+          <li><strong>${escapeHtml(group.label)}:</strong>
+            ${group.entries.map(entry =>
+              `${escapeHtml(entry.name)} (${escapeHtml(describeTimeOffEntry(entry))})`
+            ).join(', ')}
+          </li>`).join('')}</ul>`
+      : ' none this week.<br>'}
+    <strong>Regular availability limits:</strong>
+    ${restricted.length
+      ? `<ul>${restricted.map(item =>
+          `<li><strong>${escapeHtml(item.name)}:</strong> ${escapeHtml(item.limits.join('; '))}</li>`
+        ).join('')}</ul>`
+      : ' none.'}
+  `;
+}
+
+document.getElementById('postWeekSelect')?.addEventListener('change', event => {
+  loadTimeOffForWeek(event.target.value);
+});
+
+// Conflicts between one shift and a person's approved time off or weekly
+// availability, for the week being checked. Each has a short label (for
+// the dropdown and the shift cell) and a full message (for warnings).
+function timeOffConflicts(name, day, dayIndex, shiftText) {
+  const found = [];
+  if (!name || !shiftText) return found;
+
+  const range = shiftRange(shiftText);
+
+  timeOffData.timeOff
+    .filter(entry => entry.name === name && entry.day === day)
+    .forEach(entry => {
+      const overlaps = entry.allDay || !range ||
+        (range.start < hhmmToHours(entry.endTime) && hhmmToHours(entry.startTime) < range.end);
+
+      if (overlaps) {
+        found.push({
+          type: 'time-off',
+          short: `time off (${describeTimeOffEntry(entry)})`,
+          message: `${name} is assigned on ${DAYS[dayIndex]} (${shiftText}) but has approved time off (${describeTimeOffEntry(entry)}).`
+        });
+      }
+    });
+
+  const availability = timeOffData.availability[name] && timeOffData.availability[name][day];
+
+  if (availability && availability.mode === 'none') {
+    found.push({
+      type: 'availability',
+      short: `not available ${DAYS[dayIndex]}s`,
+      message: `${name} is assigned on ${DAYS[dayIndex]} (${shiftText}) but is not available on ${DAYS[dayIndex]}s.`
+    });
+  } else if (availability && availability.mode === 'hours' && range) {
+    const from = hhmmToHours(availability.start);
+    const until = hhmmToHours(availability.end);
+
+    if (range.start < from || range.end > until) {
+      const hoursText = `${inputTimeToDisplay(availability.start)}–${inputTimeToDisplay(availability.end)}`;
+      found.push({
+        type: 'availability',
+        short: `available ${hoursText} only`,
+        message: `${name} is assigned ${shiftText} on ${DAYS[dayIndex]} but is only available ` +
+          `${inputTimeToDisplay(availability.start)} – ${inputTimeToDisplay(availability.end)} on ${DAYS[dayIndex]}s.`
+      });
+    }
+  }
+
+  return found;
+}
+
+// Warnings for one assigned shift against time off and availability
+function timeOffWarningsFor(name, day, dayIndex, shiftText) {
+  return timeOffConflicts(name, day, dayIndex, shiftText)
+    .map(conflict => ({ type: conflict.type, message: conflict.message }));
+}
+
+// The same warnings are shown on the Build tab and in the Post panel
+function renderScheduleWarnings() {
+  const boxes = ['buildWarnings', 'scheduleWarnings']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+
+  if (!boxes.length) return;
+
+  const warnings = checkScheduleWarnings();
+
+  const html = warnings.length
+    ? `
+      <strong>${warnings.length} warning${warnings.length === 1 ? '' : 's'} to review before submitting</strong>
+      <ul>
+        ${warnings.map(warning => `<li>${escapeHtml(warning.message)}</li>`).join('')}
+      </ul>
+    `
+    : '<strong>No scheduling warnings.</strong>';
+
+  boxes.forEach(box => {
+    box.className = warnings.length
+      ? 'schedule-warnings has-warnings'
+      : 'schedule-warnings no-warnings';
+    box.innerHTML = html;
+  });
+}
+
+async function postScheduleForApproval() {
+  const select = document.getElementById('postWeekSelect');
+  const weekStart = select?.value;
+
+  if (!weekStart) {
+    alert('Choose a week first.');
+    return;
+  }
+
+  const snapshot = buildPostSnapshot();
+
+  if (!snapshot.groups.length) {
+    alert('There are no assigned shifts to post.');
+    return;
+  }
+
+  // Check against time off for the week actually being posted
+  if (timeOffData.week !== weekStart) {
+    await loadTimeOffForWeek(weekStart);
+  }
+
+  const warnings = checkScheduleWarnings();
+
+  if (warnings.length) {
+    const listed = warnings
+      .slice(0, 8)
+      .map(warning => `• ${warning.message}`)
+      .join('\n');
+
+    const enteredReason = window.prompt(
+      `This schedule has ${warnings.length} warning${warnings.length === 1 ? '' : 's'}:\n\n` +
+      listed +
+      (warnings.length > 8 ? `\n• …and ${warnings.length - 8} more (listed on the page)` : '') +
+      '\n\nTo submit anyway, explain why. The admin will see the warnings and your reason.',
+      ''
+    );
+
+    if (enteredReason === null) return;
+
+    if (!enteredReason.trim()) {
+      alert('Enter a reason to submit a schedule that has warnings.');
+      return;
+    }
+
+    snapshot.warnings = warnings;
+    snapshot.warningsReason = enteredReason.trim();
+  }
+
+  // Resubmitting a rejected week: the admin sees the earlier rejection
+  const answeringRejection =
+    loadedRejection && loadedRejection.weekStart === weekStart;
+
+  if (answeringRejection) {
+    snapshot.previousRejection = {
+      reason: loadedRejection.reason,
+      rejectedBy: loadedRejection.rejectedBy || '',
+      rejectedAt: loadedRejection.rejectedAt || null
+    };
+  }
+
+  const confirmed = window.confirm(
+    `Submit this schedule for ${postingWeekLabel(weekStart)}?\n\n` +
+    'An admin must approve it before employees can see it. ' +
+    'If this week already has a schedule, employees keep seeing ' +
+    'the current one until this version is approved.'
+  );
+
+  if (!confirmed) return;
+
+  const response = await fetch('/api/posted-schedules', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      store: state.store,
+      weekStart,
+      snapshot,
+      // Lets a rejected week be loaded back exactly as submitted
+      builderState: JSON.stringify(captureBuilderState())
+    })
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.error || 'The schedule could not be posted.');
+  }
+
+  if (answeringRejection) {
+    loadedRejection = null;
+    renderRejectionNote();
+  }
+
+  await loadPostedWeeks();
+
+  alert(
+    result.status === 'approved'
+      ? 'Posted. Because you are an admin, it was approved right away and employees can see it now.'
+      : 'Submitted for approval. Employees will see it once an admin approves it.'
+  );
+}
+
+document
+  .getElementById('postScheduleBtn')
+  ?.addEventListener('click', () => {
+    postScheduleForApproval().catch(err => {
+      console.error('Post schedule failed:', err);
+      alert(err.message);
+    });
+  });
+
 function cloneTemplateData(value) {
   return JSON.parse(
     JSON.stringify(value || {})
@@ -7148,6 +8541,7 @@ async function saveCurrentAsTemplate() {
     result.template.templateName ||
     templateName;
 
+  clearRowChanges();
   buildingNewTemplate = false;
 
   const savedTemplateData =
@@ -7607,6 +9001,10 @@ if (!response.ok) {
     );
   }
 
+  // No longer working on a rejected schedule
+  loadedRejection = null;
+  renderRejectionNote();
+
   const templateData =
     template.templateData || {};
 
@@ -7722,6 +9120,7 @@ replaceObjectContents(
   {}
 );
 
+clearRowChanges();
 buildingNewTemplate = false;
 
 renderAllTables();
@@ -7741,6 +9140,10 @@ function beginNewTemplate() {
   if (!confirmed) {
     return;
   }
+
+  // No longer working on a rejected schedule
+  loadedRejection = null;
+  renderRejectionNote();
 
   /*
    * Preserve the coverage row labels but clear
@@ -7812,6 +9215,7 @@ const selector =
   if (selector) {
     selector.value = '';
   }
+  clearRowChanges();
   buildingNewTemplate = true;
   renderAllTables();
 }
@@ -7933,42 +9337,7 @@ document
       }
     }
   );
-function restoreDefaultTemplate() {
 
-  replaceObjectContents(
-    managerCoverage,
-    defaultManagerCoverage
-  );
-
-  replaceObjectContents(
-    associateCoverage,
-    defaultAssociateCoverage
-  );
-
-  replaceObjectContents(
-    state.assignments,
-    {}
-  );
-
-  replaceObjectContents(
-  temporaryShifts,
-  {}
-);
-
-replaceObjectContents(
-  temporaryShiftNotes,
-  {}
-);
-
-replaceObjectContents(
-  deletedShiftAssignments,
-  {}
-);
-
-buildingNewTemplate = false;
-
-  renderAllTables();
-}
 
 document.addEventListener(
   'click',
@@ -8285,6 +9654,10 @@ document.addEventListener(
    * is not delayed while point records are downloaded.
    */
   renderAllTables();
+
+  loadPostedWeeks().catch(err =>
+    console.error('Posted schedules could not be loaded:', err)
+  );
 
   try {
     await Promise.all([

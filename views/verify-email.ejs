@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify Email</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 40px 16px;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      box-sizing: border-box;
+
+      background-image: url('/Images/Enjoy Logo w Text.png');
+      background-size: 40%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #f6f6f6;
+    }
+
+    .container {
+      background: rgba(255,255,255,0.95);
+      padding: 30px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+    }
+
+    p {
+      font-size: 15px;
+      color: #333;
+      line-height: 1.5;
+    }
+
+    .flash {
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 12px 0;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .flash-ok {
+      background: #e7f8ef;
+      border: 1px solid #9fdcbc;
+    }
+
+    .flash-error {
+      background: #fdecec;
+      border: 1px solid #f1a9a9;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      margin-top: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: #2120ba;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #1b1aa1;
+    }
+
+    .btn-primary:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #eee;
+      color: #333;
+    }
+
+    form {
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <% if (mode === 'pending') { %>
+
+      <h1>Check your email</h1>
+      <p>
+        We sent a link to <strong><%= user.email %></strong>.
+        Open it and click <strong>Confirm my email</strong> to continue.
+      </p>
+      <p class="hint">Check your spam folder too. The link expires after 24 hours.</p>
+
+      <% if (message) { %>
+        <div class="flash flash-ok"><%= message %></div>
+      <% } %>
+      <% if (error) { %>
+        <div class="flash flash-error"><%= error %></div>
+      <% } %>
+
+      <form action="/verify-email/resend" method="POST">
+        <button type="submit" class="btn btn-primary" <%= resendWait ? 'disabled' : '' %>>
+          Resend email
+        </button>
+      </form>
+      <% if (resendWait) { %>
+        <p class="hint">You can resend in <%= resendWait %>.</p>
+      <% } %>
+
+      <form action="/logout" method="POST">
+        <button type="submit" class="btn btn-secondary">Logout</button>
+      </form>
+
+    <% } else if (mode === 'confirm') { %>
+
+      <h1>Confirm your email</h1>
+      <p>
+        Confirm that <strong><%= user.email %></strong> belongs to
+        <strong><%= user.name %></strong> and that you created this account.
+      </p>
+
+      <form action="/verify-email/<%= encodeURIComponent(token) %>" method="POST">
+        <button type="submit" class="btn btn-primary">Confirm my email</button>
+      </form>
+
+      <p class="hint">
+        Didn't create an account? Close this page and nothing will happen.
+      </p>
+
+    <% } else if (mode === 'done') { %>
+
+      <h1>Email confirmed</h1>
+      <p>
+        Thanks<% if (user && user.name) { %>, <%= user.name %><% } %>.
+        You can now request access to the app.
+      </p>
+      <a href="/" class="btn btn-primary">Continue</a>
+
+    <% } else { %>
+
+      <h1>Link not valid</h1>
+      <p>
+        This link has expired, was replaced by a newer one, or was already used.
+      </p>
+      <p class="hint">Log in to send a new link.</p>
+      <a href="/login" class="btn btn-primary">Go to login</a>
+
+    <% } %>
+
+  </div>
+</body>
+</html>

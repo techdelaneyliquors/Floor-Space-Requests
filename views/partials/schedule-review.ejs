@@ -1,0 +1,138 @@
+<%# Review of one posted schedule version in the printable-schedule layout.
+    Expects: item = { review, snapshot, replacesApproved }, dayKeys. %>
+  <% const review = item.review %>
+  <% const warnings = (item.snapshot && item.snapshot.warnings) || [] %>
+
+  <% if (warnings.length) { %>
+    <div class="review-warnings">
+      <strong>
+        Submitted with <%= warnings.length %> warning<%= warnings.length === 1 ? '' : 's' %>
+      </strong>
+      <ul>
+        <% warnings.forEach(warning => { %>
+          <li><%= warning.message %></li>
+        <% }) %>
+      </ul>
+      <div class="review-warnings-reason">
+        <strong>Manager's reason:</strong> <%= item.snapshot.warningsReason || '(none given)' %>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="legend">
+    <span><span class="changed-shift">Red</span> = changed from the template this week (reasons below)</span>
+    <% if (item.replacesApproved) { %>
+      <span><span class="live-note">Was: …</span> = what employees see now, where this version differs</span>
+    <% } %>
+  </div>
+
+  <div class="table-wrap">
+    <table class="review-table">
+      <thead>
+        <tr>
+          <th class="name-col">Name</th>
+          <% dayKeys.forEach(day => { %>
+            <th><%= day.charAt(0).toUpperCase() + day.slice(1) %></th>
+          <% }) %>
+          <% if (review.hasHours) { %>
+            <th>Hours</th>
+            <th>Approved OT</th>
+            <th>OT Status</th>
+          <% } %>
+        </tr>
+      </thead>
+      <tbody>
+        <% review.rows.forEach(row => { %>
+          <tr>
+            <td class="name">
+              <%= row.name %>
+              <% if (row.isNew) { %><span class="new-badge">New this version</span><% } %>
+            </td>
+
+            <% row.cells.forEach(cell => { %>
+              <td class="day<%= cell.differsFromLive ? ' differs' : '' %>">
+                <% cell.shifts.forEach((shift, i) => { %>
+                  <span class="<%= shift.changed ? 'changed-shift' : '' %>"><%= shift.text %></span><% if (i < cell.shifts.length - 1) { %><br><% } %>
+                <% }) %>
+                <% if (cell.differsFromLive) { %>
+                  <span class="live-note">
+                    Was: <%= cell.liveShifts.length ? cell.liveShifts.join(', ') : 'off' %>
+                  </span>
+                <% } %>
+              </td>
+            <% }) %>
+
+            <% if (review.hasHours) { %>
+              <td class="metric <%= row.hasChangedShift ? 'changed-shift' : '' %>">
+                <%= row.hasHours ? row.totalHours.toFixed(2) : '' %>
+              </td>
+              <td class="metric">
+                <%= row.hasHours ? row.approvedOvertimeHours.toFixed(2) : '' %>
+              </td>
+              <td class="<%= row.withinApproval ? 'ot-ok' : 'ot-over' %>">
+                <% if (row.hasHours) { %>
+                  <%= row.withinApproval ? 'Within Approval' : `${row.unapprovedOvertimeHours.toFixed(2)} Over` %>
+                <% } %>
+              </td>
+            <% } %>
+          </tr>
+        <% }) %>
+
+        <% if (review.hasHours) { %>
+          <tr class="total-row">
+            <td>Total</td>
+            <% review.dayTotals.forEach(total => { %>
+              <td class="metric"><%= total.toFixed(2) %></td>
+            <% }) %>
+            <td class="metric"><%= review.grandTotal.toFixed(2) %></td>
+            <td class="metric"><%= review.totalApprovedOvertime.toFixed(2) %></td>
+            <td class="<%= review.totalOverApproval > 0 ? 'ot-over' : 'ot-ok' %>">
+              <%= review.totalOverApproval > 0
+                ? `${review.totalOverApproval.toFixed(2)} Over`
+                : 'Within Approval' %>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if (review.removedFromLive.length) { %>
+    <p class="removed-note">
+      No longer scheduled this week (were on the approved version):
+      <strong><%= review.removedFromLive.join(', ') %></strong>
+    </p>
+  <% } %>
+
+  <% if ((item.snapshot.adjustments || []).length) { %>
+    <h3>Changes and why (managers and admins only)</h3>
+    <div class="table-wrap">
+      <table class="adjustments">
+        <thead>
+          <tr><th>Day</th><th>Shift</th><th>Change</th><th>Reason</th></tr>
+        </thead>
+        <tbody>
+          <% item.snapshot.adjustments.forEach(adj => { %>
+            <tr>
+              <td><%= adj.day %></td>
+              <td><%= adj.shift %></td>
+              <td><%= adj.details %></td>
+              <td><%= adj.reason %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <% const previousRejection = item.snapshot && item.snapshot.previousRejection %>
+  <% if (previousRejection && previousRejection.reason) { %>
+    <div class="previous-rejection">
+      <strong>Previously rejected</strong>
+      <% if (previousRejection.rejectedBy) { %>by <%= previousRejection.rejectedBy %><% } %>
+      <% if (previousRejection.rejectedAt) { %>
+        on <%= new Date(previousRejection.rejectedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>
+      <% } %>:
+      <%= previousRejection.reason %>
+    </div>
+  <% } %>

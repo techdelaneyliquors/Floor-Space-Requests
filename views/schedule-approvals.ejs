@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schedule Approvals</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Schedule Approvals</h1>
+    <div style="display:flex; gap:8px;">
+      <a href="/posted-schedules" class="btn btn-back">Posted Schedules</a>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <% if (message) { %>
+    <div class="flash flash-ok"><%= message %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="flash flash-error"><%= error %></div>
+  <% } %>
+
+  <% if (!items.length) { %>
+    <div class="card empty">No schedules are waiting for approval.</div>
+  <% } %>
+
+  <% items.forEach(item => { %>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2><%= item.store %>: <%= item.range %></h2>
+          <div class="meta">
+            <%= item.label %>
+            · submitted by <%= item.submittedBy || 'unknown' %>
+            on <%= new Date(item.submittedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>
+            <% if (item.snapshot.templateName) { %>
+              · from template "<%= item.snapshot.templateName %>"
+            <% } %>
+          </div>
+          <% if (item.replacesApproved) { %>
+            <span class="replaces">Replaces the schedule employees currently see for this week</span>
+          <% } %>
+        </div>
+
+        <div class="decision">
+          <form action="/schedule-approvals/<%= item.id %>/approve" method="POST">
+            <input type="hidden" name="submittedAt" value="<%= new Date(item.submittedAt).toISOString() %>">
+            <button type="submit" class="btn btn-approve">Approve</button>
+          </form>
+
+          <form action="/schedule-approvals/<%= item.id %>/reject" method="POST"
+                onsubmit="return confirm('Reject this schedule?')">
+            <input type="hidden" name="submittedAt" value="<%= new Date(item.submittedAt).toISOString() %>">
+            <input type="text" name="reason" maxlength="500" placeholder="Reason for rejecting (required)" required>
+            <button type="submit" class="btn btn-reject">Reject</button>
+          </form>
+        </div>
+      </div>
+
+      <%- include('partials/schedule-review', { item, dayKeys }) %>
+    </div>
+  <% }) %>
+
+</div>
+</body>
+</html>

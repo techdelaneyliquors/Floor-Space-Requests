@@ -1,0 +1,36 @@
+<%# Shows the roster link dropdowns only for Employee/Manager and the
+    checked stores; hidden dropdowns are disabled so they aren't submitted. %>
+<style>
+  .roster-links { margin: 4px 0 10px; }
+  .roster-links[hidden], .roster-link-row[hidden] { display: none !important; }
+  .roster-link-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
+  .roster-link-store { min-width: 84px; font-weight: 600; }
+  .roster-link-row select { max-width: 340px; margin: 0; }
+  .roster-hint { color: #6b7280; font-weight: 400; }
+</style>
+<script>
+  function syncRosterLinks(form) {
+    const section = form.querySelector('[data-roster-links]')
+    if (!section) return
+
+    const role = (form.querySelector('select[name="role"]') || {}).value
+    const linked = role === 'employee' || role === 'manager'
+    const allBox = form.querySelector('input[name="stores"][value="all"]')
+    const all = Boolean(allBox && allBox.checked)
+    const checked = [...form.querySelectorAll('input[name="stores"]:checked')].map(box => box.value)
+
+    section.hidden = !linked
+
+    section.querySelectorAll('[data-link-store]').forEach(row => {
+      const show = linked && (all || checked.includes(row.dataset.linkStore))
+      row.hidden = !show
+      row.querySelector('select').disabled = !show
+    })
+  }
+
+  document.querySelectorAll('form').forEach(form => {
+    if (!form.querySelector('[data-roster-links]')) return
+    form.addEventListener('change', () => syncRosterLinks(form))
+    syncRosterLinks(form)
+  })
+</script>

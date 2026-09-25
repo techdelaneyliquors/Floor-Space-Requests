@@ -1,0 +1,29 @@
+<%# Roster link dropdowns, one per store, for an access form.
+    Expects: rosters { store: [{ name, employeeNumber, role, linkedToId, linkedToName }] },
+             stores (stores to offer), selected { store: employeeNumber }, targetUserId.
+    Shown only for Employee/Manager and the checked stores (roster-link-script). %>
+<div class="roster-links" data-roster-links>
+  <span class="field-label">
+    Roster link <small class="roster-hint">(who this is on the schedule; required for employees)</small>
+  </span>
+
+  <% stores.forEach(store => { const roster = rosters[store] || [] %>
+    <label class="roster-link-row" data-link-store="<%= store %>">
+      <span class="roster-link-store"><%= store %></span>
+      <select name="link_<%= store %>">
+        <option value="">— Not linked —</option>
+        <% roster.forEach(entry => {
+             const takenByOther = entry.linkedToId && entry.linkedToId !== String(targetUserId) %>
+          <option value="<%= entry.employeeNumber %>"
+            <%= selected[store] === entry.employeeNumber ? 'selected' : '' %>
+            <%= takenByOther ? 'disabled' : '' %>>
+            <%= entry.name %> (#<%= entry.employeeNumber %>, <%= entry.role %>)<%= takenByOther ? ` — linked to ${entry.linkedToName}` : '' %>
+          </option>
+        <% }) %>
+      </select>
+      <% if (!roster.length) { %>
+        <small class="roster-hint">No one on the <%= store %> roster has an employee number yet.</small>
+      <% } %>
+    </label>
+  <% }) %>
+</div>

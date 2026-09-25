@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time Off Requests</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      font-family: 'Inter', sans-serif;
+      background: #f6f6f6;
+      color: #1f2937;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    h1 { margin: 0; font-size: 26px; }
+    h2 { margin: 24px 0 10px; font-size: 18px; }
+
+    .btn {
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      font-family: inherit;
+    }
+
+    .btn-back { background: #2120ba; color: white; }
+    .btn-approve { background: #0ad19b; color: white; }
+    .btn-deny { background: #dc3545; color: white; }
+
+    .flash { border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+    .flash-ok { background: #e7f8ef; border: 1px solid #9fdcbc; }
+    .flash-error { background: #fdecec; border: 1px solid #f1a9a9; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .name { font-weight: 700; font-size: 16px; }
+    .meta { color: #555; font-size: 13px; margin-top: 2px; }
+    .when { font-size: 15px; margin: 8px 0 4px; font-weight: 600; }
+    .note { font-size: 14px; color: #374151; white-space: pre-wrap; }
+
+    .decision { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .decision form { margin: 0; display: flex; gap: 6px; align-items: center; }
+    .decision input[type="text"] {
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      width: 220px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 6px; text-align: left; }
+    th { font-size: 12px; text-transform: uppercase; color: #6b7280; }
+    td.changed { color: #b45309; font-weight: 600; }
+
+    .empty { color: #6b7280; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Time Off Requests</h1>
+    <a href="/" class="btn btn-back">⬅ Home</a>
+  </div>
+
+  <% if (message) { %><div class="flash flash-ok"><%= message %></div><% } %>
+  <% if (error) { %><div class="flash flash-error"><%= error %></div><% } %>
+
+  <h2>Time off waiting for approval (<%= pendingTimeOff.length %>)</h2>
+  <% if (!pendingTimeOff.length) { %>
+    <p class="empty">Nothing waiting.</p>
+  <% } %>
+  <% pendingTimeOff.forEach(request => { %>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="name"><%= request.name %></div>
+          <div class="meta"><%= request.who %></div>
+          <div class="when"><%= request.when %></div>
+          <% if (request.note) { %><div class="note"><%= request.note %></div><% } %>
+        </div>
+        <div class="decision">
+          <form action="/time-off-requests/<%= request.id %>/approve" method="POST">
+            <button type="submit" class="btn btn-approve">Approve</button>
+          </form>
+          <form action="/time-off-requests/<%= request.id %>/deny" method="POST">
+            <input type="text" name="note" maxlength="500" placeholder="Reason for denying (required)" required>
+            <button type="submit" class="btn btn-deny">Deny</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  <% }) %>
+
+  <h2>Availability changes waiting for approval (<%= pendingAvailability.length %>)</h2>
+  <% if (!pendingAvailability.length) { %>
+    <p class="empty">Nothing waiting.</p>
+  <% } %>
+  <% pendingAvailability.forEach(change => { %>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="name"><%= change.name %></div>
+          <div class="meta"><%= change.who %></div>
+          <% if (change.note) { %><div class="note"><%= change.note %></div><% } %>
+        </div>
+        <div class="decision">
+          <form action="/availability-requests/<%= change.id %>/approve" method="POST">
+            <button type="submit" class="btn btn-approve">Approve</button>
+          </form>
+          <form action="/availability-requests/<%= change.id %>/deny" method="POST">
+            <input type="text" name="note" maxlength="500" placeholder="Reason for denying (required)" required>
+            <button type="submit" class="btn btn-deny">Deny</button>
+          </form>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Day</th><th>Now</th><th>Requested</th></tr></thead>
+        <tbody>
+          <% change.days.forEach(row => { %>
+            <tr>
+              <td><%= row.day.charAt(0).toUpperCase() + row.day.slice(1) %></td>
+              <td><%= row.now %></td>
+              <td class="<%= row.now !== row.requested ? 'changed' : '' %>"><%= row.requested %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% }) %>
+
+  <h2>Upcoming approved time off</h2>
+  <% if (!upcoming.length) { %>
+    <p class="empty">None.</p>
+  <% } else { %>
+    <div class="card">
+      <table>
+        <thead><tr><th>Who</th><th>When</th><th>Note</th><th>Approved by</th></tr></thead>
+        <tbody>
+          <% upcoming.forEach(item => { %>
+            <tr>
+              <td><strong><%= item.name %></strong><div class="meta"><%= item.who %></div></td>
+              <td><%= item.when %></td>
+              <td><%= item.note %></td>
+              <td><%= item.approvedBy || '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+</div>
+</body>
+</html>

@@ -5,6 +5,9 @@
   "license": "ISC",
   "author": "",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "main": "password.js",
   "scripts": {
     "devStart": "nodemon password.js"
@@ -17,14 +20,11 @@
     "dotenv": "^17.4.2",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
-    "git": "^0.1.5",
     "jsonwebtoken": "^9.0.3",
     "method-override": "^3.0.0",
     "mongoose": "^9.6.3",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.10",
     "nodemon": "^3.1.14",
-    "passport-local": "^1.0.0",
-    "resend": "^6.28.1"
+    "passport-local": "^1.0.0"
   }
 }

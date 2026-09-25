@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Posted Schedules</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+
+  <style>
+    .pickers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: center;
+      margin: 0;
+    }
+
+    .pickers label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .pickers select {
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      margin-left: 6px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pending-note {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 13px;
+      color: #92400e;
+      background: #fef3c7;
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+
+    .pending-note a {
+      color: inherit;
+      font-weight: 600;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .top-bar, .pickers, .no-print { display: none !important; }
+      .card { box-shadow: none; padding: 0; }
+      .review-table { font-size: 7.5pt; }
+      @page { size: landscape; margin: 0.3in; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Posted Schedules</h1>
+    <div class="top-actions">
+      <a href="/schedule-approvals" class="btn btn-back">Schedule Approvals</a>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <form class="pickers" method="GET">
+      <label>
+        Store
+        <select name="store" onchange="this.form.week.value = ''; this.form.submit()">
+          <% stores.forEach(name => { %>
+            <option value="<%= name %>" <%= name === store ? 'selected' : '' %>><%= name %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <% if (weeks.length) { %>
+        <label>
+          Week
+          <select name="week" onchange="this.form.submit()">
+            <% weeks.forEach(week => { %>
+              <option value="<%= week.weekStart %>" <%= selected && week.weekStart === selected.weekStart ? 'selected' : '' %>>
+                <%= week.label === 'Current week' || week.label === 'Next week'
+                  ? `${week.label} (${week.range})`
+                  : `Week of ${week.range}` %><%= week.hasPending ? ' — new version waiting' : '' %>
+              </option>
+            <% }) %>
+          </select>
+        </label>
+      <% } else { %>
+        <input type="hidden" name="week" value="">
+      <% } %>
+
+      <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
+    </form>
+  </div>
+
+  <% if (!selected) { %>
+    <div class="card empty">No schedules have been approved for <%= store %> yet.</div>
+  <% } else { %>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2><%= store %>: <%= selected.range %></h2>
+          <div class="meta">
+            <%= selected.label %>
+            · approved by <%= selected.approvedBy || 'an admin' %>
+            on <%= new Date(selected.approvedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>
+            · submitted by <%= selected.submittedBy || 'unknown' %>
+            <% if (selected.item.snapshot.templateName) { %>
+              · from template "<%= selected.item.snapshot.templateName %>"
+            <% } %>
+          </div>
+          <% if (selected.hasPending) { %>
+            <span class="pending-note no-print">
+              A newer version of this week is waiting for approval.
+              <a href="/schedule-approvals">Review it</a>
+            </span>
+          <% } %>
+        </div>
+
+        <button type="button" class="btn btn-back no-print" onclick="window.print()">Print</button>
+      </div>
+
+      <%- include('partials/schedule-review', { item: selected.item, dayKeys }) %>
+    </div>
+  <% } %>
+
+</div>
+</body>
+</html>

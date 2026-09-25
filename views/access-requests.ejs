@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Requests</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 40px 16px;
+      font-family: 'Inter', sans-serif;
+      background: #f6f6f6;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    .btn {
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-back {
+      background: #2120ba;
+      color: white;
+    }
+
+    .btn-approve {
+      background: #0ad19b;
+      color: white;
+    }
+
+    .btn-deny {
+      background: #dc3545;
+      color: white;
+    }
+
+    .flash {
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .flash-ok {
+      background: #e7f8ef;
+      border: 1px solid #9fdcbc;
+    }
+
+    .flash-error {
+      background: #fdecec;
+      border: 1px solid #f1a9a9;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .who {
+      font-weight: 600;
+    }
+
+    .email {
+      color: #555;
+      font-size: 14px;
+    }
+
+    .asked {
+      margin: 8px 0 12px;
+      font-size: 14px;
+    }
+
+    .note {
+      background: #f9fafb;
+      border-left: 3px solid #d1d5db;
+      padding: 6px 10px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .forms {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .forms {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field-label {
+      font-size: 13px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      margin-bottom: 10px;
+    }
+
+    .checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .checks label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .empty {
+      text-align: center;
+      color: #555;
+      padding: 40px 16px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Access Requests</h1>
+    <a href="/" class="btn btn-back">⬅ Home</a>
+  </div>
+
+  <% if (message) { %>
+    <div class="flash flash-ok"><%= message %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="flash flash-error"><%= error %></div>
+  <% } %>
+
+  <% if (!requests.length) { %>
+    <div class="card empty">No pending requests.</div>
+  <% } %>
+
+  <% requests.forEach(r => {
+       const ask = r.accessRequest || {}
+       const askedStores = ask.stores || []
+       const askedAll = askedStores.includes('all')
+  %>
+    <div class="card">
+      <div class="who"><%= r.name %></div>
+      <div class="email"><%= r.email %></div>
+
+      <div class="asked">
+        Requested <strong><%= roleLabels[ask.role] || ask.role %></strong>
+        for <strong><%= formatStores(askedStores) %></strong>
+        <% if (ask.requestedAt) { %>
+          on <%= new Date(ask.requestedAt).toLocaleDateString('en-US', { timeZone: 'America/New_York' }) %>
+        <% } %>
+      </div>
+
+      <% if (ask.note) { %>
+        <div class="note"><%= ask.note %></div>
+      <% } %>
+
+      <div class="forms">
+        <form action="/access-requests/<%= r._id %>/approve" method="POST" class="approve-form">
+          <label class="field-label">Grant role</label>
+          <select name="role">
+            <% grantableRoles.forEach(role => { %>
+              <option value="<%= role %>" <%= ask.role === role ? 'selected' : '' %>>
+                <%= roleLabels[role] %>
+              </option>
+            <% }) %>
+          </select>
+
+          <span class="field-label">Grant stores</span>
+          <div class="checks">
+            <% if (canGrantAll) { %>
+              <label>
+                <input type="checkbox" class="all-box" name="stores" value="all" <%= askedAll ? 'checked' : '' %>>
+                All stores
+              </label>
+            <% } %>
+            <% grantableStores.forEach(store => { %>
+              <label>
+                <input type="checkbox" class="store-box" name="stores" value="<%= store %>"
+                  <%= !askedAll && askedStores.includes(store) ? 'checked' : '' %>>
+                <%= store %>
+              </label>
+            <% }) %>
+          </div>
+
+          <%- include('partials/roster-link-fields', {
+                rosters,
+                stores: grantableStores,
+                selected: r.linkSuggestions || {},
+                targetUserId: r._id
+              }) %>
+
+          <button type="submit" class="btn btn-approve">Approve</button>
+        </form>
+
+        <form action="/access-requests/<%= r._id %>/deny" method="POST"
+              onsubmit="return confirm('Deny this request?')">
+          <label class="field-label">Reason (optional)</label>
+          <input type="text" name="reason" maxlength="500">
+          <button type="submit" class="btn btn-deny">Deny</button>
+        </form>
+      </div>
+    </div>
+  <% }) %>
+
+</div>
+
+<script>
+  document.querySelectorAll('.approve-form').forEach(form => {
+    const allBox = form.querySelector('.all-box')
+    const storeBoxes = form.querySelectorAll('.store-box')
+
+    function syncAll() {
+      if (!allBox) return
+      storeBoxes.forEach(box => {
+        box.disabled = allBox.checked
+        if (allBox.checked) box.checked = false
+      })
+    }
+
+    if (allBox) {
+      allBox.addEventListener('change', syncAll)
+      syncAll()
+    }
+
+    form.addEventListener('submit', event => {
+      const role = form.querySelector('select[name="role"]').value
+      const anyStore = (allBox && allBox.checked) ||
+        Array.from(storeBoxes).some(box => box.checked)
+
+      if (role !== 'admin' && !anyStore) {
+        event.preventDefault()
+        alert('Choose at least one store.')
+      }
+    })
+  })
+</script>
+<%- include('partials/roster-link-script') %>
+</body>
+</html>

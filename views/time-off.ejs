@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time Off &amp; Availability</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      font-family: 'Inter', sans-serif;
+      background: #f6f6f6;
+      color: #1f2937;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    h1 { margin: 0; font-size: 26px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .actions form { margin: 0; }
+
+    .btn {
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      font-family: inherit;
+    }
+
+    .btn-primary { background: #2120ba; color: white; }
+    .btn-light { background: #e5e7eb; color: #1f2937; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .btn-logout { background: linear-gradient(135deg, #d94141, #d60b0b); color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .flash { border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+    .flash-ok { background: #e7f8ef; border: 1px solid #9fdcbc; }
+    .flash-error { background: #fdecec; border: 1px solid #f1a9a9; }
+    .flash-warn { background: #fffbeb; border: 1px solid #fcd34d; color: #78350f; }
+
+    .who { color: #555; font-size: 14px; margin-top: 4px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    label.field { display: block; font-size: 13px; font-weight: 600; }
+
+    input[type="date"], input[type="time"], select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    textarea { resize: vertical; }
+
+    .radio-row { display: flex; gap: 16px; font-size: 14px; margin: 4px 0 12px; flex-wrap: wrap; }
+    .radio-row label { display: flex; gap: 6px; align-items: center; }
+
+    .hours[hidden] { display: none; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { font-size: 12px; text-transform: uppercase; color: #6b7280; }
+    td form { margin: 0; }
+
+    .status { font-weight: 700; }
+    .status-pending { color: #b45309; }
+    .status-approved { color: #047857; }
+    .status-denied { color: #b91c1c; }
+    .status-cancelled { color: #6b7280; }
+    .small { font-size: 12px; color: #6b7280; }
+
+    .avail-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px 12px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .avail-row .day { font-weight: 600; }
+    .avail-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .avail-controls select { width: auto; min-width: 170px; margin: 0; }
+    .avail-controls input[type="time"] { width: auto; margin: 0; }
+    .avail-controls .times[hidden] { display: none; }
+
+    .current-avail { font-size: 14px; margin: 0 0 12px; padding-left: 18px; }
+
+    @media (max-width: 520px) {
+      .avail-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <div>
+      <h1>My Time Off &amp; Availability</h1>
+      <% if (links.length) { %>
+        <div class="who">
+          <%= links.map(link => `${link.store}: ${link.name} (#${link.employeeNumber})`).join(' · ') %>
+        </div>
+      <% } %>
+    </div>
+    <div class="actions">
+      <a href="<%= homePath %>" class="btn btn-light">Home</a>
+      <form action="/logout" method="POST"><button type="submit" class="btn btn-logout">Logout</button></form>
+    </div>
+  </div>
+
+  <% if (message) { %><div class="flash flash-ok"><%= message %></div><% } %>
+  <% if (error) { %><div class="flash flash-error"><%= error %></div><% } %>
+
+  <% if (!links.length) { %>
+    <div class="flash flash-warn">
+      Your account isn't linked to a store roster yet, so you can't send requests.
+      Ask a manager or admin to link it.
+    </div>
+  <% } %>
+
+  <!-- Request time off -->
+  <div class="card">
+    <h2>Request time off</h2>
+    <form action="/time-off" method="POST" id="timeOffForm">
+      <div class="grid">
+        <label class="field">
+          First day off
+          <input type="date" name="startDate" min="<%= today %>" required>
+        </label>
+        <label class="field">
+          Last day off <span class="small">(leave blank for one day)</span>
+          <input type="date" name="endDate" min="<%= today %>">
+        </label>
+      </div>
+
+      <div class="radio-row">
+        <label><input type="radio" name="allDay" value="yes" checked> All day</label>
+        <label><input type="radio" name="allDay" value="no"> Only certain hours</label>
+      </div>
+
+      <div class="grid hours" id="timeOffHours" hidden>
+        <label class="field">From <input type="time" name="startTime"></label>
+        <label class="field">Until <input type="time" name="endTime"></label>
+      </div>
+
+      <label class="field">
+        Note <span class="small">(optional)</span>
+        <textarea name="note" rows="2" maxlength="500" placeholder="e.g. doctor's appointment, family trip"></textarea>
+      </label>
+
+      <p>
+        <button type="submit" class="btn btn-primary" <%= links.length ? '' : 'disabled' %>>Send request</button>
+      </p>
+    </form>
+  </div>
+
+  <!-- My requests -->
+  <div class="card">
+    <h2>My time-off requests</h2>
+    <% if (!requests.length) { %>
+      <p class="small">No requests yet.</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>When</th><th>Note</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <% requests.forEach(request => { %>
+            <tr>
+              <td><%= request.when %></td>
+              <td><%= request.note %></td>
+              <td>
+                <span class="status status-<%= request.status %>">
+                  <%= request.status.charAt(0).toUpperCase() + request.status.slice(1) %>
+                </span>
+                <% if (request.reviewedBy && request.status !== 'cancelled') { %>
+                  <div class="small">by <%= request.reviewedBy %><%= request.reviewNote ? `: ${request.reviewNote}` : '' %></div>
+                <% } %>
+              </td>
+              <td>
+                <% if (request.canCancel) { %>
+                  <form action="/time-off/<%= request.id %>/cancel" method="POST"
+                        onsubmit="return confirm('Cancel this request?')">
+                    <button type="submit" class="btn btn-danger">Cancel</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <!-- Weekly availability -->
+  <% const approvedPattern = availability && availability.approved && availability.approved.pattern %>
+  <% const pending = availability && availability.pending && availability.pending.submittedAt ? availability.pending : null %>
+  <% const lastDecision = availability && availability.lastDecision %>
+  <% const formPattern = (pending && pending.pattern) || approvedPattern || {} %>
+
+  <div class="card">
+    <h2>My weekly availability</h2>
+
+    <% if (approvedPattern) { %>
+      <p class="small">Current (approved):</p>
+      <ul class="current-avail">
+        <% dayKeys.forEach(day => { %>
+          <li><strong><%= day.charAt(0).toUpperCase() + day.slice(1) %>:</strong> <%= describeAvailabilityDay(approvedPattern[day]) %></li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="small">No restrictions set: you're treated as available all day, every day.</p>
+    <% } %>
+
+    <% if (pending) { %>
+      <div class="flash flash-warn">
+        A change is waiting for approval (sent <%= new Date(pending.submittedAt).toLocaleDateString('en-US', { timeZone: 'America/New_York' }) %>).
+        The form below shows it.
+        <form action="/time-off/availability/withdraw" method="POST" style="display:inline"
+              onsubmit="return confirm('Withdraw this change?')">
+          <button type="submit" class="btn btn-danger">Withdraw</button>
+        </form>
+      </div>
+    <% } else if (lastDecision && lastDecision.decision === 'denied') { %>
+      <div class="flash flash-error">
+        Your last change was denied by <%= lastDecision.by && lastDecision.by.name %><%= lastDecision.note ? `: ${lastDecision.note}` : '' %>
+      </div>
+    <% } %>
+
+    <form action="/time-off/availability" method="POST" id="availabilityForm">
+      <% dayKeys.forEach(day => { const entry = formPattern[day] || { mode: 'all' } %>
+        <div class="avail-row" data-avail-day="<%= day %>">
+          <span class="day"><%= day.charAt(0).toUpperCase() + day.slice(1) %></span>
+          <div class="avail-controls">
+            <select name="mode_<%= day %>">
+              <option value="all" <%= entry.mode === 'all' ? 'selected' : '' %>>Available all day</option>
+              <option value="hours" <%= entry.mode === 'hours' ? 'selected' : '' %>>Only between…</option>
+              <option value="none" <%= entry.mode === 'none' ? 'selected' : '' %>>Not available</option>
+            </select>
+            <span class="times" <%= entry.mode === 'hours' ? '' : 'hidden' %>>
+              <input type="time" name="start_<%= day %>" value="<%= entry.start || '' %>"> to
+              <input type="time" name="end_<%= day %>" value="<%= entry.end || '' %>">
+            </span>
+          </div>
+        </div>
+      <% }) %>
+
+      <label class="field" style="margin-top:12px">
+        Note <span class="small">(optional, e.g. "school until 3 PM on weekdays")</span>
+        <textarea name="note" rows="2" maxlength="500"></textarea>
+      </label>
+
+      <p>
+        <button type="submit" class="btn btn-primary" <%= links.length ? '' : 'disabled' %>>Send for approval</button>
+      </p>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  // Time off: show the hours only for "Only certain hours"
+  const timeOffForm = document.getElementById('timeOffForm')
+  const hours = document.getElementById('timeOffHours')
+  const syncHours = () => {
+    const partial = timeOffForm.querySelector('input[name="allDay"]:checked').value === 'no'
+    hours.hidden = !partial
+    hours.querySelectorAll('input').forEach(input => { input.required = partial })
+  }
+  timeOffForm.addEventListener('change', syncHours)
+  syncHours()
+
+  // Last day can't be before the first
+  const startDate = timeOffForm.querySelector('input[name="startDate"]')
+  const endDate = timeOffForm.querySelector('input[name="endDate"]')
+  startDate.addEventListener('change', () => { endDate.min = startDate.value })
+
+  // Availability: show the times only for "Only between…"
+  document.querySelectorAll('[data-avail-day]').forEach(row => {
+    const select = row.querySelector('select')
+    const times = row.querySelector('.times')
+    const sync = () => {
+      const partial = select.value === 'hours'
+      times.hidden = !partial
+      times.querySelectorAll('input').forEach(input => { input.required = partial })
+    }
+    select.addEventListener('change', sync)
+    sync()
+  })
+</script>
+</body>
+</html>

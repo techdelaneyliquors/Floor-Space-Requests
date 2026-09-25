@@ -1,32 +1,18 @@
 <h1 class="page-title">Hi <%= name %></h1>
+<p class="role-line"><%= roleLabel %></p>
 
 
 <div class="store-grid">
 
-  <a href="/branfordstoremap" class="store-card">
-    <img src="/Images/CoastalBranford.jpg">
-    <div class="overlay">Branford Store Map</div>
+  <% storeCards.forEach((card, index) => { %>
+  <a href="<%= card.link %>"
+     class="store-card<%= (storeCards.length % 2 === 1 && index === storeCards.length - 1) ? ' center-card' : '' %>">
+    <img src="<%= card.image %>">
+    <div class="overlay">
+      <%= card.store %> <%= user.role === 'employee' ? 'Schedule' : 'Store Map' %>
+    </div>
   </a>
-
-  <a href="/Hamdenstoremap" class="store-card">
-    <img src="/Images/Amity Hamden.jpg">
-    <div class="overlay">Hamden Store Map</div>
-  </a>
-
-  <a href="/stratfordstoremap" class="store-card">
-    <img src="/Images/Stratford Townline.jpg">
-    <div class="overlay">Stratford Store Map</div>
-  </a>
-
-  <a href="/New-Havenstoremap" class="store-card">
-    <img src="/Images/Amity New Haven.jpg">
-    <div class="overlay">New Haven Store Map</div>
-  </a>
-
-  <a href="/New-Milfordstoremap" class="store-card center-card">
-    <img src="/Images/Classic New Milford.jpg">
-    <div class="overlay">New Milford Store Map</div>
-  </a>
+  <% }) %>
 
 </div>
 
@@ -36,17 +22,43 @@
 <br><br>
 
 <div class="bottom-actions">
+  <% if (canRequestSpace) { %>
   <a href="/my-requests" class="btn btn-final">
     📄 My Requests all stores
   </a>
-  
+  <% } %>
+
 <form action="/logout" method="POST" style="display:inline;">
   <button type="submit" class="btn btn-logout">
     <span class="icon">➜</span> LOGOUT
   </button>
 </form>
 
+<% if (canReviewAccess) { %>
+<a href="/access-requests" class="btn btn-admin">
+  Access Requests
+</a>
+
+<a href="/time-off-requests" class="btn btn-admin">
+  Time Off Requests<%= pendingTimeOffCount ? ` (${pendingTimeOffCount})` : '' %>
+</a>
+<% } %>
+
+<% if (canRequestTimeOff) { %>
+<a href="/time-off" class="btn btn-final">
+  My Time Off &amp; Availability
+</a>
+<% } %>
+
 <% if (user.role === 'admin') { %>
+<a href="/schedule-approvals" class="btn btn-admin">
+  Schedule Approvals<%= pendingScheduleCount ? ` (${pendingScheduleCount})` : '' %>
+</a>
+
+<a href="/posted-schedules" class="btn btn-admin">
+  Posted Schedules
+</a>
+
 <a href="/admin/users" class="btn btn-admin">
   Admin Panel
 </a>
@@ -173,6 +185,12 @@
 .page-title {
   text-align: center;
   margin-top: 20px;
+}
+
+.role-line {
+  text-align: center;
+  margin-top: -10px;
+  color: #555;
 }
 
 

@@ -158,7 +158,18 @@
 const MAP_ID = "New Milford";
 let selectedBox = null;
 
-let currentRequests = <%- JSON.stringify(requests) %>;
+let currentRequests = <%- safeJson(requests) %>;
+
+// Vendor-entered text must be escaped before it goes into innerHTML
+// or document.write, or it could inject markup and scripts.
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 const monthInput = document.getElementById("monthPicker");
 const monthLabel = document.getElementById("currentMonthLabel");
@@ -257,10 +268,10 @@ function renderList() {
       margin: 10px auto;               /* ✅ center cards */
       border-radius: 8px;
     ">
-      <strong>Spot:</strong> ${req.item_id}<br>
-      <strong>User:</strong> ${req.user}<br>
-      <strong>Brand:</strong> ${req.brand}<br>
-      <strong>Products:</strong> ${req.products}
+      <strong>Spot:</strong> ${escapeHtml(req.item_id)}<br>
+      <strong>User:</strong> ${escapeHtml(req.user)}<br>
+      <strong>Brand:</strong> ${escapeHtml(req.brand)}<br>
+      <strong>Products:</strong> ${escapeHtml(req.products)}
     </div>
   `).join("");
 
@@ -297,10 +308,10 @@ function printReservations() {
   const month = monthLabel ? monthLabel.textContent : (monthInput ? monthInput.value : "");
   const rows = reserved.map(req => `
     <tr>
-      <td>${req.item_id || ""}</td>
-      <td>${req.user || ""}</td>
-      <td>${req.brand || ""}</td>
-      <td>${req.products || ""}</td>
+      <td>${escapeHtml(req.item_id)}</td>
+      <td>${escapeHtml(req.user)}</td>
+      <td>${escapeHtml(req.brand)}</td>
+      <td>${escapeHtml(req.products)}</td>
     </tr>
   `).join("");
 
@@ -370,7 +381,7 @@ function printReservations() {
     </head>
     <body>
       <h1>Confirmed Reservations</h1>
-      <div class="meta">Map: ${MAP_ID} ${month ? `| Month: ${month}` : ""}</div>
+      <div class="meta">Map: ${escapeHtml(MAP_ID)} ${month ? `| Month: ${escapeHtml(month)}` : ""}</div>
 
       <table>
         <thead>

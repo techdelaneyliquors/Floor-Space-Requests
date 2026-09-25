@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= store %> Schedule</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 20px 16px;
+      font-family: 'Inter', sans-serif;
+      background-color: #f6f6f6;
+      color: #1f2937;
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    .meta {
+      color: #555;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .week-picker {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .week-picker select {
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      max-width: 100%;
+    }
+
+    .actions form {
+      margin: 0;
+    }
+
+    .btn {
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-home {
+      background: #2120ba;
+      color: white;
+    }
+
+    .btn-print {
+      background: #e5e7eb;
+      color: #1f2937;
+    }
+
+    .btn-calendar {
+      background: #0f766e;
+      color: white;
+    }
+
+    .btn-logout {
+      background: linear-gradient(135deg, #d94141, #d60b0b);
+      color: white;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      padding: 16px;
+      margin-bottom: 18px;
+      overflow-x: auto;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      /* Shrinks with the window so all seven days fit; below 10px the
+         card scrolls sideways instead (phones) */
+      font-size: clamp(10px, 1.05vw, 14px);
+    }
+
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 0.55em 0.6em;
+      text-align: center;
+      vertical-align: top;
+      /* Keep "8:00 AM to 12:00 PM" on one line; the card scrolls
+         sideways on narrow screens instead */
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f3f4f6;
+      font-weight: 600;
+    }
+
+    td.name {
+      text-align: left;
+      font-weight: 500;
+    }
+
+    tr.me td {
+      background: #eef2ff;
+    }
+
+    .off {
+      color: #9ca3af;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: #555;
+    }
+
+    @page {
+      size: landscape;
+      margin: 0.35in;
+    }
+
+    @media print {
+      .actions, .week-picker { display: none; }
+      body { background: white; padding: 0; }
+      .page { max-width: none; }
+      h1 { font-size: 16pt; }
+      /* Keep a group's title with the start of its table */
+      h2 { font-size: 11pt; margin-bottom: 4px; break-after: avoid; }
+
+      /* A long group may continue on the next page, but each person's
+         whole week stays on one page: rows never split, and the day
+         headings repeat at the top of every page */
+      .card {
+        box-shadow: none;
+        padding: 0;
+        margin-bottom: 10px;
+        overflow: visible;
+      }
+
+      table { font-size: 8.5pt; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; }
+      th, td { padding: 3px 4px; }
+
+      /* Keep the "you" highlight when printing */
+      tr.me td {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="page">
+
+  <div class="header">
+    <div>
+      <h1><%= store %> Schedule</h1>
+      <div class="meta">
+        <strong><%= selectedWeek.label %></strong> · <%= selectedWeek.range %>
+      </div>
+    </div>
+
+    <form class="week-picker" method="GET">
+      <label for="week">Week</label>
+      <select id="week" name="week" onchange="this.form.submit()">
+        <% weeks.forEach(week => { %>
+          <option value="<%= week.weekStart %>" <%= week.weekStart === selectedWeek.weekStart ? 'selected' : '' %>>
+            <%= week.label === 'Current week' || week.label === 'Next week'
+              ? `${week.label} (${week.range})`
+              : week.label %>
+          </option>
+        <% }) %>
+      </select>
+      <noscript><button type="submit" class="btn btn-print">Show</button></noscript>
+    </form>
+
+    <div class="actions">
+      <% if (showHomeLink) { %>
+        <a href="/" class="btn btn-home">Home</a>
+      <% } %>
+      <a href="/my-schedule.ics" class="btn btn-calendar"
+         title="Downloads a calendar file (.ics) with your shifts for next week. Open it with Outlook or Apple Calendar, or import it in Google Calendar (Settings → Import &amp; export).">
+        📅 Add next week to my calendar
+      </a>
+      <a href="/time-off" class="btn btn-print">Time off &amp; availability</a>
+      <button type="button" class="btn btn-print" onclick="window.print()">Print</button>
+      <form action="/logout" method="POST">
+        <button type="submit" class="btn btn-logout">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <% if (!posted) { %>
+    <div class="card empty">
+      The schedule for this week (<%= selectedWeek.range %>) hasn't been posted yet.
+    </div>
+  <% } %>
+
+  <% groups.forEach(group => { %>
+    <div class="card">
+      <h2><%= group.label %></h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <% dayKeys.forEach(day => { %>
+              <th><%= day.charAt(0).toUpperCase() + day.slice(1) %></th>
+            <% }) %>
+          </tr>
+        </thead>
+        <tbody>
+          <% group.employees.forEach(employee => { %>
+            <tr class="<%= employee.me ? 'me' : '' %>">
+              <td class="name"><%= employee.name %></td>
+              <% dayKeys.forEach(day => { %>
+                <td>
+                  <% if (employee.days[day].length) { %>
+                    <%- employee.days[day].map(shift => String(shift).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])).join('<br>') %>
+                  <% } else { %>
+                    <span class="off">Off</span>
+                  <% } %>
+                </td>
+              <% }) %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% }) %>
+
+</div>
+</body>
+</html>
