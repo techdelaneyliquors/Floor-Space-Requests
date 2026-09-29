@@ -52,6 +52,7 @@ const mongoose = require('mongoose')
 const User = require('./models/User')
 const LoginThrottle = require('./models/LoginThrottle')
 const PostedSchedule = require('./models/PostedSchedule')
+const HoursBudget = require('./models/HoursBudget')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -4440,6 +4441,44 @@ function requireExcelClient(req, res, next) {
     })
   }
 }
+// Upload routes used by both the Schedule page (logged-in manager) and the
+// store workbooks (Excel token). A matching Excel token may only write its
+// own store; without one the request falls through to the manager checks.
+function optionalExcelClient(getStore) {
+  return (req, res, next) => {
+    const authorization = String(req.headers.authorization || '').trim()
+    if (!authorization.startsWith('Bearer ')) return next()
+
+    const suppliedToken = authorization.slice(7).trim()
+    const client = suppliedToken && getExcelClients().find(candidate =>
+      secureTokenEquals(suppliedToken, candidate.token)
+    )
+    if (!client) return next()
+
+    const store = getCanonicalStoreName(getStore(req))
+    if (store !== client.store) {
+      return res.status(403).json({
+        success: false,
+        error: `This workbook's token is for ${client.store}, not ${store || 'an unknown store'}.`
+      })
+    }
+
+    req.excelClient = { clientId: client.clientId, store: client.store }
+    req.storeName = store
+    next()
+  }
+}
+
+// Skips a middleware once optionalExcelClient has authenticated the request
+const unlessExcel = middleware => (req, res, next) =>
+  req.excelClient ? next() : middleware(req, res, next)
+
+// Logged-in manager for the store, or that store's workbook
+const managerOrExcelUpload = [
+  optionalExcelClient(storeFromQueryOrBody),
+  ...[...managerApi, requireStoreFromRequest(storeFromQueryOrBody)].map(unlessExcel)
+]
+
 function buildExcelEmployeeRoster(settings) {
   const buildEmployeeIdentifiers =
     settings.buildEmployeeIdentifiers || {}
@@ -4975,6 +5014,84 @@ app.get('/branfordstoremap/final', ...managerPage('Branford'), async (req, res) 
   }
 })
 
+// ------------------------
+// WEEKLY HOURS BUDGET
+// ------------------------
+//
+// One budget per store: a default for every week, plus per-week overrides.
+// Managers see it on the Schedule page; only admins can change it.
+
+const MAX_BUDGET_HOURS = 10000
+
+function hoursBudgetView(doc) {
+  return {
+    defaultHours: doc && typeof doc.defaultHours === 'number' ? doc.defaultHours : null,
+    overrides: ((doc && doc.overrides) || [])
+      .map(entry => ({ weekStart: entry.weekStart, hours: entry.hours }))
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+  }
+}
+
+// '' or null clears the value; otherwise a number of hours, 2 decimals.
+// Returns { hours } or { error }.
+function cleanBudgetHours(value) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return { hours: null }
+  }
+
+  const hours = Number(value)
+
+  if (!Number.isFinite(hours) || hours < 0 || hours > MAX_BUDGET_HOURS) {
+    return { error: `Enter a number of hours between 0 and ${MAX_BUDGET_HOURS}.` }
+  }
+
+  return { hours: Math.round(hours * 100) / 100 }
+}
+
+// Body: { store, defaultHours } sets the store default, or
+// { store, weekStart, hours } sets one week's override. Empty clears it.
+app.put(
+  '/api/hours-budget',
+  ...adminApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const body = req.body || {}
+      const settingWeek = Object.prototype.hasOwnProperty.call(body, 'weekStart')
+
+      const cleaned = cleanBudgetHours(settingWeek ? body.hours : body.defaultHours)
+      if (cleaned.error) {
+        return res.status(400).json({ success: false, error: cleaned.error })
+      }
+
+      const weekStart = String(body.weekStart || '')
+      if (settingWeek && !isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'Choose a week (it must start on a Monday).' })
+      }
+
+      const doc = await HoursBudget.findOne({ store }) || new HoursBudget({ store })
+
+      if (settingWeek) {
+        doc.overrides = doc.overrides.filter(entry => entry.weekStart !== weekStart)
+        if (cleaned.hours !== null) {
+          doc.overrides.push({ weekStart, hours: cleaned.hours })
+        }
+      } else {
+        doc.defaultHours = cleaned.hours
+      }
+
+      doc.updatedBy = personRef(req.user)
+      await doc.save()
+
+      return res.json({ success: true, budget: hoursBudgetView(doc) })
+    } catch (err) {
+      console.error('Hours budget save error:', err)
+      return res.status(500).json({ success: false, error: 'The hours budget could not be saved.' })
+    }
+  }
+)
+
 // Schedule page for every store: one shared view, with each store's preset
 // coverage rows and whether it schedules cashiers from config/scheduleStores.js
 for (const store of STORE_LIST) {
@@ -5011,6 +5128,10 @@ for (const store of STORE_LIST) {
           settings = createdSettings.toObject()
         }
 
+        const hoursBudget = hoursBudgetView(
+          await HoursBudget.findOne({ store }).lean()
+        )
+
         return res.render('Store Schedule.ejs', {
           user: req.user,
           // The manager's own view of this store's approved schedule
@@ -5036,7 +5157,8 @@ for (const store of STORE_LIST) {
             previousActualHours: settings.previousActualHours || {},
             previousScheduledHours: settings.previousScheduledHours || {},
             previousWeekStart: settings.previousWeekStart || null,
-            previousWeekEnd: settings.previousWeekEnd || null
+            previousWeekEnd: settings.previousWeekEnd || null,
+            hoursBudget
           }
         })
       } catch (err) {
@@ -7615,8 +7737,7 @@ function cleanAttendancePeriod(period) {
 
 app.post(
   '/api/attendance/upload',
-  ...managerApi,
-  requireStoreFromRequest(storeFromQueryOrBody),
+  ...managerOrExcelUpload,
   async (req, res) => {
     try {
       const { attendance } = req.body;
@@ -7747,8 +7868,7 @@ app.post(
 
 app.post(
   '/api/previous-week-review',
-  ...managerApi,
-  requireStoreFromRequest(storeFromQueryOrBody),
+  ...managerOrExcelUpload,
   async (req, res) => {
 
   try {
@@ -8299,8 +8419,7 @@ app.delete(
 
 app.post(
   '/api/actuals/upload',
-  ...managerApi,
-  requireStoreFromRequest(storeFromQueryOrBody),
+  ...managerOrExcelUpload,
   async (req, res) => {
   try {
 

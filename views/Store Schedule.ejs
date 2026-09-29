@@ -664,6 +664,25 @@ td.conflict-cell {
 #printSchedule .total-row td.overtime-approved { background: #dcfce7; }
 #printSchedule .total-row td.overtime-over-limit { background: #fee2e2; }
 
+/* Weekly hours budget: "scheduled / budget" on the total rows */
+td.budget-total { white-space: nowrap; }
+td.budget-within { background: #dcfce7; }
+td.budget-over { background: #fee2e2; color: #991b1b; font-weight: 700; }
+td.budget-within, td.budget-over {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.budget-summary { display: grid; gap: 6px; margin-bottom: 10px; }
+.budget-summary .over { color: #b91c1c; font-weight: 600; }
+.budget-summary .within { color: #15803d; font-weight: 600; }
+.budget-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.budget-controls input[type="number"] { width: 110px; padding: 6px 8px; }
+.budget-controls select { padding: 6px 8px; max-width: 100%; }
+.budget-overrides { margin-top: 10px; border-collapse: collapse; }
+.budget-overrides th, .budget-overrides td { padding: 4px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+.budget-status { min-height: 1.2em; font-size: 13px; }
+.budget-status.error { color: #b91c1c; }
+
 #printSchedule > tbody > tr > td {
   white-space: nowrap;
 }
@@ -1590,6 +1609,22 @@ td.conflict-cell {
 <% } %>
 </div>
       </div>
+
+      <!-- MODULE 1: WEEKLY HOURS BUDGET -->
+      <div class="section" id="hoursBudgetSection">
+        <div class="section-title">
+          <div>
+            <h3>Weekly Hours Budget</h3>
+            <small>
+              Shown on the total row of the printable schedule (scheduled / budget)
+              and the previous week (worked / budget).
+              <%= user && user.role === 'admin' ? 'Each week uses the store default unless it has its own budget.' : 'Set by admins.' %>
+            </small>
+          </div>
+        </div>
+        <div id="hoursBudgetSummary" class="budget-summary"></div>
+        <div id="hoursBudgetControls"></div>
+      </div>
     </div>
   </section>
 
@@ -1864,6 +1899,12 @@ previousWeekEnd:
   previousScheduledHours:
     <%- safeJson(
       incoming.previousScheduledHours || {}
+    ) %>,
+
+  // { defaultHours, overrides: [{ weekStart, hours }] }; admins edit it
+  hoursBudget:
+    <%- safeJson(
+      incoming.hoursBudget || { defaultHours: null, overrides: [] }
     ) %>,
   };
 
@@ -4825,9 +4866,7 @@ function generateScheduleComments() {
         </td>
       `).join('')}
 
-      <td class="metric">
-        ${grandTotal.toFixed(2)}
-      </td>
+      ${budgetTotalCell(grandTotal, buildBudgetWeek(), 'Scheduled')}
 
       <td class="metric">
         ${overtimeTotals.approved.toFixed(2)}
@@ -6258,9 +6297,7 @@ else {
         ${totalScheduled.toFixed(2)}
       </td>
 
-      <td class="metric">
-        ${totalWorked.toFixed(2)}
-      </td>
+      ${budgetTotalCell(totalWorked, previousBudgetWeek(), 'Worked')}
 
       <td class="
         metric
@@ -7540,7 +7577,263 @@ function renderPostWeekOptions() {
 
   select.innerHTML = options.join('');
   select.value = previous || addDaysToYmd(currentMondayForPosting, 7);
+
+  // The budget week list is built from these weeks
+  renderHoursBudgetControls();
 }
+
+/*
+ * Weekly hours budget. Admins set a store default and per-week overrides;
+ * the printable schedule shows "scheduled / budget" for the week being
+ * built, and the previous week shows "worked / budget".
+ */
+const budgetTotals = {};
+
+// Until an admin picks a week, the per-week picker follows the week being built
+let budgetWeekChosen = false;
+
+function mondayOfYmd(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return addDaysToYmd(ymd, -((dow + 6) % 7));
+}
+
+// The week being built (the "Scheduling for" / "Post this schedule" week)
+function buildBudgetWeek() {
+  if (timeOffData.week) return timeOffData.week;
+  return document.getElementById('postWeekSelect')?.value || '';
+}
+
+// The uploaded previous week, as its Monday
+function previousBudgetWeek() {
+  if (!state.previousWeekStart) return '';
+  const start = new Date(state.previousWeekStart);
+  if (Number.isNaN(start.getTime())) return '';
+  return mondayOfYmd(start.toISOString().slice(0, 10));
+}
+
+// { hours, source: 'week' | 'default' } or null when no budget applies
+function budgetForWeek(weekStart) {
+  const budget = state.hoursBudget || {};
+  const override = weekStart
+    ? (budget.overrides || []).find(entry => entry.weekStart === weekStart)
+    : null;
+
+  if (override) return { hours: override.hours, source: 'week' };
+  if (typeof budget.defaultHours === 'number') {
+    return { hours: budget.defaultHours, source: 'default' };
+  }
+  return null;
+}
+
+function budgetDifferenceText(total, hours) {
+  const difference = total - hours;
+  return difference > 0.005
+    ? `${difference.toFixed(2)} over`
+    : `${Math.abs(difference).toFixed(2)} under`;
+}
+
+// The total-hours cell of a total row: "412.50 / 400.00", red when over
+function budgetTotalCell(total, weekStart, label) {
+  budgetTotals[label] = { total, weekStart };
+  queueMicrotask(renderHoursBudgetSummary);
+
+  const budget = budgetForWeek(weekStart);
+  if (!budget) {
+    return `<td class="metric">${total.toFixed(2)}</td>`;
+  }
+
+  const over = total - budget.hours > 0.005;
+  const title =
+    `${label} hours / hours budget ` +
+    `(${budget.source === 'week' ? 'set for this week' : 'store default'}): ` +
+    budgetDifferenceText(total, budget.hours);
+
+  return `
+    <td class="metric budget-total ${over ? 'budget-over' : 'budget-within'}" title="${escapeHtml(title)}">
+      ${total.toFixed(2)} / ${budget.hours.toFixed(2)}
+    </td>
+  `;
+}
+
+function budgetWeekLabel(weekStart) {
+  return currentMondayForPosting
+    ? postingWeekLabel(weekStart)
+    : `Week of ${formatYmdForPosting(weekStart, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+function renderHoursBudgetSummary() {
+  const summary = document.getElementById('hoursBudgetSummary');
+  if (!summary) return;
+
+  const line = (heading, label, entry) => {
+    if (!entry || !entry.weekStart) {
+      return `<div><strong>${heading}:</strong> <span class="muted">no week loaded.</span></div>`;
+    }
+
+    const budget = budgetForWeek(entry.weekStart);
+    const week = escapeHtml(budgetWeekLabel(entry.weekStart));
+
+    if (!budget) {
+      return `<div><strong>${heading}</strong> (${week}): ${entry.total.toFixed(2)} ${label.toLowerCase()}, <span class="muted">no budget set.</span></div>`;
+    }
+
+    const over = entry.total - budget.hours > 0.005;
+    return `
+      <div>
+        <strong>${heading}</strong> (${week}):
+        ${entry.total.toFixed(2)} ${label.toLowerCase()} / ${budget.hours.toFixed(2)} budget
+        <span class="muted">(${budget.source === 'week' ? 'set for this week' : 'store default'})</span>
+        — <span class="${over ? 'over' : 'within'}">${budgetDifferenceText(entry.total, budget.hours)}</span>
+      </div>
+    `;
+  };
+
+  summary.innerHTML =
+    line('Week being scheduled', 'Scheduled', budgetTotals.Scheduled) +
+    line('Previous week', 'Worked', budgetTotals.Worked);
+
+  if (!document.getElementById('hoursBudgetControls')?.innerHTML.trim()) {
+    renderHoursBudgetControls();
+  }
+}
+
+function renderHoursBudgetControls() {
+  const container = document.getElementById('hoursBudgetControls');
+  if (!container) return;
+
+  const budget = state.hoursBudget || { defaultHours: null, overrides: [] };
+  const overrides = budget.overrides || [];
+  const defaultText = typeof budget.defaultHours === 'number'
+    ? `${budget.defaultHours.toFixed(2)} hours`
+    : 'not set';
+
+  const overrideRows = overrides.map(entry => `
+    <tr>
+      <td>${escapeHtml(budgetWeekLabel(entry.weekStart))}</td>
+      <td>${entry.hours.toFixed(2)} hours</td>
+      ${IS_ADMIN
+        ? `<td><button type="button" class="secondary" data-budget-action="remove-week" data-week="${escapeHtml(entry.weekStart)}">Use default</button></td>`
+        : ''}
+    </tr>
+  `).join('');
+
+  const overrideTable = overrides.length
+    ? `<table class="budget-overrides">
+        <thead><tr><th>Week with its own budget</th><th>Budget</th>${IS_ADMIN ? '<th></th>' : ''}</tr></thead>
+        <tbody>${overrideRows}</tbody>
+      </table>`
+    : '';
+
+  if (!IS_ADMIN) {
+    container.innerHTML = `
+      <div><strong>Store default:</strong> ${escapeHtml(defaultText)}</div>
+      ${overrideTable}
+    `;
+    return;
+  }
+
+  // Weeks an admin can set: the uploaded previous week, the posting weeks,
+  // and any week that already has a budget
+  const weeks = new Set(overrides.map(entry => entry.weekStart));
+  const previousWeek = previousBudgetWeek();
+  if (previousWeek) weeks.add(previousWeek);
+  document.querySelectorAll('#postWeekSelect option').forEach(option => weeks.add(option.value));
+
+  const selectedWeek =
+    (budgetWeekChosen && document.getElementById('budgetWeekSelect')?.value) ||
+    buildBudgetWeek() ||
+    previousWeek;
+  if (selectedWeek) weeks.add(selectedWeek);
+
+  const weekOptions = [...weeks].filter(Boolean).sort().map(week => `
+    <option value="${escapeHtml(week)}" ${week === selectedWeek ? 'selected' : ''}>
+      ${escapeHtml(budgetWeekLabel(week))}
+    </option>
+  `).join('');
+
+  const selectedOverride = overrides.find(entry => entry.weekStart === selectedWeek);
+
+  container.innerHTML = `
+    <div class="budget-controls">
+      <label for="budgetDefaultInput"><strong>Store default</strong></label>
+      <input type="number" id="budgetDefaultInput" min="0" step="0.25"
+        value="${typeof budget.defaultHours === 'number' ? budget.defaultHours : ''}"
+        placeholder="Hours per week">
+      <span class="muted">hours per week</span>
+      <button type="button" class="secondary" data-budget-action="save-default">Save default</button>
+    </div>
+
+    <div class="budget-controls">
+      <label for="budgetWeekSelect"><strong>Budget for one week</strong></label>
+      <select id="budgetWeekSelect">${weekOptions}</select>
+      <input type="number" id="budgetWeekInput" min="0" step="0.25"
+        value="${selectedOverride ? selectedOverride.hours : ''}"
+        placeholder="${typeof budget.defaultHours === 'number' ? `Default (${budget.defaultHours})` : 'Hours'}">
+      <button type="button" class="secondary" data-budget-action="save-week">Save for this week</button>
+    </div>
+
+    <div id="budgetStatus" class="budget-status" role="status"></div>
+    ${overrideTable}
+  `;
+}
+
+async function saveHoursBudget(payload) {
+  const status = document.getElementById('budgetStatus');
+  const show = (text, isError) => {
+    if (!status) return;
+    status.textContent = text;
+    status.classList.toggle('error', Boolean(isError));
+  };
+
+  try {
+    const response = await fetch('/api/hours-budget', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ store: state.store, ...payload })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'The hours budget could not be saved.');
+    }
+
+    state.hoursBudget = result.budget;
+    renderHoursBudgetControls();
+    renderPrintSchedule();
+    renderPrevious();
+    document.getElementById('budgetStatus').textContent = 'Saved.';
+  } catch (err) {
+    show(err.message, true);
+  }
+}
+
+document.addEventListener('change', event => {
+  if (event.target.id !== 'budgetWeekSelect') return;
+
+  budgetWeekChosen = true;
+  const override = (state.hoursBudget.overrides || [])
+    .find(entry => entry.weekStart === event.target.value);
+  document.getElementById('budgetWeekInput').value = override ? override.hours : '';
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-budget-action]');
+  if (!button || !IS_ADMIN) return;
+
+  const action = button.dataset.budgetAction;
+
+  if (action === 'save-default') {
+    saveHoursBudget({ defaultHours: document.getElementById('budgetDefaultInput').value });
+  } else if (action === 'save-week') {
+    saveHoursBudget({
+      weekStart: document.getElementById('budgetWeekSelect').value,
+      hours: document.getElementById('budgetWeekInput').value
+    });
+  } else if (action === 'remove-week') {
+    saveHoursBudget({ weekStart: button.dataset.week, hours: '' });
+  }
+});
 
 function renderPostedWeeks(weeks) {
   const table = document.getElementById('postedWeeksTable');
@@ -7985,6 +8278,9 @@ async function loadTimeOffForWeek(weekStart) {
   // Redraw the shift tables so conflicts (including ones from a template
   // that was just loaded) are marked; this also refreshes the warnings
   renderAllTables();
+
+  // The budget picker follows the week being built until an admin picks one
+  if (!budgetWeekChosen) renderHoursBudgetControls();
 }
 
 // The week being checked can be changed from the Build tab too; it stays
