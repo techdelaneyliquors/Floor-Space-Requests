@@ -10,7 +10,7 @@
 
 
 
-<% if (user.role === 'admin') { %>
+<% if (isAdmin) { /* this store's managers and admins */ %>
     
   <button onclick="goToFinal()" class="btn btn-final">
     📊 Final View
