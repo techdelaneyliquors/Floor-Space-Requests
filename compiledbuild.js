@@ -3903,8 +3903,9 @@ app.get('/schedule-approvals', ...adminPage, async (req, res) => {
 
 // Admin: browse approved schedules by store and week, in the same review
 // layout as the approvals page (changes, reasons, hours and overtime)
-// Admins see every store; managers see the stores they manage (read-only:
-// the Paychex send setup and reset controls are admin-only)
+// Admins see every store; managers see the stores they manage. Both can set
+// up "Send to Paychex" (managers for their own stores); resetting a week's
+// send status is admin-only.
 app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req, res) => {
   const currentMonday = mondayOf(storeToday())
   const isAdmin = req.user.role === 'admin'
@@ -3991,8 +3992,8 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
           }
         }
       : null,
-    // "Send to Paychex" setup for this admin
-    paychexSyncKeyCreatedAt: isAdmin && req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
+    // "Send to Paychex" setup for this admin or manager
+    paychexSyncKeyCreatedAt: req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
   })
 })
 
@@ -6032,7 +6033,8 @@ function paychexDateTime(ymd, minutes) {
 
 const paychexShiftKey = (employeeNumber, start, end) => `${employeeNumber}|${start}|${end}`
 
-// Authorization: Bearer <sync key> of an approved admin
+// Authorization: Bearer <sync key> of an approved admin, or a manager (who
+// can only read and send their own stores' schedules)
 async function requirePaychexSyncKey(req, res, next) {
   try {
     const authorization = String(req.headers.authorization || '').trim()
@@ -6043,7 +6045,7 @@ async function requirePaychexSyncKey(req, res, next) {
     }
 
     const user = await User.findOne({ paychexSyncKeyHash: hashToken(key) }).lean()
-    if (!user || !isApproved(user) || user.role !== 'admin') {
+    if (!user || !isApproved(user) || !['admin', 'manager'].includes(user.role)) {
       return res.status(401).json({ success: false, error: 'This sync key is not valid any more. Create a new one on the Posted Schedules page.' })
     }
 
@@ -6055,8 +6057,8 @@ async function requirePaychexSyncKey(req, res, next) {
   }
 }
 
-// Creates (or replaces) the signed-in admin's sync key; shown once
-app.post('/api/paychex-sync/key', ...adminApi, async (req, res) => {
+// Creates (or replaces) the signed-in admin's or manager's sync key; shown once
+app.post('/api/paychex-sync/key', ...managerApi, async (req, res) => {
   try {
     const key = crypto.randomBytes(32).toString('base64url')
     await User.updateOne(
@@ -6070,7 +6072,7 @@ app.post('/api/paychex-sync/key', ...adminApi, async (req, res) => {
   }
 })
 
-app.delete('/api/paychex-sync/key', ...adminApi, async (req, res) => {
+app.delete('/api/paychex-sync/key', ...managerApi, async (req, res) => {
   try {
     await User.updateOne(
       { _id: req.user._id },

@@ -193,7 +193,7 @@
     </div>
   <% } %>
 
-  <% if (isAdmin) { %>
+  <%# Admins (every store) and managers (their own stores) %>
   <div class="card paychex-card no-print">
     <h2>Send approved schedules to Paychex</h2>
     <ol>
@@ -203,7 +203,12 @@
       <li>In Paychex Flex, open <strong>Schedules</strong>. Click the <strong>Delaney → Paychex</strong> button, pick a week, <strong>Preview</strong>, then add the shifts.</li>
     </ol>
     <p class="meta" style="margin:0 0 10px;">
-      Each person's Paychex User ID and LL1 come from the <a href="/paychex-ids">Paychex IDs</a> page.
+      <% if (isAdmin) { %>
+        Each person's Paychex User ID and LL1 come from the <a href="/paychex-ids">Paychex IDs</a> page.
+      <% } else { %>
+        You can send your own stores' approved weeks. Each person's Paychex User ID and LL1 are set by an admin;
+        anyone missing them is skipped and listed in the script.
+      <% } %>
       Shifts already sent from the app are skipped, so a week can be sent again safely. Nothing in Paychex is changed or deleted.
     </p>
 
@@ -222,11 +227,9 @@
     </div>
     <div class="sync-key-box" id="syncKeyBox" hidden></div>
   </div>
-  <% } %>
 
 </div>
 
-<% if (isAdmin) { %>
 <script>
 async function syncKeyRequest(method) {
   const response = await fetch('/api/paychex-sync/key', {
@@ -311,6 +314,5 @@ document.getElementById('revokeSyncKeyBtn')?.addEventListener('click', async () 
   }
 });
 </script>
-<% } %>
 </body>
 </html>

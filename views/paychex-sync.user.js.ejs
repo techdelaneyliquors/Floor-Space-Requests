@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Delaney → Paychex schedule sender
 // @namespace    delaney-schedule
-// @version      1.0.3
+// @version      1.0.4
 // @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
 // @match        https://paychex.flextime.paychex.com/*
 // @grant        GM_xmlhttpRequest
@@ -228,7 +228,7 @@
       } }, 'Save key')
     ),
     el('div', { class: 'dp-muted' },
-      'Create a sync key on the Delaney app\'s Posted Schedules page (admins). App: ', APP)
+      'Create a sync key on the Delaney app\'s Posted Schedules page (admins and managers). App: ', APP)
   );
 
   const panel = el('div', { id: 'delaney-paychex-panel', hidden: true },
