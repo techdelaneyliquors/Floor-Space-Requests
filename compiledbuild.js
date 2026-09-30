@@ -3903,6 +3903,15 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
 
   const approved = doc && doc.approved
 
+  // Shifts the Paychex script has logged as sent for this week, per person
+  const sentToPaychex = selected
+    ? await PaychexSentShift.aggregate([
+        { $match: { store, weekStart: selected } },
+        { $group: { _id: '$employeeNumber', employeeName: { $last: '$employeeName' }, count: { $sum: 1 } } },
+        { $sort: { employeeName: 1 } }
+      ])
+    : []
+
   res.render('posted-schedules.ejs', {
     user: req.user,
     stores: STORE_LIST,
@@ -3927,6 +3936,11 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
           paychexSync: doc.paychexSync && doc.paychexSync.sentAt
             ? { ...paychexSyncView(doc.paychexSync), failures: doc.paychexSync.failures || [] }
             : null,
+          sentToPaychex: sentToPaychex.map(entry => ({
+            employeeNumber: entry._id,
+            employeeName: entry.employeeName || `#${entry._id}`,
+            count: entry.count
+          })),
           item: {
             snapshot: approved.snapshot || { groups: [], adjustments: [] },
             review: buildScheduleReview(approved.snapshot, null),
@@ -5962,6 +5976,39 @@ app.post('/api/paychex-sync/sent', requirePaychexSyncKey, async (req, res) => {
     return res.status(500).json({ success: false, error: 'The sent shift could not be logged.' })
   }
 })
+
+// Admin "reset" on Posted Schedules: forgets that a week's shifts (or one
+// person's) were sent, so the next preview offers them again. Nothing in
+// Paychex changes; resending shifts that are still there duplicates them.
+app.delete(
+  '/api/paychex-sync/sent',
+  ...adminApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const weekStart = String((req.body && req.body.weekStart) || '')
+      const employeeNumber = cleanText(req.body && req.body.employeeNumber, 32)
+
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'Choose a week (it must start on a Monday).' })
+      }
+
+      const filter = { store, weekStart, ...(employeeNumber ? { employeeNumber } : {}) }
+      const result = await PaychexSentShift.deleteMany(filter)
+
+      // A whole-week reset also clears the week's "Sent to Paychex" summary
+      if (!employeeNumber) {
+        await PostedSchedule.updateOne({ store, weekStart }, { $unset: { paychexSync: 1 } })
+      }
+
+      return res.json({ success: true, reset: result.deletedCount })
+    } catch (err) {
+      console.error('Paychex sent-log reset error:', err)
+      return res.status(500).json({ success: false, error: 'The send status could not be reset.' })
+    }
+  }
+)
 
 // Summary of a finished (or stopped) run, shown on Posted Schedules
 app.post('/api/paychex-sync/result', requirePaychexSyncKey, async (req, res) => {

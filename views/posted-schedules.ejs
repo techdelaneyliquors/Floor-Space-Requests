@@ -65,6 +65,9 @@
     .paychex-status.sent { color: #166534; }
     .paychex-status.unsent { color: #64748b; }
     .paychex-status ul { margin: 4px 0 0; padding-left: 18px; color: #991b1b; }
+    .paychex-reset { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .paychex-reset select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
+    .paychex-reset .btn { padding: 6px 12px; font-size: 13px; }
 
     @media print {
       body { background: white; padding: 0; }
@@ -159,6 +162,24 @@
               Not sent to Paychex yet.
             <% } %>
           </div>
+          <% if (selected.sentToPaychex.length) { %>
+            <% const sentTotal = selected.sentToPaychex.reduce((sum, entry) => sum + entry.count, 0) %>
+            <div class="paychex-reset no-print">
+              <span class="meta">
+                <%= sentTotal %> shift<%= sentTotal === 1 ? '' : 's' %> from this week are marked as sent, so the Paychex script skips them.
+              </span>
+              <select id="paychexResetWho" aria-label="Whose shifts to reset">
+                <option value="">Everyone (<%= sentTotal %>)</option>
+                <% selected.sentToPaychex.forEach(entry => { %>
+                  <option value="<%= entry.employeeNumber %>"><%= entry.employeeName %> (<%= entry.count %>)</option>
+                <% }) %>
+              </select>
+              <button type="button" class="btn btn-reject" id="paychexResetBtn"
+                      data-store="<%= store %>" data-week="<%= selected.weekStart %>" data-range="<%= selected.range %>">
+                Reset Paychex send status
+              </button>
+            </div>
+          <% } %>
         </div>
 
         <button type="button" class="btn btn-back no-print" onclick="window.print()">Print</button>
@@ -237,6 +258,37 @@ document.getElementById('createSyncKeyBtn').addEventListener('click', async () =
     box.append(intro, code, copy, warning);
     box.hidden = false;
     document.getElementById('syncKeyState').textContent = 'New key created just now.';
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('paychexResetBtn')?.addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const who = document.getElementById('paychexResetWho');
+  const option = who.options[who.selectedIndex];
+  const target = who.value ? option.textContent.replace(/\s*\(\d+\)\s*$/, '').trim() : 'everyone';
+
+  const question =
+    `Reset the Paychex send status for ${target}, week of ${button.dataset.range}?\n\n` +
+    'The next preview in Paychex will offer these shifts again. Nothing in Paychex is removed: ' +
+    'if the shifts are still in the scheduler, sending them again will create duplicates.';
+  if (!confirm(question)) return;
+
+  try {
+    const response = await fetch('/api/paychex-sync/sent', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        store: button.dataset.store,
+        weekStart: button.dataset.week,
+        employeeNumber: who.value
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || 'The reset failed.');
+    location.reload();
   } catch (err) {
     alert(err.message);
   }
