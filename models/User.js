@@ -120,7 +120,12 @@ const UserSchema = new mongoose.Schema({
   },
   emailVerifyTokenHash: String,
   emailVerifyExpiry: Date,
-  lastVerifyEmailAt: Date
+  lastVerifyEmailAt: Date,
+
+  // Key the "Send to Paychex" userscript uses to read approved schedules
+  // (admins only). Only a SHA-256 hash is stored; the key is shown once.
+  paychexSyncKeyHash: String,
+  paychexSyncKeyCreatedAt: Date
 
 })
 

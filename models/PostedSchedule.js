@@ -62,6 +62,22 @@ const postedScheduleSchema = new mongoose.Schema({
     submittedBy: personSchema,
     snapshot: Object,
     builderStateJson: String
+  },
+
+  // The last "Send to Paychex" run for this week
+  paychexSync: {
+    sentAt: Date,
+    sentBy: personSchema,
+    added: Number,
+    alreadySent: Number,
+    failed: Number,
+    missingIds: Number,
+    failures: [{
+      _id: false,
+      employeeName: String,
+      date: String,
+      reason: String
+    }]
   }
 }, {
   timestamps: true

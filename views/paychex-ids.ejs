@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paychex IDs</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+
+  <style>
+    .pickers { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .pickers label { font-size: 14px; font-weight: 600; }
+    .pickers select {
+      padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: 14px; font-family: inherit; margin-left: 6px;
+    }
+    .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .summary { font-size: 14px; color: #475569; }
+    .summary strong { color: #1f2937; }
+
+    .ids-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .ids-table th, .ids-table td {
+      border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: middle;
+    }
+    .ids-table th { background: #f3f4f6; font-weight: 600; white-space: nowrap; }
+    .ids-table input {
+      width: 110px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px;
+      font-family: inherit; font-size: 14px;
+    }
+    .ids-table input.changed { border-color: #2563eb; background: #eff6ff; }
+    .ids-table input.invalid { border-color: #dc2626; background: #fef2f2; }
+    .ids-table tr.off-roster td { color: #92400e; background: #fffbeb; }
+    .muted { color: #64748b; font-size: 12px; }
+    .status-missing { color: #b91c1c; font-weight: 600; }
+    .status-ok { color: #15803d; font-weight: 600; }
+    .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+    .btn-small { padding: 5px 10px; font-size: 13px; }
+    .btn-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .table-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+    .message { min-height: 1.3em; font-size: 14px; }
+    .message.error { color: #b91c1c; }
+    .message.ok { color: #15803d; }
+    .message ul { margin: 6px 0 0; padding-left: 20px; }
+
+    textarea {
+      width: 100%; min-height: 140px; box-sizing: border-box; padding: 10px;
+      border: 1px solid #ccc; border-radius: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+    }
+    code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Paychex IDs</h1>
+    <div class="top-actions">
+      <a href="/posted-schedules" class="btn btn-back">Posted Schedules</a>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <form class="pickers" method="GET">
+      <label>
+        Store
+        <select name="store" onchange="this.form.submit()">
+          <% stores.forEach(name => { %>
+            <option value="<%= name %>" <%= name === store ? 'selected' : '' %>><%= name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
+      <span class="summary">
+        <strong><%= linkedCount %> of <%= rosterCount %></strong> employees on the <%= store %> schedule have Paychex IDs.
+      </span>
+    </form>
+    <p class="muted" style="margin:10px 0 0;">
+      The <strong>Paychex User ID</strong> is Flex Time's own number for the person (the <code>UserID</code> the
+      scheduler sends), not their employee number. <strong>LL1</strong> is the labor level 1 value sent with
+      each shift (for example the location). Employees are matched by store and employee number.
+    </p>
+  </div>
+
+  <div class="card">
+    <% if (!rows.length) { %>
+      <div class="empty">No employees with employee numbers are on the <%= store %> schedule yet.</div>
+    <% } else { %>
+      <div class="table-wrap">
+        <table class="ids-table" id="idsTable">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Role</th>
+              <th>Employee #</th>
+              <th>Paychex User ID</th>
+              <th>LL1</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% rows.forEach(row => { %>
+              <tr class="<%= row.onRoster ? '' : 'off-roster' %>"
+                  data-employee-number="<%= row.employeeNumber %>"
+                  data-employee-name="<%= row.name %>"
+                  data-saved-user="<%= row.link ? row.link.paychexUserId : '' %>"
+                  data-saved-ll1="<%= row.link && row.link.ll1 !== null ? row.link.ll1 : '' %>">
+                <td><%= row.name %></td>
+                <td><%= row.role %></td>
+                <td><%= row.employeeNumber %></td>
+                <td><input type="text" inputmode="numeric" class="user-input" aria-label="Paychex User ID for <%= row.name %>"
+                           value="<%= row.link ? row.link.paychexUserId : '' %>"></td>
+                <td><input type="text" inputmode="numeric" class="ll1-input" aria-label="LL1 for <%= row.name %>"
+                           value="<%= row.link && row.link.ll1 !== null ? row.link.ll1 : '' %>"></td>
+                <td>
+                  <% if (!row.onRoster) { %>
+                    <span>Not on the schedule roster</span>
+                  <% } else if (row.link) { %>
+                    <span class="status-ok">Saved</span>
+                  <% } else { %>
+                    <span class="status-missing">Missing</span>
+                  <% } %>
+                  <% if (row.link && row.link.updatedAt) { %>
+                    <div class="muted">
+                      <%= row.link.updatedBy || '' %>,
+                      <%= new Date(row.link.updatedAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' }) %>
+                    </div>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (row.link) { %>
+                    <div class="row-actions">
+                      <button type="button" class="btn btn-back btn-small btn-danger" data-remove>Remove</button>
+                    </div>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-actions">
+        <button type="button" class="btn btn-approve" id="saveAllBtn">Save changes</button>
+        <span id="tableMessage" class="message" role="status"></span>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Paste from a spreadsheet</h2>
+    <p class="muted" style="margin-top:0;">
+      One employee per line: <code>Employee #</code>, <code>Paychex User ID</code>, <code>LL1</code>
+      (columns copied from Excel work, or separate them with commas). A header row is skipped.
+      Employees already saved are updated.
+    </p>
+    <textarea id="pasteBox" placeholder="1042	251	3
+1057	263	3"></textarea>
+    <div class="table-actions">
+      <button type="button" class="btn btn-approve" id="importBtn">Import for <%= store %></button>
+      <span id="pasteMessage" class="message" role="status"></span>
+    </div>
+    <details style="margin-top:12px;">
+      <summary class="muted">Uploading from a store workbook instead</summary>
+      <p class="muted">
+        <code>PUT <%= typeof appBaseUrl !== 'undefined' ? appBaseUrl : '' %>/api/paychex-links</code> with header
+        <code>Authorization: Bearer &lt;that store's Excel token&gt;</code> and a JSON body like
+        <code>{"store":"<%= store %>","links":[{"employeeNumber":"1042","paychexUserId":251,"ll1":3,"employeeName":"Jane Doe"}]}</code>.
+      </p>
+    </details>
+  </div>
+
+</div>
+
+<script>
+const STORE = <%- safeJson(store) %>;
+
+function showMessage(element, text, kind, errors) {
+  element.className = `message ${kind || ''}`;
+  element.textContent = text;
+  if (errors && errors.length) {
+    const list = document.createElement('ul');
+    errors.slice(0, 20).forEach(error => {
+      const item = document.createElement('li');
+      item.textContent = `Line ${error.row}${error.employeeNumber ? ` (#${error.employeeNumber})` : ''}: ${error.error}`;
+      list.appendChild(item);
+    });
+    if (errors.length > 20) {
+      const item = document.createElement('li');
+      item.textContent = `…and ${errors.length - 20} more.`;
+      list.appendChild(item);
+    }
+    element.appendChild(list);
+  }
+}
+
+async function callApi(method, body) {
+  const response = await fetch('/api/paychex-links', {
+    method,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ store: STORE, ...body })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (response.status >= 500 || (!response.ok && !result.errors)) {
+    throw new Error(result.error || 'The request failed.');
+  }
+  return result;
+}
+
+const isWhole = (text, min) => /^\d+$/.test(text) && Number(text) >= min;
+
+// Highlight edited and invalid cells as the admin types
+document.getElementById('idsTable')?.addEventListener('input', event => {
+  const row = event.target.closest('tr');
+  if (!row) return;
+  const input = event.target;
+  const saved = input.classList.contains('user-input') ? row.dataset.savedUser : row.dataset.savedLl1;
+  const value = input.value.trim();
+  input.classList.toggle('changed', value !== saved);
+  const valid = input.classList.contains('user-input')
+    ? value === '' || isWhole(value, 1)
+    : value === '' || isWhole(value, 0);
+  input.classList.toggle('invalid', !valid);
+});
+
+document.getElementById('saveAllBtn')?.addEventListener('click', async () => {
+  const message = document.getElementById('tableMessage');
+  const links = [];
+
+  document.querySelectorAll('#idsTable tbody tr').forEach(row => {
+    const userId = row.querySelector('.user-input').value.trim();
+    const ll1 = row.querySelector('.ll1-input').value.trim();
+    const changed = userId !== row.dataset.savedUser || ll1 !== row.dataset.savedLl1;
+    if (!changed || !userId) return;
+    links.push({
+      employeeNumber: row.dataset.employeeNumber,
+      employeeName: row.dataset.employeeName,
+      paychexUserId: userId,
+      ll1
+    });
+  });
+
+  if (!links.length) {
+    showMessage(message, 'Nothing to save. Enter a Paychex User ID for an employee first.', 'error');
+    return;
+  }
+
+  try {
+    const result = await callApi('PUT', { source: 'page', links });
+    if (result.errors && result.errors.length) {
+      showMessage(message, `Saved ${result.saved}. Some rows need fixing:`, 'error', result.errors);
+    } else {
+      showMessage(message, `Saved ${result.saved}. Reloading…`, 'ok');
+      setTimeout(() => location.reload(), 600);
+    }
+  } catch (err) {
+    showMessage(message, err.message, 'error');
+  }
+});
+
+document.getElementById('idsTable')?.addEventListener('click', async event => {
+  const button = event.target.closest('[data-remove]');
+  if (!button) return;
+  const row = button.closest('tr');
+  if (!confirm(`Remove the saved Paychex IDs for ${row.dataset.employeeName} (#${row.dataset.employeeNumber})?`)) return;
+
+  try {
+    await callApi('DELETE', { employeeNumber: row.dataset.employeeNumber });
+    location.reload();
+  } catch (err) {
+    showMessage(document.getElementById('tableMessage'), err.message, 'error');
+  }
+});
+
+// "1042<TAB>251<TAB>3" or "1042, 251, 3" per line; a header line is skipped
+function parsePaste(text) {
+  const rosterNames = {};
+  document.querySelectorAll('#idsTable tbody tr').forEach(row => {
+    rosterNames[row.dataset.employeeNumber] = row.dataset.employeeName;
+  });
+
+  return text
+    .split(/\r?\n/)
+    .map(line => line.split(line.includes('\t') ? '\t' : ',').map(cell => cell.trim()))
+    .filter(cells => cells.some(Boolean))
+    .filter((cells, index) => !(index === 0 && cells[1] && !/^\d+$/.test(cells[1])))
+    .map(cells => ({
+      employeeNumber: cells[0] || '',
+      paychexUserId: cells[1] || '',
+      ll1: cells[2] || '',
+      employeeName: rosterNames[cells[0]] || ''
+    }));
+}
+
+document.getElementById('importBtn').addEventListener('click', async () => {
+  const message = document.getElementById('pasteMessage');
+  const links = parsePaste(document.getElementById('pasteBox').value);
+
+  if (!links.length) {
+    showMessage(message, 'Paste at least one line first.', 'error');
+    return;
+  }
+
+  try {
+    const result = await callApi('PUT', { source: 'paste', links });
+    if (result.errors && result.errors.length) {
+      showMessage(message, `Imported ${result.saved} of ${links.length}. These lines were skipped:`, 'error', result.errors);
+    } else {
+      showMessage(message, `Imported ${result.saved}. Reloading…`, 'ok');
+      setTimeout(() => location.reload(), 600);
+    }
+  } catch (err) {
+    showMessage(message, err.message, 'error');
+  }
+});
+</script>
+</body>
+</html>

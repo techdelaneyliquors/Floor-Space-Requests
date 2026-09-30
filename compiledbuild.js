@@ -53,6 +53,8 @@ const User = require('./models/User')
 const LoginThrottle = require('./models/LoginThrottle')
 const PostedSchedule = require('./models/PostedSchedule')
 const HoursBudget = require('./models/HoursBudget')
+const PaychexEmployeeLink = require('./models/PaychexEmployeeLink')
+const PaychexSentShift = require('./models/PaychexSentShift')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -3922,13 +3924,18 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
           approvedBy: approved.approvedBy && approved.approvedBy.name,
           approvedAt: approved.approvedAt,
           hasPending: Boolean(doc.pending && doc.pending.submittedAt),
+          paychexSync: doc.paychexSync && doc.paychexSync.sentAt
+            ? { ...paychexSyncView(doc.paychexSync), failures: doc.paychexSync.failures || [] }
+            : null,
           item: {
             snapshot: approved.snapshot || { groups: [], adjustments: [] },
             review: buildScheduleReview(approved.snapshot, null),
             replacesApproved: false
           }
         }
-      : null
+      : null,
+    // "Send to Paychex" setup for this admin
+    paychexSyncKeyCreatedAt: req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
   })
 })
 
@@ -4120,6 +4127,38 @@ function foldIcsLine(line) {
   return parts.join('\r\n')
 }
 
+// Every shift in a posted schedule's approved version, parsed from its
+// "9:00 AM to 5:00 PM" text. start/end are minutes after midnight of `date`
+// (end passes 1440 for shifts that finish after midnight). Shared by the
+// calendar download and the Paychex export so both read shifts the same way.
+function approvedScheduleShifts(doc) {
+  const shifts = []
+  const snapshot = doc && doc.approved && doc.approved.snapshot
+
+  for (const group of (snapshot && snapshot.groups) || []) {
+    for (const employee of group.employees || []) {
+      SCHEDULE_DAY_KEYS.forEach((day, index) => {
+        const date = addDaysYmd(doc.weekStart, index)
+
+        for (const shift of (employee.days && employee.days[day]) || []) {
+          const [startText, endText] = String(shift).split(' to ')
+          const start = clockTextToMinutes(startText)
+          let end = clockTextToMinutes(endText)
+          if (start == null || end == null) continue
+          if (end <= start) end += 1440 // ends after midnight
+
+          shifts.push({ group, employee, date, start, end, shift })
+        }
+      })
+    }
+  }
+
+  return shifts.sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)
+}
+
+const scheduleRoleLabel = type =>
+  SCHEDULE_GROUPS[type] ? SCHEDULE_GROUPS[type].replace(/s$/, '') : ''
+
 // The viewer's shifts in approved schedules, as calendar events
 async function collectMyShifts(user, weekStarts) {
   const stores = userStores(user)
@@ -4134,38 +4173,24 @@ async function collectMyShifts(user, weekStarts) {
   const events = []
 
   for (const doc of docs) {
-    for (const group of doc.approved.snapshot.groups || []) {
-      for (const employee of group.employees || []) {
-        if (!isViewersRow(user, doc.store, employee)) continue
+    for (const { group, employee, date, start, end, shift } of approvedScheduleShifts(doc)) {
+      if (!isViewersRow(user, doc.store, employee)) continue
 
-        SCHEDULE_DAY_KEYS.forEach((day, index) => {
-          const date = addDaysYmd(doc.weekStart, index)
-
-          for (const shift of (employee.days && employee.days[day]) || []) {
-            const [startText, endText] = String(shift).split(' to ')
-            const start = clockTextToMinutes(startText)
-            let end = clockTextToMinutes(endText)
-            if (start == null || end == null) continue
-            if (end <= start) end += 1440 // ends after midnight
-
-            events.push({
-              uid: `${doc.store}-${date}-${start}-${end}-${employee.employeeNumber || employee.name}`
-                .replace(/[^A-Za-z0-9-]/g, '') + '@delaney-schedule',
-              store: doc.store,
-              role: SCHEDULE_GROUPS[group.type] ? SCHEDULE_GROUPS[group.type].replace(/s$/, '') : '',
-              date,
-              start,
-              end,
-              shift,
-              weekStart: doc.weekStart
-            })
-          }
-        })
-      }
+      events.push({
+        uid: `${doc.store}-${date}-${start}-${end}-${employee.employeeNumber || employee.name}`
+          .replace(/[^A-Za-z0-9-]/g, '') + '@delaney-schedule',
+        store: doc.store,
+        role: scheduleRoleLabel(group.type),
+        date,
+        start,
+        end,
+        shift,
+        weekStart: doc.weekStart
+      })
     }
   }
 
-  return events.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+  return events.sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)
 }
 
 function buildIcs(events) {
@@ -4477,6 +4502,12 @@ const unlessExcel = middleware => (req, res, next) =>
 const managerOrExcelUpload = [
   optionalExcelClient(storeFromQueryOrBody),
   ...[...managerApi, requireStoreFromRequest(storeFromQueryOrBody)].map(unlessExcel)
+]
+
+// Logged-in admin, or that store's workbook
+const adminOrExcelUpload = [
+  optionalExcelClient(storeFromQueryOrBody),
+  ...[...adminApi, requireStoreFromRequest(storeFromQueryOrBody)].map(unlessExcel)
 ]
 
 function buildExcelEmployeeRoster(settings) {
@@ -5479,6 +5510,520 @@ async function getRosters(stores) {
   }
   return rosters
 }
+
+// ------------------------
+// PAYCHEX IDS
+// ------------------------
+//
+// Each employee's Paychex Flex Time User ID and labor level 1 (LL1), per
+// store, matched to the roster by employee number. Used to send approved
+// schedules into Paychex's scheduler.
+
+const PAYCHEX_LINK_SOURCES = ['page', 'paste', 'excel', 'extension']
+const MAX_PAYCHEX_LINKS_PER_SAVE = 500
+
+function paychexLinkView(link) {
+  return {
+    employeeNumber: link.employeeNumber,
+    employeeName: link.employeeName || '',
+    paychexUserId: link.paychexUserId,
+    ll1: typeof link.ll1 === 'number' ? link.ll1 : null,
+    source: link.source,
+    updatedBy: link.updatedBy && link.updatedBy.name,
+    updatedAt: link.updatedAt
+  }
+}
+
+// '' / null -> null; otherwise a whole number >= min. Returns { value } or { error }.
+function cleanWholeNumber(value, min, label, required) {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return required ? { error: `${label} is required.` } : { value: null }
+  }
+  if (!/^\d+$/.test(text) || Number(text) < min || Number(text) > 2147483647) {
+    return { error: `${label} must be a whole number${min ? ` of at least ${min}` : ''}.` }
+  }
+  return { value: Number(text) }
+}
+
+// One incoming row -> { link } or { error }
+function cleanPaychexLink(row) {
+  const employeeNumber = String((row && row.employeeNumber) ?? '').trim()
+  if (!employeeNumber) return { error: 'Employee number is required.' }
+  if (employeeNumber.length > 32) return { error: 'Employee number is too long.' }
+
+  const userId = cleanWholeNumber(row.paychexUserId, 1, 'Paychex User ID', true)
+  if (userId.error) return { error: userId.error }
+
+  const ll1 = cleanWholeNumber(row.ll1, 0, 'LL1', false)
+  if (ll1.error) return { error: ll1.error }
+
+  return {
+    link: {
+      employeeNumber,
+      employeeName: cleanText(row.employeeName, 120),
+      paychexUserId: userId.value,
+      ll1: ll1.value
+    }
+  }
+}
+
+app.get(
+  '/api/paychex-links',
+  ...adminApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const links = await PaychexEmployeeLink.find({ store: req.storeName })
+        .sort({ employeeNumber: 1 })
+        .lean()
+      return res.json({ success: true, store: req.storeName, links: links.map(paychexLinkView) })
+    } catch (err) {
+      console.error('Paychex IDs load error:', err)
+      return res.status(500).json({ success: false, error: 'Paychex IDs could not be loaded.' })
+    }
+  }
+)
+
+// Body: { store, source?, links: [{ employeeNumber, paychexUserId, ll1, employeeName }] }
+// Adds or updates each row (matched by store + employee number). Valid rows
+// are saved even if others have errors; the errors are returned by row.
+app.put(
+  '/api/paychex-links',
+  ...adminOrExcelUpload,
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const rows = Array.isArray(req.body && req.body.links) ? req.body.links : null
+
+      if (!rows || !rows.length) {
+        return res.status(400).json({ success: false, error: 'Send at least one employee in "links".' })
+      }
+      if (rows.length > MAX_PAYCHEX_LINKS_PER_SAVE) {
+        return res.status(400).json({ success: false, error: `Send at most ${MAX_PAYCHEX_LINKS_PER_SAVE} employees at a time.` })
+      }
+
+      const source = req.excelClient
+        ? 'excel'
+        : (PAYCHEX_LINK_SOURCES.includes(req.body.source) ? req.body.source : 'page')
+      const updatedBy = req.user
+        ? personRef(req.user)
+        : { name: `${store} workbook` }
+
+      const errors = []
+      const seen = new Set()
+      const operations = []
+
+      rows.forEach((row, index) => {
+        const cleaned = cleanPaychexLink(row)
+        if (cleaned.error) {
+          errors.push({ row: index + 1, employeeNumber: row && row.employeeNumber, error: cleaned.error })
+          return
+        }
+        if (seen.has(cleaned.link.employeeNumber)) {
+          errors.push({ row: index + 1, employeeNumber: cleaned.link.employeeNumber, error: 'This employee number appears more than once.' })
+          return
+        }
+        seen.add(cleaned.link.employeeNumber)
+
+        const { employeeName, ...ids } = cleaned.link
+        operations.push({
+          updateOne: {
+            filter: { store, employeeNumber: ids.employeeNumber },
+            update: {
+              $set: {
+                ...ids,
+                ...(employeeName ? { employeeName } : {}),
+                source,
+                updatedBy
+              },
+              $setOnInsert: { store }
+            },
+            upsert: true
+          }
+        })
+      })
+
+      if (operations.length) {
+        await PaychexEmployeeLink.bulkWrite(operations, { ordered: false })
+      }
+
+      return res.status(errors.length && !operations.length ? 400 : 200).json({
+        success: operations.length > 0,
+        saved: operations.length,
+        errors
+      })
+    } catch (err) {
+      console.error('Paychex IDs save error:', err)
+      return res.status(500).json({ success: false, error: 'Paychex IDs could not be saved.' })
+    }
+  }
+)
+
+app.delete(
+  '/api/paychex-links',
+  ...adminApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const employeeNumber = String((req.body && req.body.employeeNumber) || '').trim()
+      if (!employeeNumber) {
+        return res.status(400).json({ success: false, error: 'Employee number is required.' })
+      }
+      const result = await PaychexEmployeeLink.deleteOne({ store: req.storeName, employeeNumber })
+      return res.json({ success: true, deleted: result.deletedCount })
+    } catch (err) {
+      console.error('Paychex IDs delete error:', err)
+      return res.status(500).json({ success: false, error: 'The Paychex IDs could not be removed.' })
+    }
+  }
+)
+
+// Roster employees with their Paychex IDs, plus saved IDs whose employee
+// number isn't on the roster (left the store, or a typo)
+app.get('/paychex-ids', ...adminPage, async (req, res) => {
+  try {
+    const store = getCanonicalStoreName(req.query.store) || STORE_LIST[0]
+    const [roster, links] = await Promise.all([
+      getStoreRoster(store),
+      PaychexEmployeeLink.find({ store }).lean()
+    ])
+
+    const byNumber = new Map(links.map(link => [link.employeeNumber, paychexLinkView(link)]))
+    const rows = roster.map(person => ({
+      ...person,
+      onRoster: true,
+      link: byNumber.get(person.employeeNumber) || null
+    }))
+    const rosterNumbers = new Set(roster.map(person => person.employeeNumber))
+    links
+      .filter(link => !rosterNumbers.has(link.employeeNumber))
+      .forEach(link => rows.push({
+        name: link.employeeName || '(not on roster)',
+        employeeNumber: link.employeeNumber,
+        role: '',
+        onRoster: false,
+        link: paychexLinkView(link)
+      }))
+
+    return res.render('paychex-ids.ejs', {
+      user: req.user,
+      appBaseUrl: String(process.env.APP_BASE_URL || '').replace(/\/+$/, ''),
+      stores: STORE_LIST,
+      store,
+      rows,
+      linkedCount: rows.filter(row => row.onRoster && row.link).length,
+      rosterCount: roster.length
+    })
+  } catch (err) {
+    console.error('Paychex IDs page error:', err)
+    return res.status(500).send('Error loading Paychex IDs')
+  }
+})
+
+// ------------------------
+// SEND TO PAYCHEX (userscript)
+// ------------------------
+//
+// A Tampermonkey userscript running inside Paychex Flex Time's scheduler
+// (as the signed-in admin) reads an approved week from these endpoints and
+// adds each shift through Paychex's own scheduler request. Our login cookie
+// isn't sent from Paychex's site, so the script uses a per-admin sync key.
+// Every shift it adds is logged, so sending a week again skips those.
+
+const PAYCHEX_SYNC_WEEKS_BACK = 1
+const PAYCHEX_SYNC_WEEKS_AHEAD = 8
+
+// '2026-10-05' + 510 minutes -> '2026-10-05 08:30:00' (minutes may pass midnight)
+function paychexDateTime(ymd, minutes) {
+  const date = addDaysYmd(ymd, Math.floor(minutes / 1440))
+  const inDay = ((minutes % 1440) + 1440) % 1440
+  return `${date} ${String(Math.floor(inDay / 60)).padStart(2, '0')}:${String(inDay % 60).padStart(2, '0')}:00`
+}
+
+const paychexShiftKey = (employeeNumber, start, end) => `${employeeNumber}|${start}|${end}`
+
+// Authorization: Bearer <sync key> of an approved admin
+async function requirePaychexSyncKey(req, res, next) {
+  try {
+    const authorization = String(req.headers.authorization || '').trim()
+    const key = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+
+    if (!/^[A-Za-z0-9_-]{20,200}$/.test(key)) {
+      return res.status(401).json({ success: false, error: 'A valid sync key is required. Create one on the Posted Schedules page.' })
+    }
+
+    const user = await User.findOne({ paychexSyncKeyHash: hashToken(key) }).lean()
+    if (!user || !isApproved(user) || user.role !== 'admin') {
+      return res.status(401).json({ success: false, error: 'This sync key is not valid any more. Create a new one on the Posted Schedules page.' })
+    }
+
+    req.user = user
+    next()
+  } catch (err) {
+    console.error('Paychex sync key error:', err)
+    return res.status(401).json({ success: false, error: 'Sync key check failed.' })
+  }
+}
+
+// Creates (or replaces) the signed-in admin's sync key; shown once
+app.post('/api/paychex-sync/key', ...adminApi, async (req, res) => {
+  try {
+    const key = crypto.randomBytes(32).toString('base64url')
+    await User.updateOne(
+      { _id: req.user._id },
+      { $set: { paychexSyncKeyHash: hashToken(key), paychexSyncKeyCreatedAt: new Date() } }
+    )
+    return res.json({ success: true, key })
+  } catch (err) {
+    console.error('Paychex sync key create error:', err)
+    return res.status(500).json({ success: false, error: 'The sync key could not be created.' })
+  }
+})
+
+app.delete('/api/paychex-sync/key', ...adminApi, async (req, res) => {
+  try {
+    await User.updateOne(
+      { _id: req.user._id },
+      { $unset: { paychexSyncKeyHash: 1, paychexSyncKeyCreatedAt: 1 } }
+    )
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('Paychex sync key revoke error:', err)
+    return res.status(500).json({ success: false, error: 'The sync key could not be removed.' })
+  }
+})
+
+function paychexSyncView(sync) {
+  if (!sync || !sync.sentAt) return null
+  return {
+    sentAt: sync.sentAt,
+    sentBy: sync.sentBy && sync.sentBy.name,
+    added: sync.added || 0,
+    alreadySent: sync.alreadySent || 0,
+    failed: sync.failed || 0,
+    missingIds: sync.missingIds || 0
+  }
+}
+
+// Approved weeks the userscript can send, newest first
+app.get('/api/paychex-sync/weeks', requirePaychexSyncKey, async (req, res) => {
+  try {
+    const currentMonday = mondayOf(storeToday())
+    const docs = await PostedSchedule.find({
+      store: { $in: userStores(req.user) },
+      weekStart: {
+        $gte: addDaysYmd(currentMonday, -7 * PAYCHEX_SYNC_WEEKS_BACK),
+        $lte: addDaysYmd(currentMonday, 7 * PAYCHEX_SYNC_WEEKS_AHEAD)
+      },
+      'approved.approvedAt': { $exists: true }
+    })
+      .select('store weekStart paychexSync')
+      .sort({ weekStart: -1, store: 1 })
+      .lean()
+
+    return res.json({
+      success: true,
+      user: req.user.name,
+      weeks: docs.map(doc => ({
+        store: doc.store,
+        weekStart: doc.weekStart,
+        label: weekLabel(doc.weekStart, currentMonday),
+        range: weekRangeText(doc.weekStart),
+        lastSync: paychexSyncView(doc.paychexSync)
+      }))
+    })
+  } catch (err) {
+    console.error('Paychex sync weeks error:', err)
+    return res.status(500).json({ success: false, error: 'Approved weeks could not be loaded.' })
+  }
+})
+
+// One approved week as Paychex-ready shifts, with each person's saved
+// Paychex IDs and whether the shift was already sent
+app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
+  try {
+    const store = getCanonicalStoreName(req.query.store)
+    const weekStart = String(req.query.week || '')
+
+    if (!store || !canAccessStore(req.user, store)) {
+      return res.status(403).json({ success: false, error: 'You do not have access to that store.' })
+    }
+    if (!isMonday(weekStart)) {
+      return res.status(400).json({ success: false, error: 'Choose a week (it must start on a Monday).' })
+    }
+
+    const doc = await PostedSchedule.findOne({
+      store, weekStart, 'approved.approvedAt': { $exists: true }
+    })
+      .select('store weekStart approved.snapshot.groups')
+      .lean()
+
+    if (!doc) {
+      return res.status(404).json({ success: false, error: `${store} has no approved schedule for the week of ${weekRangeText(weekStart)}.` })
+    }
+
+    const [links, sent] = await Promise.all([
+      PaychexEmployeeLink.find({ store }).lean(),
+      PaychexSentShift.find({ store, weekStart }).select('shiftKey').lean()
+    ])
+    const linkByNumber = new Map(links.map(link => [link.employeeNumber, link]))
+    const sentKeys = new Set(sent.map(entry => entry.shiftKey))
+
+    const shifts = approvedScheduleShifts(doc).map(({ group, employee, date, start, end, shift }) => {
+      const employeeNumber = String(employee.employeeNumber || '').trim()
+      const link = employeeNumber ? linkByNumber.get(employeeNumber) : null
+      const startText = paychexDateTime(date, start)
+      const endText = paychexDateTime(date, end)
+      const shiftKey = employeeNumber ? paychexShiftKey(employeeNumber, startText, endText) : ''
+
+      let status = 'ready'
+      if (!employeeNumber) status = 'no-employee-number'
+      else if (!link) status = 'no-paychex-ids'
+      else if (typeof link.ll1 !== 'number') status = 'no-ll1'
+      else if (sentKeys.has(shiftKey)) status = 'already-sent'
+
+      return {
+        shiftKey,
+        employeeName: employee.name,
+        employeeNumber,
+        role: scheduleRoleLabel(group.type),
+        date,
+        shiftText: shift,
+        start: startText,
+        end: endText,
+        paychexUserId: link ? link.paychexUserId : null,
+        ll1: link && typeof link.ll1 === 'number' ? link.ll1 : null,
+        status
+      }
+    })
+
+    return res.json({
+      success: true,
+      store,
+      weekStart,
+      range: weekRangeText(weekStart),
+      shifts
+    })
+  } catch (err) {
+    console.error('Paychex sync shifts error:', err)
+    return res.status(500).json({ success: false, error: 'The schedule could not be loaded.' })
+  }
+})
+
+// Logs one shift the userscript just added, so it's never sent twice.
+// Called right after each successful add, so a run that stops halfway is
+// still recorded.
+app.post('/api/paychex-sync/sent', requirePaychexSyncKey, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const store = getCanonicalStoreName(body.store)
+    const weekStart = String(body.weekStart || '')
+
+    if (!store || !canAccessStore(req.user, store)) {
+      return res.status(403).json({ success: false, error: 'You do not have access to that store.' })
+    }
+    if (!isMonday(weekStart)) {
+      return res.status(400).json({ success: false, error: 'Invalid week.' })
+    }
+
+    const employeeNumber = cleanText(body.employeeNumber, 32)
+    const start = String(body.start || '')
+    const end = String(body.end || '')
+    const dateTime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
+    if (!employeeNumber || !dateTime.test(start) || !dateTime.test(end)) {
+      return res.status(400).json({ success: false, error: 'Employee number, start and end are required.' })
+    }
+
+    const shiftKey = paychexShiftKey(employeeNumber, start, end)
+    await PaychexSentShift.updateOne(
+      { store, shiftKey },
+      {
+        $setOnInsert: {
+          store,
+          shiftKey,
+          weekStart,
+          employeeNumber,
+          employeeName: cleanText(body.employeeName, 120),
+          paychexUserId: Number.isInteger(body.paychexUserId) ? body.paychexUserId : null,
+          ll1: Number.isInteger(body.ll1) ? body.ll1 : null,
+          start,
+          end,
+          paychexResponse: cleanText(body.paychexResponse, 500),
+          sentBy: personRef(req.user)
+        }
+      },
+      { upsert: true }
+    )
+
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('Paychex sent-shift log error:', err)
+    return res.status(500).json({ success: false, error: 'The sent shift could not be logged.' })
+  }
+})
+
+// Summary of a finished (or stopped) run, shown on Posted Schedules
+app.post('/api/paychex-sync/result', requirePaychexSyncKey, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const store = getCanonicalStoreName(body.store)
+    const weekStart = String(body.weekStart || '')
+
+    if (!store || !canAccessStore(req.user, store)) {
+      return res.status(403).json({ success: false, error: 'You do not have access to that store.' })
+    }
+    if (!isMonday(weekStart)) {
+      return res.status(400).json({ success: false, error: 'Invalid week.' })
+    }
+
+    const count = value => Math.max(0, Math.min(10000, Math.floor(Number(value) || 0)))
+    const failures = (Array.isArray(body.failures) ? body.failures : [])
+      .slice(0, 100)
+      .map(failure => ({
+        employeeName: cleanText(failure && failure.employeeName, 120),
+        date: cleanText(failure && failure.date, 10),
+        reason: cleanText(failure && failure.reason, 300)
+      }))
+
+    const result = await PostedSchedule.updateOne(
+      { store, weekStart, 'approved.approvedAt': { $exists: true } },
+      {
+        $set: {
+          paychexSync: {
+            sentAt: new Date(),
+            sentBy: personRef(req.user),
+            added: count(body.added),
+            alreadySent: count(body.alreadySent),
+            failed: count(body.failed),
+            missingIds: count(body.missingIds),
+            failures
+          }
+        }
+      }
+    )
+
+    if (!result.matchedCount) {
+      return res.status(404).json({ success: false, error: 'That week has no approved schedule.' })
+    }
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('Paychex sync result error:', err)
+    return res.status(500).json({ success: false, error: 'The result could not be saved.' })
+  }
+})
+
+// The userscript itself (no secrets in it). Tampermonkey installs it from
+// this URL and checks the same URL for updates.
+app.get('/paychex-sync.user.js', (req, res) => {
+  const base = String(process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')
+  res.type('application/javascript')
+  res.set('Cache-Control', 'no-cache')
+  return res.render('paychex-sync.user.js.ejs', {
+    appBaseUrl: base,
+    appHost: new URL(base).hostname
+  })
+})
 
 // 'store|employeeNumber' -> { userId, name } for every existing link
 async function getLinkOwners() {

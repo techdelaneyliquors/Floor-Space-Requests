@@ -52,6 +52,20 @@
       font-weight: 600;
     }
 
+    .paychex-card h2 { margin: 0 0 6px; font-size: 18px; }
+    .paychex-card ol { margin: 6px 0 10px; padding-left: 20px; font-size: 14px; }
+    .paychex-card li { margin: 3px 0; }
+    .paychex-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .sync-key-box {
+      margin-top: 10px; padding: 10px; border-radius: 8px; background: #fef3c7;
+      font-size: 13px; word-break: break-all;
+    }
+    .sync-key-box code { font-size: 14px; }
+    .paychex-status { margin-top: 8px; font-size: 13px; }
+    .paychex-status.sent { color: #166534; }
+    .paychex-status.unsent { color: #64748b; }
+    .paychex-status ul { margin: 4px 0 0; padding-left: 18px; color: #991b1b; }
+
     @media print {
       body { background: white; padding: 0; }
       .top-bar, .pickers, .no-print { display: none !important; }
@@ -69,6 +83,7 @@
     <h1>Posted Schedules</h1>
     <div class="top-actions">
       <a href="/schedule-approvals" class="btn btn-back">Schedule Approvals</a>
+      <a href="/paychex-ids" class="btn btn-back">Paychex IDs</a>
       <a href="/" class="btn btn-back">⬅ Home</a>
     </div>
   </div>
@@ -127,6 +142,23 @@
               <a href="/schedule-approvals">Review it</a>
             </span>
           <% } %>
+          <% const sync = selected.paychexSync; %>
+          <div class="paychex-status no-print <%= sync ? 'sent' : 'unsent' %>" id="paychexWeekStatus">
+            <% if (sync) { %>
+              Sent to Paychex by <%= sync.sentBy || 'an admin' %>
+              on <%= new Date(sync.sentAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>:
+              <%= sync.added %> added, <%= sync.alreadySent %> already sent<%= sync.missingIds ? `, ${sync.missingIds} missing Paychex IDs` : '' %><%= sync.failed ? `, ${sync.failed} failed` : '' %>.
+              <% if (sync.failures.length) { %>
+                <ul>
+                  <% sync.failures.slice(0, 10).forEach(failure => { %>
+                    <li><%= failure.employeeName %> (<%= failure.date %>): <%= failure.reason %></li>
+                  <% }) %>
+                </ul>
+              <% } %>
+            <% } else { %>
+              Not sent to Paychex yet.
+            <% } %>
+          </div>
         </div>
 
         <button type="button" class="btn btn-back no-print" onclick="window.print()">Print</button>
@@ -136,6 +168,89 @@
     </div>
   <% } %>
 
+  <div class="card paychex-card no-print">
+    <h2>Send approved schedules to Paychex</h2>
+    <ol>
+      <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> in your browser (one time).</li>
+      <li><a href="/paychex-sync.user.js" id="installScriptLink">Install the Delaney → Paychex script</a>. Tampermonkey opens and asks you to confirm.</li>
+      <li>Create a sync key below and paste it into the script's Settings (one time per browser).</li>
+      <li>In Paychex Flex, open <strong>Schedules</strong>. Click the <strong>Delaney → Paychex</strong> button, pick a week, <strong>Preview</strong>, then add the shifts.</li>
+    </ol>
+    <p class="meta" style="margin:0 0 10px;">
+      Each person's Paychex User ID and LL1 come from the <a href="/paychex-ids">Paychex IDs</a> page.
+      Shifts already sent from the app are skipped, so a week can be sent again safely. Nothing in Paychex is changed or deleted.
+    </p>
+
+    <div class="paychex-actions">
+      <button type="button" class="btn btn-approve" id="createSyncKeyBtn">
+        <%= paychexSyncKeyCreatedAt ? 'Replace my sync key' : 'Create my sync key' %>
+      </button>
+      <% if (paychexSyncKeyCreatedAt) { %>
+        <button type="button" class="btn btn-reject" id="revokeSyncKeyBtn">Turn off my sync key</button>
+        <span class="meta" id="syncKeyState">
+          Your key was created <%= new Date(paychexSyncKeyCreatedAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium' }) %>.
+        </span>
+      <% } else { %>
+        <span class="meta" id="syncKeyState">You don't have a sync key yet.</span>
+      <% } %>
+    </div>
+    <div class="sync-key-box" id="syncKeyBox" hidden></div>
+  </div>
+
 </div>
+
+<script>
+async function syncKeyRequest(method) {
+  const response = await fetch('/api/paychex-sync/key', {
+    method,
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.success) throw new Error(result.error || 'The request failed.');
+  return result;
+}
+
+document.getElementById('createSyncKeyBtn').addEventListener('click', async () => {
+  const replacing = document.getElementById('revokeSyncKeyBtn');
+  if (replacing && !confirm('Replace your sync key? The script will stop working until you paste the new key into its Settings.')) return;
+
+  const box = document.getElementById('syncKeyBox');
+  try {
+    const { key } = await syncKeyRequest('POST');
+    box.replaceChildren();
+    const intro = document.createElement('div');
+    intro.innerHTML = '<strong>Your sync key</strong> (shown only now; copy it into the script\'s Settings):';
+    const code = document.createElement('code');
+    code.id = 'newSyncKey';
+    code.textContent = key;
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn btn-back';
+    copy.style.marginLeft = '8px';
+    copy.textContent = 'Copy';
+    copy.addEventListener('click', () => {
+      navigator.clipboard.writeText(key).then(() => { copy.textContent = 'Copied'; }).catch(() => {});
+    });
+    const warning = document.createElement('div');
+    warning.textContent = 'Treat it like a password: anyone with it can read approved schedules.';
+    box.append(intro, code, copy, warning);
+    box.hidden = false;
+    document.getElementById('syncKeyState').textContent = 'New key created just now.';
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('revokeSyncKeyBtn')?.addEventListener('click', async () => {
+  if (!confirm('Turn off your sync key? The Paychex script will stop working until you create a new one.')) return;
+  try {
+    await syncKeyRequest('DELETE');
+    location.reload();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+</script>
 </body>
 </html>

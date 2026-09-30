@@ -1,0 +1,399 @@
+// ==UserScript==
+// @name         Delaney → Paychex schedule sender
+// @namespace    delaney-schedule
+// @version      1.0.0
+// @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
+// @match        https://paychex.flextime.paychex.com/Dashboard/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      <%= appHost %>
+// @updateURL    <%= appBaseUrl %>/paychex-sync.user.js
+// @downloadURL  <%= appBaseUrl %>/paychex-sync.user.js
+// @run-at       document-idle
+// ==/UserScript==
+
+/*
+ * Runs inside Paychex Flex Time as the signed-in person. It reads an
+ * approved week from the Delaney app (with your sync key) and adds each
+ * shift through the same request the Visual Scheduler uses when you add a
+ * shift by hand. Shifts it has already added are logged in the Delaney app
+ * and skipped next time. Nothing in Paychex is edited or deleted.
+ *
+ * These are Paychex's internal web requests, not a published API; if
+ * Paychex changes them, sending fails with a clear error and nothing else.
+ */
+(function () {
+  'use strict';
+
+  const APP = <%- JSON.stringify(appBaseUrl) %>;
+  const SEND_DELAY_MS = 400;
+  const STOP_AFTER_FAILURES_IN_A_ROW = 3;
+
+  // The scheduler's request token; only frames that have one can add shifts
+  const pageToken = new URLSearchParams(location.search).get('t');
+  if (!pageToken || window.innerWidth < 400) return;
+  if (document.getElementById('delaney-paychex-panel')) return;
+
+  const STATUS_TEXT = {
+    'ready': 'Will be added',
+    'already-sent': 'Already sent',
+    'no-paychex-ids': 'No Paychex IDs saved',
+    'no-ll1': 'No LL1 saved',
+    'no-employee-number': 'No employee number on schedule',
+    'added': 'Added',
+    'failed': 'Failed'
+  };
+
+  /* ---------- small helpers ---------- */
+
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(([key, value]) => {
+      if (key === 'style') node.style.cssText = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else if (value !== undefined && value !== null && value !== false) node.setAttribute(key, value);
+    });
+    children.flat().forEach(child => {
+      if (child === null || child === undefined || child === false) return;
+      node.appendChild(typeof child === 'string' || typeof child === 'number'
+        ? document.createTextNode(String(child))
+        : child);
+    });
+    return node;
+  }
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  function getKey() {
+    return String(GM_getValue('syncKey', '') || '').trim();
+  }
+
+  // Calls the Delaney app. GM_xmlhttpRequest is used because Paychex's
+  // page can't call another site directly.
+  function app(method, path, body) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method,
+        url: APP + path,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + getKey()
+        },
+        data: body ? JSON.stringify(body) : undefined,
+        timeout: 30000,
+        onload: response => {
+          let json = null;
+          try { json = JSON.parse(response.responseText); } catch (err) { /* not JSON */ }
+          if (response.status >= 200 && response.status < 300 && json) resolve(json);
+          else reject(new Error((json && json.error) || `The Delaney app returned HTTP ${response.status}.`));
+        },
+        onerror: () => reject(new Error('Could not reach the Delaney app. Check your connection.')),
+        ontimeout: () => reject(new Error('The Delaney app took too long to answer (it may be waking up). Try again.'))
+      });
+    });
+  }
+
+  // Adds one shift the way the Visual Scheduler does
+  async function addShiftToPaychex(shift, weekStart) {
+    const fields = {
+      ID1: '-1',
+      ID2: '0',
+      UserID: String(shift.paychexUserId),
+      PayTypeID: '-1',
+      StartTime: shift.start,
+      EndTime: shift.end,
+      LL1: String(shift.ll1)
+    };
+    for (let level = 2; level <= 15; level++) fields['LL' + level] = '0';
+    fields.Note = `Delaney schedule, week of ${weekStart}`;
+
+    const token = new URLSearchParams(location.search).get('t') || pageToken;
+    const response = await fetch(
+      `${location.origin}/Dashboard/VisualScheduler/AddEditShift?t=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams(fields).toString()
+      }
+    );
+
+    const text = await response.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (err) { /* not JSON */ }
+
+    if (!response.ok) {
+      throw new Error(`Paychex returned HTTP ${response.status}.`);
+    }
+    if (!json) {
+      throw new Error('Paychex did not answer as expected. Your Paychex session may have expired; reload the page and try again.');
+    }
+
+    const rejected =
+      json.Success === false || json.success === false ||
+      json.IsSuccess === false || json.IsError === true ||
+      Boolean(json.Error || json.error || json.ErrorMessage);
+    if (rejected) {
+      throw new Error(String(json.Message || json.message || json.ErrorMessage || json.Error || json.error || 'Paychex rejected the shift.'));
+    }
+
+    return text.slice(0, 500);
+  }
+
+  /* ---------- panel ---------- */
+
+  const style = el('style', {}, `
+    #delaney-paychex-toggle { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
+      background: #1e3a8a; color: #fff; border: 0; border-radius: 999px; padding: 10px 16px;
+      font: 600 13px/1.2 Segoe UI, Arial, sans-serif; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+    #delaney-paychex-panel { position: fixed; right: 16px; bottom: 64px; z-index: 2147483000;
+      width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 96px); overflow: auto;
+      background: #fff; color: #1f2937; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.3);
+      font: 13px/1.4 Segoe UI, Arial, sans-serif; padding: 14px 16px; box-sizing: border-box; }
+    #delaney-paychex-panel h3 { margin: 0 0 8px; font-size: 16px; color: #1e3a8a; }
+    #delaney-paychex-panel .dp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    #delaney-paychex-panel select, #delaney-paychex-panel input { padding: 6px 8px; border: 1px solid #cbd5e1;
+      border-radius: 6px; font: inherit; max-width: 100%; }
+    #delaney-paychex-panel button { border: 0; border-radius: 6px; padding: 7px 12px; font: 600 13px Segoe UI, Arial, sans-serif; cursor: pointer; }
+    #delaney-paychex-panel .dp-primary { background: #1e3a8a; color: #fff; }
+    #delaney-paychex-panel .dp-go { background: #15803d; color: #fff; }
+    #delaney-paychex-panel .dp-plain { background: #e5e7eb; color: #1f2937; }
+    #delaney-paychex-panel button:disabled { opacity: .5; cursor: default; }
+    #delaney-paychex-panel .dp-muted { color: #64748b; font-size: 12px; }
+    #delaney-paychex-panel .dp-error { color: #b91c1c; font-weight: 600; }
+    #delaney-paychex-panel .dp-ok { color: #15803d; font-weight: 600; }
+    #delaney-paychex-panel table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    #delaney-paychex-panel th, #delaney-paychex-panel td { border-bottom: 1px solid #e5e7eb; padding: 4px 6px; text-align: left; white-space: nowrap; }
+    #delaney-paychex-panel th { background: #f1f5f9; position: sticky; top: 0; }
+    #delaney-paychex-panel .dp-chip { border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
+    #delaney-paychex-panel .dp-ready { background: #dbeafe; color: #1e40af; }
+    #delaney-paychex-panel .dp-already-sent { background: #e5e7eb; color: #374151; }
+    #delaney-paychex-panel .dp-added { background: #dcfce7; color: #166534; }
+    #delaney-paychex-panel .dp-failed, #delaney-paychex-panel .dp-no-paychex-ids,
+    #delaney-paychex-panel .dp-no-ll1, #delaney-paychex-panel .dp-no-employee-number { background: #fee2e2; color: #991b1b; }
+  `);
+
+  const state = { weeks: [], shifts: [], week: null, sending: false };
+
+  const messageLine = el('div', { class: 'dp-muted' });
+  const weekSelect = el('select', { 'aria-label': 'Approved week' });
+  const personSelect = el('select', { 'aria-label': 'Employees to send' });
+  const previewButton = el('button', { class: 'dp-primary', type: 'button', onclick: () => preview() }, 'Preview');
+  const sendButton = el('button', { class: 'dp-go', type: 'button', disabled: true, onclick: () => send() }, 'Add shifts to Paychex');
+  const summary = el('div', {});
+  const tableBody = el('tbody', {});
+  const table = el('table', { hidden: true },
+    el('thead', {}, el('tr', {}, ['Employee', 'Paychex ID', 'LL1', 'Day', 'Shift', 'Status'].map(text => el('th', {}, text)))),
+    tableBody
+  );
+
+  const keyInput = el('input', { type: 'password', placeholder: 'Paste your sync key', size: 36, 'aria-label': 'Sync key' });
+  const settings = el('details', {},
+    el('summary', { class: 'dp-muted' }, 'Settings'),
+    el('div', { class: 'dp-row' },
+      keyInput,
+      el('button', { class: 'dp-plain', type: 'button', onclick: () => {
+        GM_setValue('syncKey', keyInput.value.trim());
+        keyInput.value = '';
+        loadWeeks();
+      } }, 'Save key')
+    ),
+    el('div', { class: 'dp-muted' },
+      'Create a sync key on the Delaney app\'s Posted Schedules page (admins). App: ', APP)
+  );
+
+  const panel = el('div', { id: 'delaney-paychex-panel', hidden: true },
+    el('h3', {}, 'Delaney → Paychex'),
+    messageLine,
+    el('div', { class: 'dp-row' }, el('label', {}, 'Week '), weekSelect, previewButton),
+    el('div', { class: 'dp-row' }, el('label', {}, 'Send '), personSelect, sendButton),
+    summary,
+    table,
+    settings
+  );
+
+  const toggle = el('button', { id: 'delaney-paychex-toggle', type: 'button', onclick: () => {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden && !state.weeks.length) loadWeeks();
+  } }, 'Delaney → Paychex');
+
+  document.head.appendChild(style);
+  document.body.appendChild(panel);
+  document.body.appendChild(toggle);
+
+  function say(text, kind) {
+    messageLine.className = kind ? `dp-${kind}` : 'dp-muted';
+    messageLine.textContent = text;
+  }
+
+  function describeSync(sync) {
+    if (!sync) return 'not sent yet';
+    const when = new Date(sync.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `sent ${when}: ${sync.added} added${sync.failed ? `, ${sync.failed} failed` : ''}`;
+  }
+
+  async function loadWeeks() {
+    if (!getKey()) {
+      settings.open = true;
+      say('Paste your sync key under Settings to start.', 'error');
+      return;
+    }
+    say('Loading approved weeks…');
+    try {
+      const result = await app('GET', '/api/paychex-sync/weeks');
+      state.weeks = result.weeks || [];
+      weekSelect.replaceChildren(...state.weeks.map((week, index) =>
+        el('option', { value: String(index) },
+          `${week.store} — ${week.label === 'Current week' || week.label === 'Next week' ? week.label + ' ' : ''}${week.range} (${describeSync(week.lastSync)})`)));
+      say(state.weeks.length
+        ? `Signed in to the Delaney app as ${result.user}. Choose a week and preview it.`
+        : 'No approved weeks to send right now.', state.weeks.length ? null : 'error');
+    } catch (err) {
+      say(err.message, 'error');
+      settings.open = true;
+    }
+  }
+
+  function renderShifts() {
+    tableBody.replaceChildren(...state.shifts.map(shift => el('tr', {},
+      el('td', {}, shift.employeeName),
+      el('td', {}, shift.paychexUserId ?? '—'),
+      el('td', {}, shift.ll1 ?? '—'),
+      el('td', {}, new Date(shift.date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })),
+      el('td', {}, shift.shiftText),
+      el('td', {}, el('span', { class: `dp-chip dp-${shift.status}`, title: shift.error || '' },
+        STATUS_TEXT[shift.status] || shift.status, shift.error ? `: ${shift.error}` : ''))
+    )));
+    table.hidden = !state.shifts.length;
+
+    const count = status => state.shifts.filter(shift => shift.status === status).length;
+    const missing = count('no-paychex-ids') + count('no-ll1') + count('no-employee-number');
+    summary.replaceChildren(
+      el('div', {}, `${count('ready')} to add · ${count('already-sent') + count('added')} already in Paychex from the app` +
+        (missing ? ` · ${missing} skipped (missing IDs — add them on the Paychex IDs page)` : '') +
+        (count('failed') ? ` · ${count('failed')} failed` : ''))
+    );
+
+    const ready = selectedShifts().length;
+    sendButton.disabled = state.sending || !ready;
+    sendButton.textContent = ready ? `Add ${ready} shift${ready === 1 ? '' : 's'} to Paychex` : 'Nothing to add';
+  }
+
+  function selectedShifts() {
+    const person = personSelect.value;
+    return state.shifts.filter(shift =>
+      shift.status === 'ready' && (!person || shift.employeeNumber === person));
+  }
+
+  async function preview() {
+    const week = state.weeks[Number(weekSelect.value)];
+    if (!week) return;
+    say(`Loading ${week.store}, ${week.range}…`);
+    try {
+      const result = await app('GET', `/api/paychex-sync/shifts?store=${encodeURIComponent(week.store)}&week=${encodeURIComponent(week.weekStart)}`);
+      state.week = week;
+      state.shifts = result.shifts || [];
+
+      // "Send": everyone, or one person (handy for a first test)
+      const people = new Map();
+      state.shifts.filter(shift => shift.status === 'ready')
+        .forEach(shift => people.set(shift.employeeNumber, shift.employeeName));
+      personSelect.replaceChildren(
+        el('option', { value: '' }, 'Everyone'),
+        ...[...people].sort((a, b) => a[1].localeCompare(b[1]))
+          .map(([number, name]) => el('option', { value: number }, `Only ${name}`))
+      );
+
+      say(`${week.store}, ${week.range}. Check the list, then add the shifts.`);
+      renderShifts();
+    } catch (err) {
+      say(err.message, 'error');
+    }
+  }
+  personSelect.addEventListener('change', renderShifts);
+
+  async function send() {
+    const week = state.week;
+    const toSend = selectedShifts();
+    if (!week || !toSend.length) return;
+    if (!confirm(`Add ${toSend.length} shift${toSend.length === 1 ? '' : 's'} to Paychex for ${week.store}, ${week.range}?`)) return;
+
+    state.sending = true;
+    previewButton.disabled = true;
+    weekSelect.disabled = true;
+    personSelect.disabled = true;
+
+    let added = 0;
+    let failedInARow = 0;
+    const failures = [];
+
+    for (let index = 0; index < toSend.length; index++) {
+      const shift = toSend[index];
+      say(`Adding ${index + 1} of ${toSend.length}: ${shift.employeeName}, ${shift.shiftText}…`);
+
+      try {
+        const paychexResponse = await addShiftToPaychex(shift, week.weekStart);
+        shift.status = 'added';
+        added++;
+        failedInARow = 0;
+
+        // Log it right away so a stopped run never re-adds it
+        await app('POST', '/api/paychex-sync/sent', {
+          store: week.store,
+          weekStart: week.weekStart,
+          employeeNumber: shift.employeeNumber,
+          employeeName: shift.employeeName,
+          paychexUserId: shift.paychexUserId,
+          ll1: shift.ll1,
+          start: shift.start,
+          end: shift.end,
+          paychexResponse
+        }).catch(err => {
+          shift.error = `added to Paychex, but not logged in the app (${err.message})`;
+        });
+      } catch (err) {
+        shift.status = 'failed';
+        shift.error = err.message;
+        failures.push({ employeeName: shift.employeeName, date: shift.date, reason: err.message });
+        failedInARow++;
+      }
+
+      renderShifts();
+
+      if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) {
+        say(`Stopped after ${failedInARow} failures in a row: ${failures[failures.length - 1].reason}`, 'error');
+        break;
+      }
+      if (index < toSend.length - 1) await sleep(SEND_DELAY_MS);
+    }
+
+    const count = status => state.shifts.filter(item => item.status === status).length;
+    await app('POST', '/api/paychex-sync/result', {
+      store: week.store,
+      weekStart: week.weekStart,
+      added,
+      alreadySent: count('already-sent'),
+      failed: failures.length,
+      missingIds: count('no-paychex-ids') + count('no-ll1') + count('no-employee-number'),
+      failures
+    }).catch(() => {});
+
+    state.sending = false;
+    previewButton.disabled = false;
+    weekSelect.disabled = false;
+    personSelect.disabled = false;
+    renderShifts();
+
+    if (failedInARow < STOP_AFTER_FAILURES_IN_A_ROW) {
+      say(failures.length
+        ? `Done: ${added} added, ${failures.length} failed (see the list). Refresh the scheduler to see the new shifts.`
+        : `Done: ${added} shift${added === 1 ? '' : 's'} added. Refresh the scheduler to see them.`,
+        failures.length ? 'error' : 'ok');
+    }
+  }
+})();
