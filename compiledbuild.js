@@ -55,6 +55,8 @@ const PostedSchedule = require('./models/PostedSchedule')
 const HoursBudget = require('./models/HoursBudget')
 const PaychexEmployeeLink = require('./models/PaychexEmployeeLink')
 const PaychexSentShift = require('./models/PaychexSentShift')
+const PtoHours = require('./models/PtoHours')
+const SickDay = require('./models/SickDay')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -3446,7 +3448,10 @@ function cleanScheduleSnapshot(input) {
         shiftCount += days[day].length
       }
 
-      if (shiftCount) {
+      // Paid time off hours for the week (not shifts; not overtime)
+      const ptoHours = cleanHours(employee.ptoHours, 168)
+
+      if (shiftCount || ptoHours > 0) {
         employees.push({
           name,
           employeeNumber: cleanText(employee.employeeNumber, 20),
@@ -3455,6 +3460,7 @@ function cleanScheduleSnapshot(input) {
           changed,
           hours,
           totalHours: cleanHours(employee.totalHours, 168),
+          ptoHours,
           approvedOvertimeHours: cleanHours(employee.approvedOvertimeHours, 168),
           withinApproval: employee.withinApproval !== false,
           unapprovedOvertimeHours: cleanHours(employee.unapprovedOvertimeHours, 168)
@@ -3805,6 +3811,7 @@ function buildScheduleReview(snapshot, liveSnapshot) {
         }
       }),
       totalHours: employee.totalHours,
+      ptoHours: employee.ptoHours || 0,
       approvedOvertimeHours: employee.approvedOvertimeHours,
       withinApproval: employee.withinApproval !== false,
       unapprovedOvertimeHours: employee.unapprovedOvertimeHours,
@@ -3821,11 +3828,16 @@ function buildScheduleReview(snapshot, liveSnapshot) {
     employees.reduce((sum, employee) =>
       sum + ((employee.hours && employee.hours[day]) || 0), 0))
 
+  // PTO counts toward total hours (and the budget) but not overtime
+  const ptoTotal = rows.reduce((sum, row) => sum + row.ptoHours, 0)
+
   return {
     rows,
     hasHours,
+    hasPto: ptoTotal > 0,
+    ptoTotal,
     dayTotals,
-    grandTotal: dayTotals.reduce((sum, value) => sum + value, 0),
+    grandTotal: dayTotals.reduce((sum, value) => sum + value, 0) + ptoTotal,
     // Store-wide overtime: approved OT hours and hours over approval
     totalApprovedOvertime: rows.reduce((sum, row) =>
       sum + (row.hasHours ? row.approvedOvertimeHours : 0), 0),
@@ -3872,9 +3884,19 @@ app.get('/schedule-approvals', ...adminPage, async (req, res) => {
 
 // Admin: browse approved schedules by store and week, in the same review
 // layout as the approvals page (changes, reasons, hours and overtime)
-app.get('/posted-schedules', ...adminPage, async (req, res) => {
+// Admins see every store; managers see the stores they manage (read-only:
+// the Paychex send setup and reset controls are admin-only)
+app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req, res) => {
   const currentMonday = mondayOf(storeToday())
-  const store = getCanonicalStoreName(req.query.store) || STORE_LIST[0]
+  const isAdmin = req.user.role === 'admin'
+  const stores = STORE_LIST.filter(name => canAccessStore(req.user, name))
+
+  if (!stores.length) {
+    return res.status(403).send('You do not manage any stores yet.')
+  }
+
+  const requestedStore = getCanonicalStoreName(req.query.store)
+  const store = stores.includes(requestedStore) ? requestedStore : stores[0]
 
   const weeks = await PostedSchedule.find({
     store,
@@ -3904,7 +3926,7 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
   const approved = doc && doc.approved
 
   // Shifts the Paychex script has logged as sent for this week, per person
-  const sentToPaychex = selected
+  const sentToPaychex = selected && isAdmin
     ? await PaychexSentShift.aggregate([
         { $match: { store, weekStart: selected } },
         { $group: { _id: '$employeeNumber', employeeName: { $last: '$employeeName' }, count: { $sum: 1 } } },
@@ -3914,8 +3936,10 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
 
   res.render('posted-schedules.ejs', {
     user: req.user,
-    stores: STORE_LIST,
+    isAdmin,
+    stores,
     store,
+    schedulePath: STORE_PAGES[store].schedulePath,
     dayKeys: SCHEDULE_DAY_KEYS,
     weeks: weeks.map(week => ({
       weekStart: week.weekStart,
@@ -3949,7 +3973,7 @@ app.get('/posted-schedules', ...adminPage, async (req, res) => {
         }
       : null,
     // "Send to Paychex" setup for this admin
-    paychexSyncKeyCreatedAt: req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
+    paychexSyncKeyCreatedAt: isAdmin && req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
   })
 })
 
@@ -5137,6 +5161,202 @@ app.put(
   }
 )
 
+// ------------------------
+// PTO AND SICK DAYS
+// ------------------------
+//
+// PTO: paid time off hours per employee per schedule week (default 0),
+// set in the Build tab next to that week's approved time off. They show in
+// the printable schedule's PTO column and count toward total hours and
+// the hours budget, but not overtime.
+//
+// Sick days: an absence on the previous-week review can be marked a paid
+// sick day (its hours count as worked) or an unpaid sick day. Either way it
+// gets no attendance point recommendation.
+
+// '' / null -> 0; otherwise hours between 0 and max, to 2 decimals.
+// Returns { hours } or { error }.
+function cleanHoursInput(value, max, label) {
+  const text = String(value ?? '').trim()
+  if (!text) return { hours: 0 }
+  const hours = Number(text)
+  if (!Number.isFinite(hours) || hours < 0 || hours > max) {
+    return { error: `${label} must be between 0 and ${max}.` }
+  }
+  return { hours: Math.round(hours * 100) / 100 }
+}
+
+const ptoEntryView = entry => ({
+  employeeName: entry.employeeName,
+  employeeNumber: entry.employeeNumber || '',
+  days: Object.fromEntries(SCHEDULE_DAY_KEYS.map(day => [day, (entry.days && entry.days[day]) || 0])),
+  hours: entry.hours,
+  updatedBy: entry.updatedBy && entry.updatedBy.name,
+  updatedAt: entry.updatedAt
+})
+
+app.get(
+  '/api/pto',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const weekStart = String(req.query.week || '')
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'Choose the Monday the week starts on.' })
+      }
+      const entries = await PtoHours.find({ store: req.storeName, weekStart }).lean()
+      return res.json({ success: true, weekStart, entries: entries.map(ptoEntryView) })
+    } catch (err) {
+      console.error('PTO load error:', err)
+      return res.status(500).json({ success: false, error: 'PTO hours could not be loaded.' })
+    }
+  }
+)
+
+// Body: { store, weekStart, employeeName, employeeNumber,
+//         days: { monday: 8, thursday: 4, ... } }   (paid hours per day;
+// all 0 clears). The weekly total is the sum of the days.
+app.put(
+  '/api/pto',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const body = req.body || {}
+      const weekStart = String(body.weekStart || '')
+      const employeeName = cleanText(body.employeeName, 100)
+
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'Choose the Monday the week starts on.' })
+      }
+      if (!employeeName) {
+        return res.status(400).json({ success: false, error: 'Employee is required.' })
+      }
+
+      const suppliedDays = body.days && typeof body.days === 'object' ? body.days : {}
+      const days = {}
+      for (const day of SCHEDULE_DAY_KEYS) {
+        const cleaned = cleanHoursInput(suppliedDays[day], 24, `PTO hours for ${day.charAt(0).toUpperCase() + day.slice(1)}`)
+        if (cleaned.error) {
+          return res.status(400).json({ success: false, error: cleaned.error })
+        }
+        days[day] = cleaned.hours
+      }
+      const hours = Math.round(SCHEDULE_DAY_KEYS.reduce((sum, day) => sum + days[day], 0) * 100) / 100
+
+      if (hours === 0) {
+        await PtoHours.deleteOne({ store, weekStart, employeeName })
+        return res.json({ success: true, entry: { employeeName, days, hours: 0 } })
+      }
+
+      const entry = await PtoHours.findOneAndUpdate(
+        { store, weekStart, employeeName },
+        {
+          $set: {
+            days,
+            hours,
+            employeeNumber: cleanText(body.employeeNumber, 32),
+            updatedBy: personRef(req.user)
+          },
+          $setOnInsert: { store, weekStart, employeeName }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ).lean()
+
+      return res.json({ success: true, entry: ptoEntryView(entry) })
+    } catch (err) {
+      console.error('PTO save error:', err)
+      return res.status(500).json({ success: false, error: 'PTO hours could not be saved.' })
+    }
+  }
+)
+
+const sickDayView = entry => ({
+  employeeNumber: entry.employeeNumber,
+  employeeName: entry.employeeName || '',
+  date: entry.date,
+  type: entry.type,
+  hours: entry.type === 'paid-sick' ? entry.hours : 0,
+  updatedBy: entry.updatedBy && entry.updatedBy.name,
+  updatedAt: entry.updatedAt
+})
+
+async function sickDaysForWeek(store, weekStart) {
+  if (!isMonday(weekStart)) return []
+  const entries = await SickDay.find({ store, weekStart }).lean()
+  return entries.map(sickDayView)
+}
+
+// Body: { store, weekStart, employeeNumber, employeeName, date, type, hours }
+// type: 'paid-sick' | 'unpaid-sick' | '' (back to an ordinary absence)
+app.put(
+  '/api/sick-days',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const body = req.body || {}
+      const weekStart = String(body.weekStart || '')
+      const date = String(body.date || '')
+      const employeeNumber = cleanText(body.employeeNumber, 32)
+      const type = String(body.type || '')
+
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'The reviewed week is missing.' })
+      }
+      if (!parseYmd(date) || date < weekStart || date > addDaysYmd(weekStart, 6)) {
+        return res.status(400).json({ success: false, error: 'The day must be in the reviewed week.' })
+      }
+      if (!employeeNumber) {
+        return res.status(400).json({ success: false, error: 'This employee has no employee number on the schedule.' })
+      }
+      if (type && !['paid-sick', 'unpaid-sick'].includes(type)) {
+        return res.status(400).json({ success: false, error: 'Choose paid sick day or unpaid sick day.' })
+      }
+
+      if (!type) {
+        await SickDay.deleteOne({ store, employeeNumber, date })
+        return res.json({ success: true, sickDay: null })
+      }
+
+      let hours = 0
+      if (type === 'paid-sick') {
+        const cleaned = cleanHoursInput(body.hours, 24, 'Sick hours')
+        if (cleaned.error) {
+          return res.status(400).json({ success: false, error: cleaned.error })
+        }
+        if (cleaned.hours <= 0) {
+          return res.status(400).json({ success: false, error: 'Enter the paid sick hours for that day.' })
+        }
+        hours = cleaned.hours
+      }
+
+      const entry = await SickDay.findOneAndUpdate(
+        { store, employeeNumber, date },
+        {
+          $set: {
+            weekStart,
+            type,
+            hours,
+            employeeName: cleanText(body.employeeName, 100),
+            updatedBy: personRef(req.user)
+          },
+          $setOnInsert: { store, employeeNumber, date }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ).lean()
+
+      return res.json({ success: true, sickDay: sickDayView(entry) })
+    } catch (err) {
+      console.error('Sick day save error:', err)
+      return res.status(500).json({ success: false, error: 'The sick day could not be saved.' })
+    }
+  }
+)
+
 // Schedule page for every store: one shared view, with each store's preset
 // coverage rows and whether it schedules cashiers from config/scheduleStores.js
 for (const store of STORE_LIST) {
@@ -5177,6 +5397,12 @@ for (const store of STORE_LIST) {
           await HoursBudget.findOne({ store }).lean()
         )
 
+        // Sick days already marked for the uploaded previous week
+        const previousMonday = settings.previousWeekStart
+          ? mondayOf(new Date(settings.previousWeekStart).toISOString().slice(0, 10))
+          : ''
+        const sickDays = previousMonday ? await sickDaysForWeek(store, previousMonday) : []
+
         return res.render('Store Schedule.ejs', {
           user: req.user,
           // The manager's own view of this store's approved schedule
@@ -5203,7 +5429,8 @@ for (const store of STORE_LIST) {
             previousScheduledHours: settings.previousScheduledHours || {},
             previousWeekStart: settings.previousWeekStart || null,
             previousWeekEnd: settings.previousWeekEnd || null,
-            hoursBudget
+            hoursBudget,
+            sickDays
           }
         })
       } catch (err) {

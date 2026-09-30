@@ -50,6 +50,12 @@
 </a>
 <% } %>
 
+<% if (user.role === 'manager') { %>
+<a href="/posted-schedules" class="btn btn-admin">
+  Posted Schedules
+</a>
+<% } %>
+
 <% if (user.role === 'admin') { %>
 <a href="/schedule-approvals" class="btn btn-admin">
   Schedule Approvals<%= pendingScheduleCount ? ` (${pendingScheduleCount})` : '' %>

@@ -666,6 +666,29 @@ td.conflict-cell {
 
 /* Weekly hours budget: "scheduled / budget" on the total rows */
 td.budget-total { white-space: nowrap; }
+
+/* PTO: Build-tab section and the printable schedule's PTO column */
+.pto-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pto-table th, .pto-table td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: center; vertical-align: middle; }
+.pto-table th { background: #f1f5f9; white-space: nowrap; }
+.pto-table td.pto-name { text-align: left; font-weight: 600; white-space: nowrap; }
+.pto-table td.pto-off { background: #fef3c7; color: #92400e; font-weight: 600; white-space: nowrap; }
+.pto-table td.pto-note { text-align: left; color: #475569; font-size: 12px; }
+.pto-table input[type="number"] { width: 64px; padding: 4px 6px; margin-top: 4px; }
+.pto-table .pto-paid { display: block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #1f2937; cursor: pointer; }
+.pto-table .pto-week-total { font-size: 14px; }
+.pto-table .pto-status { font-size: 12px; color: #15803d; min-height: 1em; }
+.pto-table .pto-status.error { color: #b91c1c; }
+td.pto-cell { color: #7c2d12; font-weight: 600; }
+
+/* Previous week: sick days */
+.sick-day-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.sick-day-controls select, .sick-day-controls input { padding: 5px 6px; }
+.sick-day-controls input { width: 80px; }
+.sick-day-status { font-size: 12px; color: #15803d; }
+.sick-day-status.error { color: #b91c1c; }
+.sick-no-point { font-size: 13px; color: #166534; background: #dcfce7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; }
+.sick-marker { display: block; font-size: 11px; font-weight: 700; color: #1d4ed8; }
 td.budget-within { background: #dcfce7; }
 td.budget-over { background: #fee2e2; color: #991b1b; font-weight: 700; }
 td.budget-within, td.budget-over {
@@ -1443,6 +1466,10 @@ td.budget-within, td.budget-over {
         Time off requests<%= pendingTimeOffCount ? ` (${pendingTimeOffCount})` : '' %>
       </a>
 
+      <a class="secondary link-button" href="/posted-schedules?store=<%= encodeURIComponent(storeName) %>">
+        Posted schedules
+      </a>
+
       <% if (user && user.role === 'manager') { %>
         <details class="me-menu">
           <summary class="secondary link-button">Me ▾</summary>
@@ -1608,6 +1635,21 @@ td.budget-within, td.budget-over {
   </div>
 <% } %>
 </div>
+      </div>
+
+      <!-- MODULE 1: PAID TIME OFF -->
+      <div class="section" id="ptoSection">
+        <div class="section-title">
+          <div>
+            <h3>Paid Time Off (PTO)</h3>
+            <small>
+              Approved time off for the week being scheduled. Tick <strong>Paid</strong> for each paid
+              day off (8 hours by default; change it if needed). Paid hours show in the printable
+              schedule's PTO column and count toward total hours and the hours budget, not overtime.
+            </small>
+          </div>
+        </div>
+        <div id="ptoPanel"><span class="muted">Loading time off…</span></div>
       </div>
 
       <!-- MODULE 1: WEEKLY HOURS BUDGET -->
@@ -1906,6 +1948,11 @@ previousWeekEnd:
     <%- safeJson(
       incoming.hoursBudget || { defaultHours: null, overrides: [] }
     ) %>,
+
+  // Absences on the previous-week review marked as paid/unpaid sick days:
+  // [{ employeeNumber, date, type, hours }]
+  sickDays:
+    <%- safeJson(incoming.sickDays || []) %>,
   };
 
   // Preset coverage rows for this store (config/scheduleStores.js). Blank means
@@ -4697,11 +4744,12 @@ function generateScheduleComments() {
   function renderPrintSchedule() {
   const data = gatherScheduled();
 
+  // Everyone with a shift, plus anyone with only paid time off
   const employees = Object.keys(data).filter(
     name =>
       DAY_KEYS.some(
         day => data[name][day].shifts.length
-      )
+      ) || ptoHoursFor(name) > 0
   );
 
   let bodyHtml = '';
@@ -4721,11 +4769,14 @@ function generateScheduleComments() {
         ] || ''
       ).trim();
 
+    // Overtime is on worked hours only; PTO is added to the total after
     const overtimeApproval =
       calculateOvertimeApproval(
         employeeNumber,
         total
       );
+
+    const ptoHours = ptoHoursFor(name);
 
     const employeeHasChanges =
       DAY_KEYS.some(
@@ -4772,12 +4823,16 @@ function generateScheduleComments() {
 
         ${dayCells}
 
+        <td class="metric pto-cell">
+          ${ptoHours ? ptoHours.toFixed(2) : ''}
+        </td>
+
         <td class="metric ${
           employeeHasChanges
             ? 'temporary-hours'
             : ''
         }">
-          ${total.toFixed(2)}
+          ${(total + ptoHours).toFixed(2)}
         </td>
 
         <td class="metric">
@@ -4821,12 +4876,18 @@ function generateScheduleComments() {
     )
   );
 
+  const ptoTotal = employees.reduce(
+    (sum, name) => sum + ptoHoursFor(name),
+    0
+  );
+
+  // Worked + PTO: what's compared with the hours budget
   const grandTotal =
     dayTotals.reduce(
       (sum, value) =>
         sum + value,
       0
-    );
+    ) + ptoTotal;
 
   // Store-wide overtime: total approved OT hours, and total hours over
   // approval across everyone scheduled
@@ -4866,6 +4927,10 @@ function generateScheduleComments() {
         </td>
       `).join('')}
 
+      <td class="metric pto-cell">
+        ${ptoTotal ? ptoTotal.toFixed(2) : ''}
+      </td>
+
       ${budgetTotalCell(grandTotal, buildBudgetWeek(), 'Scheduled')}
 
       <td class="metric">
@@ -4896,7 +4961,7 @@ function generateScheduleComments() {
       <tr>
 
         <td colspan="${
-          DAYS.length + 4
+          DAYS.length + 5
         }">
 
           <div class="print-comments">
@@ -4983,6 +5048,8 @@ function generateScheduleComments() {
             ${escapeHtml(day)}
           </th>
         `).join('')}
+
+        <th>PTO</th>
 
         <th>Hours</th>
 
@@ -5695,7 +5762,9 @@ function renderExceptionSection(
           ${
             item.type === 'overtime'
               ? buildOvertimeReviewControls(item)
-              : buildPointAssignmentControls(item)
+              : item.type === 'absence'
+                ? buildAbsenceControls(item)
+                : buildPointAssignmentControls(item)
           }
 
         </div>
@@ -5945,7 +6014,7 @@ function renderPreviousWeekDates() {
             ] || 0
           );
 
-        const workedTotal =
+        const clockedTotal =
           DAY_KEYS.reduce(
             (sum, day) =>
               sum +
@@ -5954,6 +6023,17 @@ function renderPreviousWeekDates() {
               ),
             0
           );
+
+        // Paid sick days count as hours worked (not overtime)
+        const paidSickTotal =
+          DAY_KEYS.reduce(
+            (sum, day, dayIndex) =>
+              sum + paidSickHours(employeeIdentifier, getExceptionDate(dayIndex)),
+            0
+          );
+
+        const workedTotal =
+          clockedTotal + paidSickTotal;
 
         const difference =
           workedTotal -
@@ -5974,7 +6054,7 @@ function renderPreviousWeekDates() {
         const overtimeApproval =
           calculateOvertimeApproval(
             employeeIdentifier,
-            workedTotal
+            clockedTotal
           );
 
         totalScheduled +=
@@ -5994,11 +6074,12 @@ function renderPreviousWeekDates() {
           overtimeApproval
             .unapprovedOvertimeHours;
 
-        DAY_KEYS.forEach(day => {
+        DAY_KEYS.forEach((day, dayIndex) => {
           const actualDayHours =
             Number(
               actualHours[day] || 0
-            );
+            ) +
+            paidSickHours(employeeIdentifier, getExceptionDate(dayIndex));
 
           const scheduledDayHours =
             scheduledPaidHoursFromRanges(
@@ -6020,7 +6101,16 @@ function renderPreviousWeekDates() {
               : '';
 
         const dayCells =
-          DAY_KEYS.map(day => {
+          DAY_KEYS.map((day, dayIndex) => {
+            const sickDay = sickDayFor(employeeIdentifier, getExceptionDate(dayIndex));
+            const sickMarker = sickDay
+              ? `<span class="sick-marker">${
+                  sickDay.type === 'paid-sick'
+                    ? `Paid sick ${Number(sickDay.hours).toFixed(2)}`
+                    : 'Unpaid sick'
+                }</span>`
+              : '';
+
             const plannedValues =
               normalizeShiftValues(
                 scheduledShifts[day]
@@ -6140,6 +6230,7 @@ function renderPreviousWeekDates() {
                 }">
                   ${actualHtml}
                 </span>
+                ${sickMarker}
               </td>
             `;
           }).join('');
@@ -7835,6 +7926,325 @@ document.addEventListener('click', event => {
   }
 });
 
+/*
+ * Paid time off. The PTO section lists everyone with approved time off in
+ * the week being built (plus anyone who already has PTO saved), day by
+ * day. Each day off has a "Paid" box: ticked, it counts PTO_DAY_HOURS
+ * (editable); unticked, the day is unpaid. The weekly total appears in the
+ * printable schedule's PTO column and counts toward total hours and the
+ * hours budget, but not overtime.
+ */
+const PTO_DAY_HOURS = 8;
+
+let ptoData = { week: '', hours: {}, days: {}, loaded: false };
+
+const ptoHoursFor = name => Number(ptoData.hours[name] || 0);
+
+async function loadPtoForWeek(weekStart) {
+  try {
+    const response = await fetch(
+      `/api/pto?store=${encodeURIComponent(state.store)}&week=${encodeURIComponent(weekStart)}`,
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+    );
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'PTO could not be loaded.');
+    ptoData = {
+      week: weekStart,
+      hours: Object.fromEntries((result.entries || []).map(entry => [entry.employeeName, entry.hours])),
+      days: Object.fromEntries((result.entries || []).map(entry => [entry.employeeName, entry.days || {}])),
+      loaded: true
+    };
+  } catch (err) {
+    console.error('PTO could not be loaded:', err);
+    ptoData = { week: weekStart, hours: {}, days: {}, loaded: false, failed: true };
+  }
+}
+
+function describeTimeOffCell(entries) {
+  return entries.map(entry => entry.allDay
+    ? 'Off all day'
+    : `${inputTimeToDisplay(entry.startTime)}–${inputTimeToDisplay(entry.endTime)}`
+  ).join('<br>');
+}
+
+function renderPtoPanel() {
+  const panel = document.getElementById('ptoPanel');
+  if (!panel) return;
+
+  if (!timeOffData.week) {
+    panel.innerHTML = '<span class="muted">Loading time off…</span>';
+    return;
+  }
+
+  // Everyone with approved time off this week, plus saved PTO
+  const people = new Map();
+  (timeOffData.timeOff || []).forEach(entry => {
+    if (!people.has(entry.name)) people.set(entry.name, []);
+    people.get(entry.name).push(entry);
+  });
+  Object.keys(ptoData.hours).forEach(name => {
+    if (!people.has(name)) people.set(name, []);
+  });
+
+  const weekLabel = escapeHtml(postingWeekLabel(timeOffData.week));
+
+  if (!people.size) {
+    panel.innerHTML = `<p class="muted">No approved time off for ${weekLabel}.</p>`;
+    return;
+  }
+
+  const rows = [...people.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, entries]) => {
+      const notes = [...new Set(entries.map(entry => entry.note).filter(Boolean))];
+      const savedDays = ptoData.days[name] || {};
+      const cells = DAY_KEYS.map((day, index) => {
+        const dayEntries = entries.filter(entry => entry.day === day);
+        const paidHours = Number(savedDays[day] || 0);
+        // A day off, or a day that already has paid PTO saved
+        if (!dayEntries.length && !paidHours) return '<td></td>';
+
+        return `
+          <td class="${dayEntries.length ? 'pto-off' : ''}" data-pto-day="${day}">
+            ${dayEntries.length ? describeTimeOffCell(dayEntries) : ''}
+            <label class="pto-paid">
+              <input type="checkbox" class="pto-paid-box" ${paidHours ? 'checked' : ''}
+                aria-label="Paid time off for ${escapeHtml(name)} on ${escapeHtml(DAYS[index])}">
+              Paid
+            </label>
+            <input type="number" min="0" max="24" step="0.25" class="pto-day-hours"
+              aria-label="Paid hours for ${escapeHtml(name)} on ${escapeHtml(DAYS[index])}"
+              value="${paidHours || PTO_DAY_HOURS}" ${paidHours ? '' : 'hidden'}>
+          </td>
+        `;
+      }).join('');
+      const hours = ptoHoursFor(name);
+
+      return `
+        <tr data-pto-name="${escapeHtml(name)}">
+          <td class="pto-name">${escapeHtml(name)}</td>
+          ${cells}
+          <td class="pto-note">${notes.map(escapeHtml).join('<br>')}</td>
+          <td>
+            <strong class="pto-week-total">${hours.toFixed(2)}</strong>
+            <div class="pto-status" data-pto-status></div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  panel.innerHTML = `
+    <p class="muted" style="margin-top:0;">Week being scheduled: <strong>${weekLabel}</strong>${
+      ptoData.failed ? ' · <span class="error-text">Saved PTO hours could not be loaded.</span>' : ''}</p>
+    <div class="table-wrap">
+      <table class="pto-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            ${DAYS.map(day => `<th>${escapeHtml(day)}</th>`).join('')}
+            <th>Notes</th>
+            <th>Paid PTO (week)</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/*
+ * Sick days on the previous-week review. An absence (scheduled, no time
+ * worked) can be marked a paid sick day, whose hours count as worked (not
+ * overtime), or an unpaid sick day. Sick days get no attendance point
+ * recommendation.
+ */
+function sickDayFor(employeeNumber, date) {
+  if (!employeeNumber || !date) return null;
+  return (state.sickDays || []).find(entry =>
+    entry.employeeNumber === employeeNumber && entry.date === date) || null;
+}
+
+function paidSickHours(employeeNumber, date) {
+  const sickDay = sickDayFor(employeeNumber, date);
+  return sickDay && sickDay.type === 'paid-sick' ? Number(sickDay.hours || 0) : 0;
+}
+
+// Points already assigned (by an admin) for this absence, if any
+function assignedPointForAbsence(item) {
+  return ['absence', 'no_call_no_show']
+    .map(type => existingAttendancePoints[buildSourceExceptionId(item, type)])
+    .find(Boolean) || null;
+}
+
+function buildAbsenceControls(item) {
+  const sickDay = sickDayFor(item.employeeNumber, item.infractionDate);
+  const type = sickDay ? sickDay.type : '';
+  // A paid sick day is a full day: 8 hours by default (no lunch deduction)
+  const hours = sickDay && sickDay.type === 'paid-sick'
+    ? sickDay.hours
+    : PTO_DAY_HOURS;
+
+  const sickControls = `
+    <div class="sick-day-controls" data-sick-panel="${escapeHtml(item.id)}">
+      <label>
+        Sick day
+        <select class="sick-day-type" aria-label="Sick day for ${escapeHtml(item.buildName)}">
+          <option value="" ${type === '' ? 'selected' : ''}>Not a sick day</option>
+          <option value="paid-sick" ${type === 'paid-sick' ? 'selected' : ''}>Paid sick day</option>
+          <option value="unpaid-sick" ${type === 'unpaid-sick' ? 'selected' : ''}>Unpaid sick day</option>
+        </select>
+      </label>
+      <label class="sick-hours-label" ${type === 'paid-sick' ? '' : 'hidden'}>
+        Paid hours
+        <input type="number" class="sick-day-hours" min="0" max="24" step="0.25" value="${escapeHtml(hours)}">
+      </label>
+      <button type="button" class="secondary save-sick-day-button"
+        data-exception-id="${escapeHtml(item.id)}"
+        data-employee-number="${escapeHtml(item.employeeNumber)}"
+        data-employee-name="${escapeHtml(item.buildName)}"
+        data-date="${escapeHtml(item.infractionDate)}">
+        Save
+      </button>
+      <span class="sick-day-status" data-sick-status></span>
+    </div>
+  `;
+
+  if (!sickDay) {
+    return sickControls + buildPointAssignmentControls(item);
+  }
+
+  const alreadyAssigned = assignedPointForAbsence(item);
+  return sickControls + `
+    <div class="sick-no-point">
+      ${sickDay.type === 'paid-sick'
+        ? `Paid sick day: ${Number(sickDay.hours).toFixed(2)} hours added to hours worked.`
+        : 'Unpaid sick day: no hours added.'}
+      No attendance point is recommended.
+      ${alreadyAssigned
+        ? ' <strong>Note: points were already assigned for this absence; an admin can void them in the attendance point history.</strong>'
+        : ''}
+    </div>
+  `;
+}
+
+document.addEventListener('change', event => {
+  const select = event.target.closest('.sick-day-type');
+  if (!select) return;
+  const panel = select.closest('.sick-day-controls');
+  panel.querySelector('.sick-hours-label').hidden = select.value !== 'paid-sick';
+});
+
+document.addEventListener('click', async event => {
+  const button = event.target.closest('.save-sick-day-button');
+  if (!button) return;
+
+  const panel = button.closest('.sick-day-controls');
+  const status = panel.querySelector('[data-sick-status]');
+  const type = panel.querySelector('.sick-day-type').value;
+  const hours = panel.querySelector('.sick-day-hours').value;
+
+  const show = (text, isError) => {
+    status.textContent = text;
+    status.classList.toggle('error', Boolean(isError));
+  };
+
+  if (!button.dataset.employeeNumber) {
+    show('This employee has no employee number on the schedule.', true);
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/sick-days', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        store: state.store,
+        weekStart: previousBudgetWeek(),
+        employeeNumber: button.dataset.employeeNumber,
+        employeeName: button.dataset.employeeName,
+        date: button.dataset.date,
+        type,
+        hours
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || 'The sick day could not be saved.');
+
+    state.sickDays = (state.sickDays || []).filter(entry =>
+      !(entry.employeeNumber === button.dataset.employeeNumber && entry.date === button.dataset.date));
+    if (result.sickDay) state.sickDays.push(result.sickDay);
+
+    // Worked hours, totals, the budget and the point controls all change
+    renderPrevious();
+  } catch (err) {
+    show(err.message, true);
+    button.disabled = false;
+  }
+});
+
+// Saves a person's PTO whenever a "Paid" box or a day's hours change
+document.addEventListener('change', async event => {
+  const input = event.target.closest('.pto-paid-box, .pto-day-hours');
+  if (!input) return;
+
+  const row = input.closest('tr');
+  const name = row.dataset.ptoName;
+  const status = row.querySelector('[data-pto-status]');
+  const week = ptoData.week || timeOffData.week;
+
+  // Ticking "Paid" shows the hours box, starting at 8
+  if (input.classList.contains('pto-paid-box')) {
+    const hoursBox = input.closest('td').querySelector('.pto-day-hours');
+    hoursBox.hidden = !input.checked;
+    if (input.checked && !(Number(hoursBox.value) > 0)) hoursBox.value = PTO_DAY_HOURS;
+  }
+
+  const days = {};
+  row.querySelectorAll('[data-pto-day]').forEach(cell => {
+    const paid = cell.querySelector('.pto-paid-box').checked;
+    days[cell.dataset.ptoDay] = paid ? cell.querySelector('.pto-day-hours').value : 0;
+  });
+
+  const show = (text, isError) => {
+    status.textContent = text;
+    status.classList.toggle('error', Boolean(isError));
+  };
+
+  try {
+    const response = await fetch('/api/pto', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        store: state.store,
+        weekStart: week,
+        employeeName: name,
+        employeeNumber: String(state.buildEmployeeIdentifiers?.[name] || ''),
+        days
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || 'PTO could not be saved.');
+
+    if (result.entry.hours > 0) {
+      ptoData.hours[name] = result.entry.hours;
+      ptoData.days[name] = result.entry.days || {};
+    } else {
+      delete ptoData.hours[name];
+      delete ptoData.days[name];
+    }
+    row.querySelector('.pto-week-total').textContent = Number(result.entry.hours || 0).toFixed(2);
+    show('Saved');
+
+    // Print totals, the budget and the snapshot all include PTO
+    recalculate();
+  } catch (err) {
+    show(err.message, true);
+  }
+});
+
 function renderPostedWeeks(weeks) {
   const table = document.getElementById('postedWeeksTable');
   if (!table) return;
@@ -7923,7 +8333,7 @@ function buildPostSnapshot() {
   const groups = { manager: [], associate: [], cashier: [] };
 
   Object.keys(data)
-    .filter(name => DAY_KEYS.some(day => data[name][day].shifts.length))
+    .filter(name => DAY_KEYS.some(day => data[name][day].shifts.length) || ptoHoursFor(name) > 0)
     .forEach(name => {
       const type = getEmployeeRole(name).toLowerCase() || 'associate';
 
@@ -7961,6 +8371,8 @@ function buildPostSnapshot() {
           DAY_KEYS.map(day => [day, data[name][day].hours])
         ),
         totalHours: Number(totalHours.toFixed(2)),
+        // Paid time off for the week: in total hours, not overtime
+        ptoHours: ptoHoursFor(name),
         approvedOvertimeHours: overtime.approvedOvertimeHours,
         withinApproval: overtime.withinApproval,
         unapprovedOvertimeHours: overtime.unapprovedOvertimeHours
@@ -8255,6 +8667,9 @@ function describeTimeOffEntry(entry) {
 async function loadTimeOffForWeek(weekStart) {
   if (!weekStart) return;
 
+  // PTO hours belong to the same week
+  const ptoLoading = loadPtoForWeek(weekStart);
+
   try {
     const response = await fetch(
       `/api/time-off-schedule?store=${encodeURIComponent(state.store)}&week=${encodeURIComponent(weekStart)}`,
@@ -8273,7 +8688,10 @@ async function loadTimeOffForWeek(weekStart) {
     timeOffData = { week: weekStart, timeOff: [], availability: {}, failed: true };
   }
 
+  await ptoLoading;
+
   renderTimeOffPanel();
+  renderPtoPanel();
 
   // Redraw the shift tables so conflicts (including ones from a template
   // that was just loaded) are marked; this also refreshes the warnings

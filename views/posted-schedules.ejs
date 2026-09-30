@@ -85,8 +85,12 @@
   <div class="top-bar">
     <h1>Posted Schedules</h1>
     <div class="top-actions">
-      <a href="/schedule-approvals" class="btn btn-back">Schedule Approvals</a>
-      <a href="/paychex-ids" class="btn btn-back">Paychex IDs</a>
+      <% if (isAdmin) { %>
+        <a href="/schedule-approvals" class="btn btn-back">Schedule Approvals</a>
+        <a href="/paychex-ids" class="btn btn-back">Paychex IDs</a>
+      <% } else { %>
+        <a href="<%= schedulePath %>" class="btn btn-back"><%= store %> Schedule</a>
+      <% } %>
       <a href="/" class="btn btn-back">⬅ Home</a>
     </div>
   </div>
@@ -142,7 +146,7 @@
           <% if (selected.hasPending) { %>
             <span class="pending-note no-print">
               A newer version of this week is waiting for approval.
-              <a href="/schedule-approvals">Review it</a>
+              <% if (isAdmin) { %><a href="/schedule-approvals">Review it</a><% } %>
             </span>
           <% } %>
           <% const sync = selected.paychexSync; %>
@@ -162,7 +166,7 @@
               Not sent to Paychex yet.
             <% } %>
           </div>
-          <% if (selected.sentToPaychex.length) { %>
+          <% if (isAdmin && selected.sentToPaychex.length) { %>
             <% const sentTotal = selected.sentToPaychex.reduce((sum, entry) => sum + entry.count, 0) %>
             <div class="paychex-reset no-print">
               <span class="meta">
@@ -189,6 +193,7 @@
     </div>
   <% } %>
 
+  <% if (isAdmin) { %>
   <div class="card paychex-card no-print">
     <h2>Send approved schedules to Paychex</h2>
     <ol>
@@ -217,9 +222,11 @@
     </div>
     <div class="sync-key-box" id="syncKeyBox" hidden></div>
   </div>
+  <% } %>
 
 </div>
 
+<% if (isAdmin) { %>
 <script>
 async function syncKeyRequest(method) {
   const response = await fetch('/api/paychex-sync/key', {
@@ -232,7 +239,7 @@ async function syncKeyRequest(method) {
   return result;
 }
 
-document.getElementById('createSyncKeyBtn').addEventListener('click', async () => {
+document.getElementById('createSyncKeyBtn')?.addEventListener('click', async () => {
   const replacing = document.getElementById('revokeSyncKeyBtn');
   if (replacing && !confirm('Replace your sync key? The script will stop working until you paste the new key into its Settings.')) return;
 
@@ -304,5 +311,6 @@ document.getElementById('revokeSyncKeyBtn')?.addEventListener('click', async () 
   }
 });
 </script>
+<% } %>
 </body>
 </html>

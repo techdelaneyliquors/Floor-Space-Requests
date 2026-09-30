@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Delaney → Paychex schedule sender
 // @namespace    delaney-schedule
-// @version      1.0.2
+// @version      1.0.3
 // @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
 // @match        https://paychex.flextime.paychex.com/*
 // @grant        GM_xmlhttpRequest
@@ -393,14 +393,12 @@
 
       renderShifts();
 
-      if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) {
-        say(`Stopped after ${failedInARow} failures in a row: ${failures[failures.length - 1].reason}`, 'error');
-        break;
-      }
+      if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) break;
       if (index < toSend.length - 1) await sleep(SEND_DELAY_MS);
     }
 
     const count = status => state.shifts.filter(item => item.status === status).length;
+    say('Saving the results in the Delaney app…');
     await app('POST', '/api/paychex-sync/result', {
       store: week.store,
       weekStart: week.weekStart,
@@ -417,7 +415,10 @@
     personSelect.disabled = false;
     renderShifts();
 
-    if (failedInARow < STOP_AFTER_FAILURES_IN_A_ROW) {
+    // The final message comes after the results are saved
+    if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) {
+      say(`Stopped after ${failedInARow} failures in a row: ${failures[failures.length - 1].reason}`, 'error');
+    } else {
       say(failures.length
         ? `Done: ${added} added, ${failures.length} failed (see the list). Refresh the scheduler to see the new shifts.`
         : `Done: ${added} shift${added === 1 ? '' : 's'} added. Refresh the scheduler to see them.`,

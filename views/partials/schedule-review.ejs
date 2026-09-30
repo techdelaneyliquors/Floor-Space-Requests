@@ -35,6 +35,7 @@
             <th><%= day.charAt(0).toUpperCase() + day.slice(1) %></th>
           <% }) %>
           <% if (review.hasHours) { %>
+            <% if (review.hasPto) { %><th>PTO</th><% } %>
             <th>Hours</th>
             <th>Approved OT</th>
             <th>OT Status</th>
@@ -63,8 +64,11 @@
             <% }) %>
 
             <% if (review.hasHours) { %>
+              <% if (review.hasPto) { %>
+                <td class="metric pto-cell"><%= row.ptoHours ? row.ptoHours.toFixed(2) : '' %></td>
+              <% } %>
               <td class="metric <%= row.hasChangedShift ? 'changed-shift' : '' %>">
-                <%= row.hasHours ? row.totalHours.toFixed(2) : '' %>
+                <%= row.hasHours ? (row.totalHours + row.ptoHours).toFixed(2) : '' %>
               </td>
               <td class="metric">
                 <%= row.hasHours ? row.approvedOvertimeHours.toFixed(2) : '' %>
@@ -84,6 +88,9 @@
             <% review.dayTotals.forEach(total => { %>
               <td class="metric"><%= total.toFixed(2) %></td>
             <% }) %>
+            <% if (review.hasPto) { %>
+              <td class="metric pto-cell"><%= review.ptoTotal.toFixed(2) %></td>
+            <% } %>
             <td class="metric"><%= review.grandTotal.toFixed(2) %></td>
             <td class="metric"><%= review.totalApprovedOvertime.toFixed(2) %></td>
             <td class="<%= review.totalOverApproval > 0 ? 'ot-over' : 'ot-ok' %>">
