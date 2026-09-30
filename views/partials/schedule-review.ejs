@@ -38,7 +38,7 @@
             <% if (review.hasPto) { %><th>PTO</th><% } %>
             <th>Hours</th>
             <th>Approved OT</th>
-            <th>OT Status</th>
+            <th>Paid OT</th>
           <% } %>
         </tr>
       </thead>
@@ -73,9 +73,10 @@
               <td class="metric">
                 <%= row.hasHours ? row.approvedOvertimeHours.toFixed(2) : '' %>
               </td>
-              <td class="<%= row.withinApproval ? 'ot-ok' : 'ot-over' %>">
+              <%# Hourly: every hour over 40 is paid OT (red when over their approved OT) %>
+              <td class="metric <%= row.salaried ? 'ot-salaried' : (row.withinApproval ? '' : 'ot-over') %>">
                 <% if (row.hasHours) { %>
-                  <%= row.withinApproval ? 'Within Approval' : `${row.unapprovedOvertimeHours.toFixed(2)} Over` %>
+                  <%= row.salaried ? 'Salaried' : row.paidOvertimeHours.toFixed(2) %>
                 <% } %>
               </td>
             <% } %>
@@ -93,10 +94,8 @@
             <% } %>
             <td class="metric"><%= review.grandTotal.toFixed(2) %></td>
             <td class="metric"><%= review.totalApprovedOvertime.toFixed(2) %></td>
-            <td class="<%= review.totalOverApproval > 0 ? 'ot-over' : 'ot-ok' %>">
-              <%= review.totalOverApproval > 0
-                ? `${review.totalOverApproval.toFixed(2)} Over`
-                : 'Within Approval' %>
+            <td class="metric <%= review.totalOverApproval > 0 ? 'ot-over' : '' %>">
+              <%= review.totalPaidOvertime.toFixed(2) %>
             </td>
           </tr>
         <% } %>

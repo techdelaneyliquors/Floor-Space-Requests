@@ -680,6 +680,7 @@ td.budget-total { white-space: nowrap; }
 .pto-table .pto-status { font-size: 12px; color: #15803d; min-height: 1em; }
 .pto-table .pto-status.error { color: #b91c1c; }
 td.pto-cell { color: #7c2d12; font-weight: 600; }
+td.ot-salaried { color: #475569; font-style: italic; text-align: center; }
 
 /* Previous week: sick days */
 .sick-day-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
@@ -1404,15 +1405,15 @@ td.budget-within, td.budget-over {
   font-size: 9px !important;
 }
 
-/* OT column */
+/* Planned OT column */
 #previousWeekComparisonTable th:nth-last-child(2),
 #previousWeekComparisonTable td:nth-last-child(2) {
-  width: 30px !important;
-  min-width: 30px !important;
+  width: 35px !important;
+  min-width: 35px !important;
   font-size: 9px !important;
 }
 
-/* OT Status */
+/* Paid OT */
 #previousWeekComparisonTable th:last-child,
 #previousWeekComparisonTable td:last-child {
   width: 35px !important;
@@ -1953,7 +1954,18 @@ previousWeekEnd:
   // [{ employeeNumber, date, type, hours }]
   sickDays:
     <%- safeJson(incoming.sickDays || []) %>,
+
+  // Employee numbers marked salaried on the Paychex IDs page: no paid OT
+  salariedEmployeeNumbers:
+    <%- safeJson(incoming.salariedEmployeeNumbers || []) %>,
   };
+
+  const isSalaried = employeeNumber =>
+    Boolean(employeeNumber) && state.salariedEmployeeNumbers.includes(String(employeeNumber));
+
+  // Hourly employees are paid overtime for every hour over 40; salaried, none
+  const paidOvertimeFor = (employeeNumber, workedHours) =>
+    isSalaried(employeeNumber) ? 0 : Math.max(0, Number(workedHours || 0) - 40);
 
   // Preset coverage rows for this store (config/scheduleStores.js). Blank means
   // no preset window; a loaded template replaces these.
@@ -4843,26 +4855,7 @@ function generateScheduleComments() {
           }
         </td>
 
-        <td class="${
-          overtimeApproval
-            .withinApproval
-              ? 'overtime-approved'
-              : 'overtime-over-limit'
-        }">
-
-          ${
-            overtimeApproval
-              .withinApproval
-                ? 'Within Approval'
-                : (
-                    overtimeApproval
-                      .unapprovedOvertimeHours
-                      .toFixed(2) +
-                    ' Over'
-                  )
-          }
-
-        </td>
+        ${paidOvertimeCell(employeeNumber, total, overtimeApproval.approvedOvertimeHours, 'their approved OT')}
 
       </tr>
     `;
@@ -4909,9 +4902,10 @@ function generateScheduleComments() {
 
       totals.approved += approval.approvedOvertimeHours;
       totals.over += approval.unapprovedOvertimeHours;
+      totals.paid += paidOvertimeFor(employeeNumber, weeklyHours);
       return totals;
     },
-    { approved: 0, over: 0 }
+    { approved: 0, over: 0, paid: 0 }
   );
 
   bodyHtml += `
@@ -4937,16 +4931,8 @@ function generateScheduleComments() {
         ${overtimeTotals.approved.toFixed(2)}
       </td>
 
-      <td class="${
-        overtimeTotals.over > 0
-          ? 'overtime-over-limit'
-          : 'overtime-approved'
-      }">
-        ${
-          overtimeTotals.over > 0
-            ? `${overtimeTotals.over.toFixed(2)} Over`
-            : 'Within Approval'
-        }
+      <td class="metric ${overtimeTotals.over > 0 ? 'overtime-over-limit' : ''}">
+        ${overtimeTotals.paid.toFixed(2)}
       </td>
 
     </tr>
@@ -5058,7 +5044,7 @@ function generateScheduleComments() {
         </th>
 
         <th>
-          OT Status
+          Paid OT
         </th>
 
       </tr>
@@ -5970,6 +5956,8 @@ function renderPreviousWeekDates() {
    * These values are used in the final TOTAL row.
    */
   let totalActualOvertime = 0;
+  let totalPlannedOvertime = 0;
+  let totalPaidOvertime = 0;
   let totalApprovedOvertime = 0;
   let totalOverApproval = 0;
 
@@ -6065,6 +6053,13 @@ function renderPreviousWeekDates() {
 
         totalActualOvertime +=
           overtimeApproval.overtimeHours;
+
+        // Planned OT: scheduled hours over 40. Paid OT: clocked hours over
+        // 40 (hourly only; paid sick days aren't overtime). Salaried: none.
+        const salaried = isSalaried(employeeIdentifier);
+        const plannedOvertime = salaried ? 0 : Math.max(0, scheduledTotal - 40);
+        totalPlannedOvertime += plannedOvertime;
+        totalPaidOvertime += paidOvertimeFor(employeeIdentifier, clockedTotal);
 
         totalApprovedOvertime +=
           overtimeApproval
@@ -6235,36 +6230,6 @@ function renderPreviousWeekDates() {
             `;
           }).join('');
 
-        /*
-         * The employee is within approval when the
-         * actual overtime does not exceed their
-         * approved overtime allowance.
-         */
-        const overtimeStatusClass =
-          overtimeApproval.withinApproval
-            ? 'overtime-approved'
-            : 'overtime-over-limit';
-
-        let overtimeStatusText = '';
-
-        if (
-          overtimeApproval.overtimeHours ===
-          0
-        ) {
-          overtimeStatusText =
-            'No OT';
-        } else if (
-          overtimeApproval.withinApproval
-        ) {
-          overtimeStatusText =
-            'Appr.';
-        } else {
-          overtimeStatusText =
-            `${overtimeApproval
-              .unapprovedOvertimeHours
-              .toFixed(2)} Over`;
-        }
-
         return `
           <tr>
             <td>
@@ -6294,20 +6259,10 @@ function renderPreviousWeekDates() {
             </td>
 
             <td class="comparison-hours">
-              ${
-                overtimeApproval
-                  .overtimeHours
-                  .toFixed(2)
-              }
+              ${salaried ? '—' : plannedOvertime.toFixed(2)}
             </td>
 
-            <td class="${overtimeStatusClass}">
-              ${escapeHtml(
-                overtimeStatusText
-              )}
-
-              
-            </td>
+            ${paidOvertimeCell(employeeIdentifier, clockedTotal, plannedOvertime, 'the planned OT')}
           </tr>
         `;
       })
@@ -6353,28 +6308,8 @@ function renderPreviousWeekDates() {
       </td>
     `).join('');
 
-  let overallOvertimeStatus = '';
-
-  let overallOvertimeClass =
-    'overtime-approved';
-
-  if (totalActualOvertime === 0) {
-  overallOvertimeStatus =
-    'No OT';
-}
-else if (totalOverApproval > 0) {
-  overallOvertimeStatus =
-    `${Number(
-      totalOverApproval.toFixed(2)
-    )} Over`;
-
-  overallOvertimeClass =
-    'overtime-over-limit';
-}
-else {
-  overallOvertimeStatus =
-    'Approved';
-}
+  const paidOverPlanned =
+    totalPaidOvertime - totalPlannedOvertime > 0.005;
 
   const totalRow = `
     <tr class="total-row">
@@ -6398,16 +6333,11 @@ else {
       </td>
 
       <td class="metric">
-        ${totalActualOvertime.toFixed(2)}
+        ${totalPlannedOvertime.toFixed(2)}
       </td>
 
-      <td class="
-        metric
-        ${overallOvertimeClass}
-      ">
-        ${overallOvertimeStatus}
-
-        
+      <td class="metric ${paidOverPlanned ? 'overtime-over-limit' : ''}">
+        ${totalPaidOvertime.toFixed(2)}
       </td>
     </tr>
   `;
@@ -6437,12 +6367,12 @@ else {
           Δ
         </th>
 
-        <th>
-          OT
+        <th title="Scheduled hours over 40">
+          Planned OT
         </th>
 
-        <th>
-          OT Status
+        <th title="Worked hours over 40 (hourly employees)">
+          Paid OT
         </th>
       </tr>
     </thead>
@@ -7747,6 +7677,26 @@ function budgetTotalCell(total, weekStart, label) {
   `;
 }
 
+/*
+ * Paid OT cell. Salaried employees show "Salaried" (no paid overtime);
+ * hourly employees show every hour over 40, in red when it's more than
+ * `limit` (their approved OT on the schedule, the planned OT for the
+ * previous week).
+ */
+function paidOvertimeCell(employeeNumber, workedHours, limit, limitLabel) {
+  if (isSalaried(employeeNumber)) {
+    return '<td class="ot-salaried">Salaried</td>';
+  }
+  const paid = paidOvertimeFor(employeeNumber, workedHours);
+  const over = paid - Number(limit || 0) > 0.005;
+  return `
+    <td class="metric ${over ? 'overtime-over-limit' : ''}"
+        title="${over ? escapeHtml(`${(paid - limit).toFixed(2)} hours more than ${limitLabel}`) : ''}">
+      ${paid.toFixed(2)}
+    </td>
+  `;
+}
+
 function budgetWeekLabel(weekStart) {
   return currentMondayForPosting
     ? postingWeekLabel(weekStart)
@@ -8373,6 +8323,8 @@ function buildPostSnapshot() {
         totalHours: Number(totalHours.toFixed(2)),
         // Paid time off for the week: in total hours, not overtime
         ptoHours: ptoHoursFor(name),
+        salaried: isSalaried(employeeNumber),
+        paidOvertimeHours: Number(paidOvertimeFor(employeeNumber, totalHours).toFixed(2)),
         approvedOvertimeHours: overtime.approvedOvertimeHours,
         withinApproval: overtime.withinApproval,
         unapprovedOvertimeHours: overtime.unapprovedOvertimeHours

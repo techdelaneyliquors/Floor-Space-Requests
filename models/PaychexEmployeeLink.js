@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 
-// How one of our employees is identified in Paychex Flex Time, per store.
+// How one of our employees is identified in Paychex Flex Time, per store,
+// and whether they're salaried.
 // Matched to the schedule roster by store + employee number, and used to
 // send approved shifts into Paychex's scheduler:
 //   paychexUserId -> AddEditShift "UserID" (Flex Time's internal user id)
@@ -29,11 +30,13 @@ const paychexEmployeeLinkSchema = new mongoose.Schema({
     default: ''
   },
 
+  // Optional so an employee can be marked salaried before their Paychex
+  // IDs are known; shifts aren't sent to Paychex without it
   paychexUserId: {
     type: Number,
-    required: true,
     min: 1,
-    validate: Number.isInteger
+    default: null,
+    validate: value => value === null || Number.isInteger(value)
   },
 
   ll1: {
@@ -41,6 +44,13 @@ const paychexEmployeeLinkSchema = new mongoose.Schema({
     min: 0,
     default: null,
     validate: value => value === null || Number.isInteger(value)
+  },
+
+  // Salaried employees get no paid overtime on the schedules; everyone
+  // else is paid for all hours over 40 in a week
+  salaried: {
+    type: Boolean,
+    default: false
   },
 
   // Where the last change came from: the admin page, a paste, a workbook

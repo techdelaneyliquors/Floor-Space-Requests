@@ -3450,6 +3450,8 @@ function cleanScheduleSnapshot(input) {
 
       // Paid time off hours for the week (not shifts; not overtime)
       const ptoHours = cleanHours(employee.ptoHours, 168)
+      const totalHours = cleanHours(employee.totalHours, 168)
+      const salaried = employee.salaried === true
 
       if (shiftCount || ptoHours > 0) {
         employees.push({
@@ -3459,8 +3461,16 @@ function cleanScheduleSnapshot(input) {
           // Review details for admins (employees see names and times only)
           changed,
           hours,
-          totalHours: cleanHours(employee.totalHours, 168),
+          totalHours,
           ptoHours,
+          // Salaried: no paid overtime. Hourly: paid for every hour over 40
+          // (worked out here if a page from before this change left it out)
+          salaried,
+          paidOvertimeHours: salaried
+            ? 0
+            : employee.paidOvertimeHours === undefined || employee.paidOvertimeHours === null
+              ? Math.max(0, Math.round((totalHours - 40) * 100) / 100)
+              : cleanHours(employee.paidOvertimeHours, 168),
           approvedOvertimeHours: cleanHours(employee.approvedOvertimeHours, 168),
           withinApproval: employee.withinApproval !== false,
           unapprovedOvertimeHours: cleanHours(employee.unapprovedOvertimeHours, 168)
@@ -3812,6 +3822,13 @@ function buildScheduleReview(snapshot, liveSnapshot) {
       }),
       totalHours: employee.totalHours,
       ptoHours: employee.ptoHours || 0,
+      salaried: employee.salaried === true,
+      // Older submissions had no paid OT: every scheduled hour over 40
+      paidOvertimeHours: employee.salaried === true
+        ? 0
+        : typeof employee.paidOvertimeHours === 'number'
+          ? employee.paidOvertimeHours
+          : Math.max(0, (employee.totalHours || 0) - 40),
       approvedOvertimeHours: employee.approvedOvertimeHours,
       withinApproval: employee.withinApproval !== false,
       unapprovedOvertimeHours: employee.unapprovedOvertimeHours,
@@ -3843,6 +3860,8 @@ function buildScheduleReview(snapshot, liveSnapshot) {
       sum + (row.hasHours ? row.approvedOvertimeHours : 0), 0),
     totalOverApproval: rows.reduce((sum, row) =>
       sum + (row.hasHours ? row.unapprovedOvertimeHours : 0), 0),
+    totalPaidOvertime: rows.reduce((sum, row) =>
+      sum + (row.hasHours ? row.paidOvertimeHours : 0), 0),
     // In the live version but no longer scheduled at all
     removedFromLive: live
       ? live.filter(employee => !employees.some(e => e.name === employee.name))
@@ -5403,6 +5422,11 @@ for (const store of STORE_LIST) {
           : ''
         const sickDays = previousMonday ? await sickDaysForWeek(store, previousMonday) : []
 
+        // Employee numbers marked salaried on the Paychex IDs page (no paid OT)
+        const salariedEmployeeNumbers = (await PaychexEmployeeLink.find({ store, salaried: true })
+          .select('employeeNumber')
+          .lean()).map(link => link.employeeNumber)
+
         return res.render('Store Schedule.ejs', {
           user: req.user,
           // The manager's own view of this store's approved schedule
@@ -5430,7 +5454,8 @@ for (const store of STORE_LIST) {
             previousWeekStart: settings.previousWeekStart || null,
             previousWeekEnd: settings.previousWeekEnd || null,
             hoursBudget,
-            sickDays
+            sickDays,
+            salariedEmployeeNumbers
           }
         })
       } catch (err) {
@@ -5767,8 +5792,9 @@ function paychexLinkView(link) {
   return {
     employeeNumber: link.employeeNumber,
     employeeName: link.employeeName || '',
-    paychexUserId: link.paychexUserId,
+    paychexUserId: typeof link.paychexUserId === 'number' ? link.paychexUserId : null,
     ll1: typeof link.ll1 === 'number' ? link.ll1 : null,
+    salaried: link.salaried === true,
     source: link.source,
     updatedBy: link.updatedBy && link.updatedBy.name,
     updatedAt: link.updatedAt
@@ -5787,24 +5813,38 @@ function cleanWholeNumber(value, min, label, required) {
   return { value: Number(text) }
 }
 
+// "yes", "y", "true", "1", "salaried", "x" -> true; blank -> undefined (leave as is)
+function cleanSalaried(value) {
+  if (value === true || value === false) return value
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text) return undefined
+  if (['yes', 'y', 'true', '1', 'salaried', 'salary', 'x'].includes(text)) return true
+  if (['no', 'n', 'false', '0', 'hourly'].includes(text)) return false
+  return null
+}
+
 // One incoming row -> { link } or { error }
 function cleanPaychexLink(row) {
   const employeeNumber = String((row && row.employeeNumber) ?? '').trim()
   if (!employeeNumber) return { error: 'Employee number is required.' }
   if (employeeNumber.length > 32) return { error: 'Employee number is too long.' }
 
-  const userId = cleanWholeNumber(row.paychexUserId, 1, 'Paychex User ID', true)
+  const userId = cleanWholeNumber(row.paychexUserId, 1, 'Paychex User ID', false)
   if (userId.error) return { error: userId.error }
 
   const ll1 = cleanWholeNumber(row.ll1, 0, 'LL1', false)
   if (ll1.error) return { error: ll1.error }
+
+  const salaried = cleanSalaried(row.salaried)
+  if (salaried === null) return { error: 'Salaried must be yes or no.' }
 
   return {
     link: {
       employeeNumber,
       employeeName: cleanText(row.employeeName, 120),
       paychexUserId: userId.value,
-      ll1: ll1.value
+      ll1: ll1.value,
+      ...(salaried === undefined ? {} : { salaried })
     }
   }
 }
@@ -5868,6 +5908,13 @@ app.put(
         seen.add(cleaned.link.employeeNumber)
 
         const { employeeName, ...ids } = cleaned.link
+
+        // Nothing left to keep (no IDs, not salaried): remove the record
+        if (ids.paychexUserId === null && ids.ll1 === null && ids.salaried === false) {
+          operations.push({ deleteOne: { filter: { store, employeeNumber: ids.employeeNumber } } })
+          return
+        }
+
         operations.push({
           updateOne: {
             filter: { store, employeeNumber: ids.employeeNumber },
@@ -5953,7 +6000,8 @@ app.get('/paychex-ids', ...adminPage, async (req, res) => {
       stores: STORE_LIST,
       store,
       rows,
-      linkedCount: rows.filter(row => row.onRoster && row.link).length,
+      linkedCount: rows.filter(row => row.onRoster && row.link && row.link.paychexUserId).length,
+      salariedCount: rows.filter(row => row.onRoster && row.link && row.link.salaried).length,
       rosterCount: roster.length
     })
   } catch (err) {
@@ -6120,7 +6168,7 @@ app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
 
       let status = 'ready'
       if (!employeeNumber) status = 'no-employee-number'
-      else if (!link) status = 'no-paychex-ids'
+      else if (!link || !link.paychexUserId) status = 'no-paychex-ids'
       else if (typeof link.ll1 !== 'number') status = 'no-ll1'
       else if (sentKeys.has(shiftKey)) status = 'already-sent'
 
@@ -6133,7 +6181,7 @@ app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
         shiftText: shift,
         start: startText,
         end: endText,
-        paychexUserId: link ? link.paychexUserId : null,
+        paychexUserId: link && link.paychexUserId ? link.paychexUserId : null,
         ll1: link && typeof link.ll1 === 'number' ? link.ll1 : null,
         status
       }

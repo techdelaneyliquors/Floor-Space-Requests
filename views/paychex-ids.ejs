@@ -30,6 +30,9 @@
       font-family: inherit; font-size: 14px;
     }
     .ids-table input.changed { border-color: #2563eb; background: #eff6ff; }
+    .ids-table td.salaried-cell { text-align: center; }
+    .ids-table td.salaried-cell.changed { background: #eff6ff; }
+    .ids-table input[type="checkbox"] { width: 18px; height: 18px; }
     .ids-table input.invalid { border-color: #dc2626; background: #fef2f2; }
     .ids-table tr.off-roster td { color: #92400e; background: #fffbeb; }
     .muted { color: #64748b; font-size: 12px; }
@@ -77,13 +80,16 @@
       </label>
       <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
       <span class="summary">
-        <strong><%= linkedCount %> of <%= rosterCount %></strong> employees on the <%= store %> schedule have Paychex IDs.
+        <strong><%= linkedCount %> of <%= rosterCount %></strong> employees on the <%= store %> schedule have Paychex IDs;
+        <strong><%= salariedCount %></strong> marked salaried.
       </span>
     </form>
     <p class="muted" style="margin:10px 0 0;">
       The <strong>Paychex User ID</strong> is Flex Time's own number for the person (the <code>UserID</code> the
       scheduler sends), not their employee number. <strong>LL1</strong> is the labor level 1 value sent with
-      each shift (for example the location). Employees are matched by store and employee number.
+      each shift (for example the location). <strong>Salaried</strong> employees get no paid overtime on the
+      schedules; everyone else is paid overtime for every hour over 40 in a week. Employees are matched by
+      store and employee number.
     </p>
   </div>
 
@@ -100,6 +106,7 @@
               <th>Employee #</th>
               <th>Paychex User ID</th>
               <th>LL1</th>
+              <th title="Salaried employees get no paid overtime on the schedules">Salaried</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -109,22 +116,27 @@
               <tr class="<%= row.onRoster ? '' : 'off-roster' %>"
                   data-employee-number="<%= row.employeeNumber %>"
                   data-employee-name="<%= row.name %>"
-                  data-saved-user="<%= row.link ? row.link.paychexUserId : '' %>"
-                  data-saved-ll1="<%= row.link && row.link.ll1 !== null ? row.link.ll1 : '' %>">
+                  data-saved-user="<%= row.link && row.link.paychexUserId !== null ? row.link.paychexUserId : '' %>"
+                  data-saved-ll1="<%= row.link && row.link.ll1 !== null ? row.link.ll1 : '' %>"
+                  data-saved-salaried="<%= row.link && row.link.salaried ? 'true' : 'false' %>">
                 <td><%= row.name %></td>
                 <td><%= row.role %></td>
                 <td><%= row.employeeNumber %></td>
                 <td><input type="text" inputmode="numeric" class="user-input" aria-label="Paychex User ID for <%= row.name %>"
-                           value="<%= row.link ? row.link.paychexUserId : '' %>"></td>
+                           value="<%= row.link && row.link.paychexUserId !== null ? row.link.paychexUserId : '' %>"></td>
                 <td><input type="text" inputmode="numeric" class="ll1-input" aria-label="LL1 for <%= row.name %>"
                            value="<%= row.link && row.link.ll1 !== null ? row.link.ll1 : '' %>"></td>
+                <td class="salaried-cell">
+                  <input type="checkbox" class="salaried-input" aria-label="<%= row.name %> is salaried"
+                         <%= row.link && row.link.salaried ? 'checked' : '' %>>
+                </td>
                 <td>
                   <% if (!row.onRoster) { %>
                     <span>Not on the schedule roster</span>
-                  <% } else if (row.link) { %>
+                  <% } else if (row.link && row.link.paychexUserId !== null) { %>
                     <span class="status-ok">Saved</span>
                   <% } else { %>
-                    <span class="status-missing">Missing</span>
+                    <span class="status-missing">Missing Paychex ID</span>
                   <% } %>
                   <% if (row.link && row.link.updatedAt) { %>
                     <div class="muted">
@@ -156,8 +168,9 @@
   <div class="card">
     <h2 style="margin-top:0;">Paste from a spreadsheet</h2>
     <p class="muted" style="margin-top:0;">
-      One employee per line: <code>Employee #</code>, <code>Paychex User ID</code>, <code>LL1</code>
-      (columns copied from Excel work, or separate them with commas). A header row is skipped.
+      One employee per line: <code>Employee #</code>, <code>Paychex User ID</code>, <code>LL1</code>, and
+      optionally <code>Salaried</code> (yes/no) (columns copied from Excel work, or separate them with commas).
+      A header row is skipped.
       Employees already saved are updated.
     </p>
     <textarea id="pasteBox" placeholder="1042	251	3
@@ -217,9 +230,15 @@ async function callApi(method, body) {
 const isWhole = (text, min) => /^\d+$/.test(text) && Number(text) >= min;
 
 // Highlight edited and invalid cells as the admin types
+document.getElementById('idsTable')?.addEventListener('change', event => {
+  if (!event.target.classList.contains('salaried-input')) return;
+  const row = event.target.closest('tr');
+  event.target.closest('td').classList.toggle('changed', String(event.target.checked) !== row.dataset.savedSalaried);
+});
+
 document.getElementById('idsTable')?.addEventListener('input', event => {
   const row = event.target.closest('tr');
-  if (!row) return;
+  if (!row || event.target.type === 'checkbox') return;
   const input = event.target;
   const saved = input.classList.contains('user-input') ? row.dataset.savedUser : row.dataset.savedLl1;
   const value = input.value.trim();
@@ -237,18 +256,23 @@ document.getElementById('saveAllBtn')?.addEventListener('click', async () => {
   document.querySelectorAll('#idsTable tbody tr').forEach(row => {
     const userId = row.querySelector('.user-input').value.trim();
     const ll1 = row.querySelector('.ll1-input').value.trim();
-    const changed = userId !== row.dataset.savedUser || ll1 !== row.dataset.savedLl1;
-    if (!changed || !userId) return;
+    const salaried = row.querySelector('.salaried-input').checked;
+    const changed =
+      userId !== row.dataset.savedUser ||
+      ll1 !== row.dataset.savedLl1 ||
+      String(salaried) !== row.dataset.savedSalaried;
+    if (!changed) return;
     links.push({
       employeeNumber: row.dataset.employeeNumber,
       employeeName: row.dataset.employeeName,
       paychexUserId: userId,
-      ll1
+      ll1,
+      salaried
     });
   });
 
   if (!links.length) {
-    showMessage(message, 'Nothing to save. Enter a Paychex User ID for an employee first.', 'error');
+    showMessage(message, 'Nothing to save. Change a Paychex User ID, LL1 or Salaried first.', 'error');
     return;
   }
 
@@ -295,6 +319,8 @@ function parsePaste(text) {
       employeeNumber: cells[0] || '',
       paychexUserId: cells[1] || '',
       ll1: cells[2] || '',
+      // Optional 4th column: yes/no (blank leaves it unchanged)
+      salaried: cells[3] || '',
       employeeName: rosterNames[cells[0]] || ''
     }));
 }
