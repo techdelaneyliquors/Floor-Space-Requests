@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Delaney → Paychex schedule sender
 // @namespace    delaney-schedule
-// @version      1.0.1
+// @version      1.0.2
 // @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
 // @match        https://paychex.flextime.paychex.com/*
 // @grant        GM_xmlhttpRequest
@@ -215,8 +215,15 @@
     el('div', { class: 'dp-row' },
       keyInput,
       el('button', { class: 'dp-plain', type: 'button', onclick: () => {
-        GM_setValue('syncKey', keyInput.value.trim());
+        // Tolerate "Bearer ", quotes and stray spaces/line breaks from copying
+        const key = keyInput.value.replace(/^\s*bearer\s+/i, '').replace(/["'\s]/g, '');
+        if (!/^[A-Za-z0-9_-]{20,200}$/.test(key)) {
+          say('That doesn\'t look like a sync key. On Posted Schedules, click "Replace my sync key", use its Copy button, and paste here.', 'error');
+          return;
+        }
+        GM_setValue('syncKey', key);
         keyInput.value = '';
+        say('Key saved. Loading…');
         loadWeeks();
       } }, 'Save key')
     ),
