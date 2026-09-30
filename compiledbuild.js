@@ -5377,6 +5377,111 @@ app.put(
   }
 )
 
+// ------------------------
+// PREVIOUS WEEK REVIEW: "READY FOR ADMIN REVIEW" EMAIL
+// ------------------------
+//
+// A manager (or admin) presses "Ping admin" at the bottom of the Previous
+// Week tab; Brevo emails the reviewer that the store's review is ready.
+// Limited to once per 15 minutes per store to protect the daily email limit.
+
+const PREVIOUS_WEEK_PING_INTERVAL_MS = 15 * 60 * 1000
+
+function previousWeekReviewRecipients() {
+  return String(process.env.PREVIOUS_WEEK_REVIEW_NOTIFY_TO || 'sclark@delaneyliquors.com')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+}
+
+const previousWeekPingView = ping => ping && ping.sentAt
+  ? { sentAt: ping.sentAt, weekStart: ping.weekStart || '', sentBy: ping.sentBy && ping.sentBy.name }
+  : null
+
+app.post(
+  '/api/previous-week-review/ping',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    const store = req.storeName
+    try {
+      const settings = await ScheduleSettings.findOne({ store })
+        .select('previousWeekStart previousWeekEnd previousWeekReviewPing')
+        .lean()
+
+      if (!settings || !settings.previousWeekStart) {
+        return res.status(400).json({ success: false, error: 'No previous week has been uploaded for this store yet.' })
+      }
+
+      const weekStart = mondayOf(new Date(settings.previousWeekStart).toISOString().slice(0, 10))
+      const now = new Date()
+
+      // Claim the send atomically so a double click can't send twice
+      const claimed = await ScheduleSettings.findOneAndUpdate(
+        {
+          store,
+          $or: [
+            { 'previousWeekReviewPing.sentAt': { $exists: false } },
+            { 'previousWeekReviewPing.sentAt': null },
+            { 'previousWeekReviewPing.sentAt': { $lte: new Date(now.getTime() - PREVIOUS_WEEK_PING_INTERVAL_MS) } }
+          ]
+        },
+        { $set: { previousWeekReviewPing: { sentAt: now, weekStart, sentBy: personRef(req.user) } } },
+        { returnDocument: 'before' }
+      ).lean()
+
+      if (!claimed) {
+        const last = settings.previousWeekReviewPing
+        const waitMinutes = Math.max(1, Math.ceil(
+          (new Date(last.sentAt).getTime() + PREVIOUS_WEEK_PING_INTERVAL_MS - now.getTime()) / 60000
+        ))
+        return res.status(429).json({
+          success: false,
+          error: `The admin was already pinged${last.sentBy && last.sentBy.name ? ` by ${last.sentBy.name}` : ''}. You can ping again in ${waitMinutes} minute${waitMinutes === 1 ? '' : 's'}.`,
+          lastPing: previousWeekPingView(last)
+        })
+      }
+
+      const range = weekRangeText(weekStart)
+      const link = `${getAppBaseUrl()}${STORE_PAGES[store].schedulePath}`
+      const summary = `The previous week review for ${store} (week of ${range}) is ready for admin review.`
+
+      try {
+        await sendEmail({
+          to: previousWeekReviewRecipients(),
+          subject: `${store}: previous week review ready for admin review`,
+          text:
+            `${summary}\n\n` +
+            `Sent by ${req.user.name}.\n\n` +
+            `Open the ${store} schedule and go to the "Previous Week" tab: ${link}`,
+          html:
+            `<p>${escapeHtml(summary)}</p>` +
+            `<p>Sent by ${escapeHtml(req.user.name)}.</p>` +
+            `<p><a href="${escapeHtml(link)}">Open the ${escapeHtml(store)} schedule</a> and go to the "Previous Week" tab.</p>`
+        })
+      } catch (err) {
+        // Not sent: give the claim back so they can try again right away
+        await ScheduleSettings.updateOne(
+          { store },
+          claimed.previousWeekReviewPing && claimed.previousWeekReviewPing.sentAt
+            ? { $set: { previousWeekReviewPing: claimed.previousWeekReviewPing } }
+            : { $unset: { previousWeekReviewPing: 1 } }
+        )
+        console.error('Previous week review email failed:', err)
+        return res.status(502).json({ success: false, error: 'The email could not be sent. Please try again in a moment.' })
+      }
+
+      return res.json({
+        success: true,
+        lastPing: { sentAt: now, weekStart, sentBy: req.user.name }
+      })
+    } catch (err) {
+      console.error(`${store} previous week ping error:`, err)
+      return res.status(500).json({ success: false, error: 'The email could not be sent.' })
+    }
+  }
+)
+
 // Schedule page for every store: one shared view, with each store's preset
 // coverage rows and whether it schedules cashiers from config/scheduleStores.js
 for (const store of STORE_LIST) {
@@ -5456,7 +5561,8 @@ for (const store of STORE_LIST) {
             previousWeekEnd: settings.previousWeekEnd || null,
             hoursBudget,
             sickDays,
-            salariedEmployeeNumbers
+            salariedEmployeeNumbers,
+            previousWeekReviewPing: previousWeekPingView(settings.previousWeekReviewPing)
           }
         })
       } catch (err) {

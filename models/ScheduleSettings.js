@@ -78,6 +78,19 @@ approvedOvertimeHours: {
 employeeIdentifiers: {
   type: Object,
   default: {}
+},
+
+// The last "ready for admin review" email sent from the Previous Week tab
+previousWeekReviewPing: {
+  sentAt: Date,
+  weekStart: String,
+  sentBy: {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    name: String
+  }
 }
 
 }, {

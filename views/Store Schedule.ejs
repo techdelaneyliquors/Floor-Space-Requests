@@ -682,6 +682,14 @@ td.budget-total { white-space: nowrap; }
 td.pto-cell { color: #7c2d12; font-weight: 600; }
 td.ot-salaried { color: #475569; font-style: italic; text-align: center; }
 
+/* Previous week: "ready for admin review" email */
+.review-ping { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.review-ping h3 { margin: 0 0 4px; }
+.review-ping-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.review-ping-status { font-size: 13px; color: #475569; }
+.review-ping-status.ok { color: #15803d; font-weight: 600; }
+.review-ping-status.error { color: #b91c1c; font-weight: 600; }
+
 /* Previous week: sick days */
 .sick-day-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .sick-day-controls select, .sick-day-controls input { padding: 5px 6px; }
@@ -1843,6 +1851,18 @@ td.budget-within, td.budget-over {
   ></textarea>
 
 </div>
+
+<!-- MODULE 5: TELL THE ADMIN THE REVIEW IS READY -->
+<div class="section no-print review-ping">
+  <div>
+    <h3>Ready for admin review?</h3>
+    <small>Emails the admin that the <%= storeName %> previous week review is ready.</small>
+  </div>
+  <div class="review-ping-actions">
+    <button type="button" class="primary" id="previousWeekPingBtn">📧 Ping admin: review is ready</button>
+    <span id="previousWeekPingStatus" class="review-ping-status" role="status"></span>
+  </div>
+</div>
     </div>
   </section>
 
@@ -1958,6 +1978,10 @@ previousWeekEnd:
   // Employee numbers marked salaried on the Paychex IDs page: no paid OT
   salariedEmployeeNumbers:
     <%- safeJson(incoming.salariedEmployeeNumbers || []) %>,
+
+  // Last "previous week review is ready" email: { sentAt, weekStart, sentBy }
+  previousWeekReviewPing:
+    <%- safeJson(incoming.previousWeekReviewPing || null) %>,
   };
 
   const isSalaried = employeeNumber =>
@@ -8133,6 +8157,68 @@ document.addEventListener('click', async event => {
     button.disabled = false;
   }
 });
+
+/*
+ * "Ping admin: review is ready" at the bottom of the Previous Week tab.
+ * Emails the reviewer (once per 15 minutes per store) and shows when it
+ * was last sent for the uploaded week.
+ */
+function renderPreviousWeekPing(message, kind) {
+  const button = document.getElementById('previousWeekPingBtn');
+  const status = document.getElementById('previousWeekPingStatus');
+  if (!button || !status) return;
+
+  const week = previousBudgetWeek();
+  button.disabled = !week;
+
+  if (message) {
+    status.textContent = message;
+    status.className = `review-ping-status ${kind || ''}`;
+    return;
+  }
+
+  const ping = state.previousWeekReviewPing;
+  status.className = 'review-ping-status';
+  if (!week) {
+    status.textContent = 'Upload the previous week first.';
+  } else if (ping && ping.weekStart === week) {
+    const when = new Date(ping.sentAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+    status.textContent = `Admin pinged ${when}${ping.sentBy ? ` by ${ping.sentBy}` : ''}.`;
+  } else {
+    status.textContent = 'The admin hasn\'t been pinged for this week yet.';
+  }
+}
+
+document.getElementById('previousWeekPingBtn')?.addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const week = previousBudgetWeek();
+  const range = week
+    ? `${formatYmdForPosting(week, { month: 'short', day: 'numeric' })} – ${formatYmdForPosting(addDaysToYmd(week, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : '';
+  if (!confirm(`Email the admin that the ${state.store} previous week review${range ? ` (${range})` : ''} is ready for review?`)) return;
+
+  button.disabled = true;
+  renderPreviousWeekPing('Sending…');
+  try {
+    const response = await fetch('/api/previous-week-review/ping', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ store: state.store })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (result.lastPing) state.previousWeekReviewPing = result.lastPing;
+    if (!response.ok || !result.success) throw new Error(result.error || 'The email could not be sent.');
+
+    renderPreviousWeekPing(`Sent. The admin has been told the ${state.store} review is ready.`, 'ok');
+  } catch (err) {
+    renderPreviousWeekPing(err.message, 'error');
+  } finally {
+    button.disabled = !previousBudgetWeek();
+  }
+});
+
+renderPreviousWeekPing();
 
 // Saves a person's PTO whenever a "Paid" box or a day's hours change
 document.addEventListener('change', async event => {
