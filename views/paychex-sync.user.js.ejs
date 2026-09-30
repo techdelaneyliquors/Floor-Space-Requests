@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Delaney → Paychex schedule sender
 // @namespace    delaney-schedule
-// @version      1.0.0
+// @version      1.0.1
 // @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
-// @match        https://paychex.flextime.paychex.com/Dashboard/*
+// @match        https://paychex.flextime.paychex.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -30,10 +30,24 @@
   const SEND_DELAY_MS = 400;
   const STOP_AFTER_FAILURES_IN_A_ROW = 3;
 
-  // The scheduler's request token; only frames that have one can add shifts
-  const pageToken = new URLSearchParams(location.search).get('t');
-  if (!pageToken || window.innerWidth < 400) return;
+  const log = message => console.info('[Delaney → Paychex] ' + message);
+
+  // The scheduler's request token ("t"). Usually in this frame's address;
+  // otherwise Paychex puts it in the page's own links and scripts.
+  function findPageToken() {
+    const fromUrl = new URLSearchParams(location.search).get('t');
+    if (fromUrl) return fromUrl;
+    const match = /[?&]t=([0-9a-f]{32})\b/i.exec(document.documentElement.innerHTML);
+    return match ? match[1] : null;
+  }
+
+  // Paychex loads several frames; show the button once, in a visible one
+  if (window.innerWidth < 400 || window.innerHeight < 200) {
+    log(`not shown in ${location.pathname}: frame is too small (${window.innerWidth}×${window.innerHeight}).`);
+    return;
+  }
   if (document.getElementById('delaney-paychex-panel')) return;
+  log(`ready in ${location.pathname} (scheduler token ${findPageToken() ? 'found' : 'not found yet'}).`);
 
   const STATUS_TEXT = {
     'ready': 'Will be added',
@@ -109,7 +123,10 @@
     for (let level = 2; level <= 15; level++) fields['LL' + level] = '0';
     fields.Note = `Delaney schedule, week of ${weekStart}`;
 
-    const token = new URLSearchParams(location.search).get('t') || pageToken;
+    const token = findPageToken();
+    if (!token) {
+      throw new Error('Paychex\'s scheduler token was not found on this page. Open Schedules in Paychex and try again.');
+    }
     const response = await fetch(
       `${location.origin}/Dashboard/VisualScheduler/AddEditShift?t=${encodeURIComponent(token)}`,
       {
@@ -321,6 +338,10 @@
     const week = state.week;
     const toSend = selectedShifts();
     if (!week || !toSend.length) return;
+    if (!findPageToken()) {
+      say('Paychex\'s scheduler token was not found on this page. Open Schedules in Paychex (the Visual Scheduler) and use the button there.', 'error');
+      return;
+    }
     if (!confirm(`Add ${toSend.length} shift${toSend.length === 1 ? '' : 's'} to Paychex for ${week.store}, ${week.range}?`)) return;
 
     state.sending = true;
