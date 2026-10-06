@@ -3533,15 +3533,17 @@ const pipelinePersonRef = user => ({
   name: literal(user.name)
 })
 
-async function notifyScheduleApprovers(store, weekStart, submitter) {
-  const override = getAccessRequestNotifyOverride()
+// Who hears about schedules waiting for approval. SCHEDULE_APPROVAL_NOTIFY_TO
+// (comma-separated) overrides the default reviewer.
+function scheduleApprovalRecipients() {
+  return String(process.env.SCHEDULE_APPROVAL_NOTIFY_TO || 'sclark@delaneyliquors.com')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+}
 
-  const recipients = override.length
-    ? override
-    : (await User.find({ accessStatus: 'approved', role: 'admin' })
-        .select('email')
-        .lean()
-      ).map(admin => admin.email)
+async function notifyScheduleApprovers(store, weekStart, submitter) {
+  const recipients = scheduleApprovalRecipients()
 
   if (!recipients.length) return
 
