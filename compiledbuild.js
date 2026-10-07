@@ -2615,17 +2615,24 @@ app.post(
         });
       }
 
+      // Unscheduled shifts (worked a day with no scheduled shift) use the
+      // same explanation record; any amount of time worked needs one
+      const isUnscheduledShift =
+        cleanSourceExceptionId.split(':')[1] === 'unscheduled';
+
       if (
         !Number.isFinite(
           numericOvertimeHours
         ) ||
-        numericOvertimeHours < 0.5
+        (isUnscheduledShift
+          ? numericOvertimeHours <= 0
+          : numericOvertimeHours < 0.5)
       ) {
         return res.status(400).json({
           success: false,
-          error:
-            'The overtime amount must be at least ' +
-            '0.50 hours.'
+          error: isUnscheduledShift
+            ? 'The unscheduled shift has no hours worked.'
+            : 'The overtime amount must be at least 0.50 hours.'
         });
       }
 

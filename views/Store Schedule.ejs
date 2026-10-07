@@ -5470,6 +5470,34 @@ const actualDayHours =
         return;
       }
 
+      /*
+       * Worked on a day with no scheduled shift (the yellow cells). Listed
+       * with overtime: it needs a manager explanation, never points.
+       */
+      if (
+        plannedValues.length === 0 &&
+        actualValues.length > 0
+      ) {
+        exceptions.overtime.push({
+          ...baseRecord,
+
+          id: createExceptionId(
+            'unscheduled',
+            employeeNumber,
+            infractionDate
+          ),
+
+          type: 'unscheduled',
+          overtimeHours: actualDayHours,
+
+          summary:
+            `${buildName} worked an unscheduled shift on ` +
+            `${DAYS[dayIndex]} (${actualDayHours.toFixed(2)} hours).`
+        });
+
+        return;
+      }
+
       if (
         plannedValues.length > 0 &&
         actualValues.length > 0
@@ -5644,7 +5672,7 @@ function buildExceptionTimesHtml(item) {
 
   let hoursText = '';
 
-  if (item.type === 'overtime') {
+  if (item.type === 'overtime' || item.type === 'unscheduled') {
     hoursText =
       `<br>Scheduled hours: ` +
       `${item.scheduledDayHours.toFixed(2)}` +
@@ -5666,6 +5694,10 @@ function buildOvertimeReviewControls(item) {
   const sourceExceptionId =
     buildOvertimeSourceExceptionId(item);
 
+  // Unscheduled shifts use the same explanation flow (no points)
+  const unscheduled = item.type === 'unscheduled';
+  const noun = unscheduled ? 'Shift' : 'Overtime';
+
   const savedReview =
     existingOvertimeReviews[
       sourceExceptionId
@@ -5679,13 +5711,13 @@ function buildOvertimeReviewControls(item) {
     '';
 
   let buttonText =
-    'Save Overtime Explanation';
+    `Save ${noun} Explanation`;
 
   let buttonClass = '';
 
   if (savedReview) {
     buttonText =
-      'Update Overtime Explanation';
+      `Update ${noun} Explanation`;
 
     buttonClass =
       'review-saved';
@@ -5721,12 +5753,16 @@ function buildOvertimeReviewControls(item) {
       data-overtime-panel="${escapeHtml(item.id)}"
     >
       <label class="overtime-comment-label">
-        Manager overtime explanation
+        ${unscheduled
+          ? 'Manager explanation for the added shift'
+          : 'Manager overtime explanation'}
 
         <textarea
           class="exception-comment overtime-explanation"
           data-exception-id="${escapeHtml(item.id)}"
-          placeholder="Explain why the employee worked at least 30 minutes over schedule..."
+          placeholder="${unscheduled
+            ? 'Explain why the employee worked a shift they were not scheduled for...'
+            : 'Explain why the employee worked at least 30 minutes over schedule...'}"
         >${escapeHtml(savedExplanation)}</textarea>
       </label>
 
@@ -5783,7 +5819,7 @@ function renderExceptionSection(
           </div>
 
           ${
-            item.type === 'overtime'
+            item.type === 'overtime' || item.type === 'unscheduled'
               ? buildOvertimeReviewControls(item)
               : item.type === 'absence'
                 ? buildAbsenceControls(item)
@@ -5859,7 +5895,7 @@ function renderAttendanceExceptionReview(
     )}
 
     ${renderExceptionSection(
-      'Daily Overtime of 30 Minutes or More',
+      'Daily Overtime of 30 Minutes or More and Unscheduled Shifts',
       'overtime-heading',
       exceptions.overtime
     )}
@@ -6544,9 +6580,10 @@ function apiInfractionType(type) {
 function buildOvertimeSourceExceptionId(
   item
 ) {
+  // Unscheduled shifts get their own ID so they never mix with overtime
   return [
     state.store,
-    'overtime',
+    item.type === 'unscheduled' ? 'unscheduled' : 'overtime',
     item.employeeNumber,
     item.infractionDate
   ].join(':');
