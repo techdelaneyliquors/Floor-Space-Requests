@@ -48,6 +48,26 @@ const cookieParser = require('cookie-parser')
 
 const app = express()
 app.set('trust proxy', 1);
+app.disable('x-powered-by')
+
+// Browser security headers on every response. The pages use inline scripts,
+// so the CSP doesn't restrict scripts; it stops other sites framing the app
+// (clickjacking), plugins, <base> tag hijacking and off-site form posts.
+// Referrer-Policy keeps tokens in reset/verify URLs from leaking to other
+// sites (e.g. Google Fonts).
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    'Content-Security-Policy': "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+  })
+  if (req.secure) {
+    res.set('Strict-Transport-Security', 'max-age=15552000')
+  }
+  next()
+})
 const mongoose = require('mongoose')
 const User = require('./models/User')
 const LoginThrottle = require('./models/LoginThrottle')
@@ -465,7 +485,8 @@ function getTokenFromRequest(req) {
 // Verifies a login token and returns its user, or null if the token is
 // invalid, expired, for a deleted user, or from before a password reset.
 async function userFromToken(token) {
-  const payload = jwt.verify(token, process.env.JWT_SECRET)
+  // Only accept the algorithm signToken uses
+  const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] })
   const user = await User.findById(payload.sub).lean()
 
   if (!user) return null
@@ -869,7 +890,7 @@ async function requireItemRequestStore(req, res, next) {
     next()
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 }
 
@@ -1850,7 +1871,8 @@ app.post('/login', requireGuest, async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      // HTTPS-only on the live site even if NODE_ENV isn't set there
+      secure: process.env.NODE_ENV === 'production' || req.secure,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000
     })
@@ -2976,6 +2998,24 @@ app.get('/register', requireGuest, (req, res) => {
   res.render('register.ejs', { error: null })
 })
 
+// Password rules for sign-up and password reset. bcrypt only reads the
+// first 72 bytes, so very long passwords are capped too.
+const MIN_PASSWORD_LENGTH = 8
+const MAX_PASSWORD_LENGTH = 72
+
+function passwordProblem(password) {
+  if (typeof password !== 'string' || !password) {
+    return 'Enter a password.'
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.`
+  }
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_LENGTH) {
+    return `Passwords can be at most ${MAX_PASSWORD_LENGTH} characters.`
+  }
+  return null
+}
+
 app.post('/register', requireGuest, async (req, res) => {
   try {
     const quota = await claimIpQuota(
@@ -2997,9 +3037,14 @@ app.post('/register', requireGuest, async (req, res) => {
 
     // ✅ check passwords match
     if (password !== confirmPassword) {
-      return res.status(400).render('register.ejs', { 
-        error: "Passwords do not match" 
+      return res.status(400).render('register.ejs', {
+        error: "Passwords do not match"
       });
+    }
+
+    const weakPassword = passwordProblem(password)
+    if (weakPassword) {
+      return res.status(400).render('register.ejs', { error: weakPassword })
     }
 
     const cleanEmail = String(email || '').trim().toLowerCase()
@@ -5076,7 +5121,10 @@ app.get("/my-requests", ...approvedPage, requireRole('vendor', 'manager'), async
   res.render("my-requests.ejs", {
     user: req.user,
     requests: rows,
-    selectedStore: req.query.store || ""
+    // Goes into the page's script: only allow a plain map id
+    selectedStore: /^[A-Za-z -]{1,40}$/.test(String(req.query.store || ''))
+      ? String(req.query.store)
+      : ""
   });
 });
 
@@ -7422,7 +7470,7 @@ app.get('/api/month', ...floorSpaceApi('vendor', 'manager'), async (req, res) =>
     res.json([...reservedRows, ...requestedRows])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7431,6 +7479,19 @@ app.post('/api/request', ...floorSpaceApi('vendor', 'manager'), async (req, res)
   
   const { item_id, month, brand, products, map } = req.body
   const user = req.user.name
+
+  // Every field must be plain text (not an array or object)
+  if ([item_id, month, brand, products, map].some(value => typeof value !== 'string')) {
+    return res.status(400).json({
+      error: 'item_id, month, brand, products, and map must be text'
+    })
+  }
+
+  if (!/^\d{4}-\d{2}$/.test(month) || brand.length > 200 || products.length > 1000) {
+    return res.status(400).json({
+      error: 'Use a YYYY-MM month and keep brand/products short'
+    })
+  }
 
   if (!item_id || !month || !brand || !products || !map) {
     console.log("❌ Missing field!")
@@ -7471,7 +7532,7 @@ app.post('/api/request', ...floorSpaceApi('vendor', 'manager'), async (req, res)
     res.json({ ok: true })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7498,7 +7559,7 @@ app.get('/api/requests', ...floorSpaceApi('manager'), async (req, res) => {
     res.json(rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7508,15 +7569,12 @@ app.post(
   ...floorSpaceApi('manager'),
   requireItemRequestStore,
   async (req, res) => {
-  const { request_id, item_id, month, map } = req.body
+  // The spot, month and map come from the stored request, never from the
+  // browser, so approving one request can't reserve a different spot
+  const request_id = req.itemRequest._id
+  const { item_id, month, map_id: map } = req.itemRequest
 
-  if (!request_id || !item_id || !month || !map) {
-    return res.status(400).json({
-      error: 'request_id, item_id, month, and map are required'
-    })
-  }
-
-  if (req.itemRequest.map_id !== map) {
+  if (req.body.map && req.body.map !== map) {
     return res.status(400).json({
       error: 'The request does not belong to this map'
     })
@@ -7565,7 +7623,7 @@ app.post(
     res.json({ ok: true })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7592,7 +7650,7 @@ app.post(
     res.json({ ok: true })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7610,7 +7668,7 @@ app.get('/api/user-requests', ...approvedApi, requireRoleApi('vendor', 'manager'
     res.json(rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7631,7 +7689,7 @@ app.get('/api/final-data', ...floorSpaceApi('manager'), async (req, res) => {
     res.json(rows)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -7656,7 +7714,7 @@ app.get("/debug-db", ...adminPage, async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -8037,8 +8095,10 @@ app.post(
           .randomBytes(32)
           .toString('hex');
 
+      // Only a SHA-256 hash is stored, like email verification tokens, so
+      // a copy of the database can't be used to reset passwords
       user.resetToken =
-        token;
+        hashToken(token);
 
       user.resetTokenExpiry =
         new Date(
@@ -8056,9 +8116,10 @@ app.post(
        * https://floor-space-requests-app.onrender.com/
        * reset-password/token
        */
+      // Built from APP_BASE_URL, not the request's Host header, so a forged
+      // Host can't point the emailed link at another site
       const resetLink =
-        `${req.protocol}://` +
-        `${req.get('host')}` +
+        `${getAppBaseUrl()}` +
         `/reset-password/` +
         `${encodeURIComponent(token)}`;
 
@@ -8207,7 +8268,7 @@ app.get('/reset-password/:token', async (req, res) => {
   //console.log("TOKEN FROM URL:", req.params.token);
 
   const user = await User.findOne({
-    resetToken: req.params.token
+    resetToken: hashToken(req.params.token)
   });
 
   //console.log("FOUND USER:", user);
@@ -8238,8 +8299,16 @@ app.post('/reset-password/:token', async (req, res) => {
     });
   }
 
+  const weakPassword = passwordProblem(password)
+  if (weakPassword) {
+    return res.render('reset-password.ejs', {
+      token: req.params.token,
+      error: weakPassword
+    });
+  }
+
   const user = await User.findOne({
-    resetToken: req.params.token,
+    resetToken: hashToken(req.params.token),
     resetTokenExpiry: { $gt: new Date() }
   });
 
