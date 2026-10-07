@@ -628,6 +628,18 @@ td.conflict-cell {
   font-weight: 700;
 }
 
+/* Worked on a day they weren't scheduled: "OFF" with the time worked below */
+.unscheduled-work-cell {
+  background: #fde68a !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.unscheduled-work-cell .actual-shift {
+  color: #92400e !important;
+  font-weight: 700;
+}
+
 .attendance-exception-review {
   margin-top:20px;
   display:grid;
@@ -1787,7 +1799,8 @@ td.budget-within, td.budget-over {
 
       <small>
         Planned shifts are shown first. Actual shifts are
-        shown in italic text underneath.
+        shown in italic text underneath. Yellow: worked on a
+        day they weren't scheduled.
       </small>
     </div>
   </div>
@@ -6171,9 +6184,17 @@ function renderPreviousWeekDates() {
               plannedValues.length > 0 &&
               actualValues.length === 0;
 
+            // Worked a day they weren't scheduled ("OFF" with time below)
+            const unscheduledWork =
+              plannedValues.length === 0 &&
+              actualValues.length > 0;
+
             if (noTimeWorked) {
               cellClass +=
                 ' no-time-worked-cell';
+            } else if (unscheduledWork) {
+              cellClass +=
+                ' unscheduled-work-cell';
             } else if (issue) {
               if (
                 issue.late &&
