@@ -239,12 +239,26 @@
   font-weight: 700;
 }
 
-.remove-row-button {
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-top: 6px;
+}
+
+.remove-row-button {
   padding: 4px 8px;
   border: 1px solid #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+  font-size: 11px;
+}
+
+.rename-row-button {
+  padding: 4px 8px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 11px;
 }
 
@@ -2813,7 +2827,47 @@ function clearRowChanges() {
   replaceObjectContents(removedRows, {});
 }
 
+// Renaming only changes the row's label (e.g. "Manager 1" ->
+// "John Cristal (M1)"); its shifts and assignments stay attached. Saving the
+// template keeps the new name for future weeks.
+function renameCoverageRow(type, shiftId) {
+  const coverage = coverageFor(type);
+  const row = coverage && coverage[shiftId];
+  if (!row) return;
+
+  const currentLabel = row.label || shiftId;
+  const entered = window.prompt(
+    `New name for the "${currentLabel}" row:\n\n` +
+    'Save the template afterwards to keep this name for future weeks.',
+    currentLabel
+  );
+
+  if (entered === null) return;
+
+  const label = entered.trim().slice(0, 60);
+
+  if (!label) {
+    alert('Enter a name for the row.');
+    return;
+  }
+
+  if (label === currentLabel) return;
+
+  row.label = label;
+  renderAllTables();
+}
+
 document.addEventListener('click', event => {
+  const renameButton = event.target.closest('[data-rename-row-type]');
+
+  if (renameButton) {
+    renameCoverageRow(
+      renameButton.dataset.renameRowType,
+      renameButton.dataset.renameRowId
+    );
+    return;
+  }
+
   const removeButton = event.target.closest('[data-remove-row-type]');
 
   if (removeButton) {
@@ -3092,14 +3146,25 @@ document.addEventListener('click', event => {
                 : ''
             }
 
-            <button
-              type="button"
-              class="remove-row-button no-print"
-              data-remove-row-type="${escapeHtml(type)}"
-              data-remove-row-id="${escapeHtml(shiftId)}"
-            >
-              Remove row
-            </button>
+            <span class="row-buttons no-print">
+              <button
+                type="button"
+                class="rename-row-button"
+                data-rename-row-type="${escapeHtml(type)}"
+                data-rename-row-id="${escapeHtml(shiftId)}"
+              >
+                Rename
+              </button>
+
+              <button
+                type="button"
+                class="remove-row-button"
+                data-remove-row-type="${escapeHtml(type)}"
+                data-remove-row-id="${escapeHtml(shiftId)}"
+              >
+                Remove row
+              </button>
+            </span>
           </td>
           ${cells}
         </tr>
