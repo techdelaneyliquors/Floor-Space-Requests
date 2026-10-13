@@ -274,13 +274,22 @@ app.use(
 )
 
 
+// Without a database every page fails, so if the first connection can't be
+// made, stop: Render then restarts the service and tries again
 mongoose.connect(process.env.MONGO_URI)
+  .catch(err => {
+    console.error('Could not connect to MongoDB; shutting down so the service restarts:', err)
+    process.exit(1)
+  })
   .then(async () => {
     console.log("MongoDB connected ✅")
-    await migrateUserRoles()
-    await linkItemRequestsToUsers()
+    try {
+      await migrateUserRoles()
+      await linkItemRequestsToUsers()
+    } catch (err) {
+      console.error('Startup data update failed:', err)
+    }
   })
-  .catch(err => console.error(err))
 
 // One-time, idempotent: floor-space requests used to identify their owner
 // only by name. Link each older request to the single account with exactly
@@ -443,7 +452,9 @@ app.use(cookieParser())
 
 
 const PORT = process.env.PORT || 3301
-const currentMonth = () => new Date().toISOString().slice(0, 7)
+// The store's current month (Eastern time), not UTC: UTC rolls over to the
+// next month a few hours early on the last evening of each month
+const currentMonth = () => storeToday().slice(0, 7)
 
 // ------------------------
 // JWT HELPERS
@@ -585,7 +596,11 @@ const STORE_PAGES = {
     finalPath: '/branfordstoremap/final',
     schedulePath: '/Branfordstoremap/Schedule',
     employeePath: '/branfordstoremap/my-schedule',
-    image: '/Images/CoastalBranford.jpg'
+    image: '/Images/CoastalBranford.jpg',
+    // Floor-space map: views/maps/<mapSvg>.ejs, page title, drawing width (px)
+    mapSvg: 'branford',
+    mapTitle: 'Branford Store Map',
+    mapMaxWidth: 2800
   },
   Hamden: {
     mapId: 'Hamden',
@@ -593,7 +608,11 @@ const STORE_PAGES = {
     finalPath: '/Hamdenstoremap/final',
     schedulePath: '/hamdenstoremap/schedule',
     employeePath: '/Hamdenstoremap/my-schedule',
-    image: '/Images/Amity Hamden.jpg'
+    image: '/Images/Amity Hamden.jpg',
+    // Floor-space map: views/maps/<mapSvg>.ejs, page title, drawing width (px)
+    mapSvg: 'hamden',
+    mapTitle: 'Amity Hamden Store Map',
+    mapMaxWidth: 1600
   },
   'New Haven': {
     mapId: 'New Haven',
@@ -601,7 +620,11 @@ const STORE_PAGES = {
     finalPath: '/New-Havenstoremap/final',
     schedulePath: '/New-Havenstoremap/Schedule',
     employeePath: '/New-Havenstoremap/my-schedule',
-    image: '/Images/Amity New Haven.jpg'
+    image: '/Images/Amity New Haven.jpg',
+    // Floor-space map: views/maps/<mapSvg>.ejs, page title, drawing width (px)
+    mapSvg: 'new-haven',
+    mapTitle: 'Amity New Haven Store Map',
+    mapMaxWidth: 1800
   },
   'New Milford': {
     mapId: 'New Milford',
@@ -609,7 +632,12 @@ const STORE_PAGES = {
     finalPath: '/New-Milfordstoremap/final',
     schedulePath: '/New-Milfordstoremap/schedule',
     employeePath: '/New-Milfordstoremap/my-schedule',
-    image: '/Images/Classic New Milford.jpg'
+    image: '/Images/Classic New Milford.jpg',
+    // Floor-space map: views/maps/<mapSvg>.ejs, page title, drawing width (px)
+    mapSvg: 'new-milford',
+    mapTitle: 'Classic Liquors New Milford Store Map',
+    mapMaxWidth: 1600,
+    showClassEvent: true
   },
   Stratford: {
     mapId: 'stratford',
@@ -617,7 +645,11 @@ const STORE_PAGES = {
     finalPath: '/stratfordstoremap/final',
     schedulePath: '/stratfordstoremap/Schedule',
     employeePath: '/stratfordstoremap/my-schedule',
-    image: '/Images/Stratford Townline.jpg'
+    image: '/Images/Stratford Townline.jpg',
+    // Floor-space map: views/maps/<mapSvg>.ejs, page title, drawing width (px)
+    mapSvg: 'stratford',
+    mapTitle: 'Townline Stratford Store Map',
+    mapMaxWidth: 2000
   }
 }
 
@@ -3333,22 +3365,32 @@ app.get('/', ...approvedPage, async (req, res) => {
 })
 
 // Floor-space maps: vendors, managers and admins
-const MAP_VIEWS = {
-  Branford: 'Branford Store Map.ejs',
-  Stratford: 'Stratford Map.ejs',
-  'New Haven': 'New Haven Map.ejs',
-  Hamden: 'Hamden Map.ejs',
-  'New Milford': 'New Milford Map.ejs'
+// Floor-space maps and Final pages: one shared page each (views/store-map.ejs
+// and views/store-final.ejs); each store's drawing is views/maps/<mapSvg>.ejs
+function storeMapLocals(store) {
+  const page = STORE_PAGES[store]
+  return {
+    storeName: store,
+    mapId: page.mapId,
+    mapSvg: page.mapSvg,
+    mapTitle: page.mapTitle,
+    mapMaxWidth: page.mapMaxWidth,
+    showClassEvent: page.showClassEvent === true,
+    mapPath: page.mapPath,
+    finalPath: page.finalPath,
+    schedulePath: page.schedulePath
+  }
 }
 
-for (const [store, view] of Object.entries(MAP_VIEWS)) {
+for (const store of STORE_LIST) {
   app.get(
     STORE_PAGES[store].mapPath,
     ...approvedPage,
     requireRole('vendor', 'manager'),
     requireStore(store),
     (req, res) => {
-      res.render(view, {
+      res.render('store-map.ejs', {
+        ...storeMapLocals(store),
         user: req.user,
         // Shows the final/schedule buttons and approve/reject controls
         isAdmin: canManageStore(req.user, store),
@@ -3356,6 +3398,35 @@ for (const [store, view] of Object.entries(MAP_VIEWS)) {
       })
     }
   )
+}
+
+// Final pages (managers and admins of the store)
+for (const store of STORE_LIST) {
+  app.get(STORE_PAGES[store].finalPath, ...managerPage(store), async (req, res) => {
+    // ?month=YYYY-MM from the map page; otherwise this month (store time)
+    const requested = String(req.query.month || '')
+    const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : currentMonth()
+
+    try {
+      const requests = await ItemRequest.find({
+        month,
+        map_id: STORE_PAGES[store].mapId
+      })
+        .select('item_id user brand products status')
+        .sort({ item_id: 1 })
+        .lean()
+
+      res.render('store-final.ejs', {
+        ...storeMapLocals(store),
+        user: req.user,
+        month,
+        requests
+      })
+    } catch (err) {
+      console.error(`${store} final page error:`, err)
+      res.status(500).send('Error loading final page')
+    }
+  })
 }
 
 // ------------------------
@@ -5133,32 +5204,6 @@ app.get("/my-requests", ...approvedPage, requireRole('vendor', 'manager'), async
 // FINAL PAGES (ADMIN ONLY)
 // ------------------------
 
-app.get('/branfordstoremap/final', ...managerPage('Branford'), async (req, res) => {
-  const MAP_ID = 'branford'
-  try {
-    
-    const month = req.query.month || currentMonth()
-
-    const confirmed = await ItemRequest.find({
-      month,
-      map_id: MAP_ID
-    })
-      .select('item_id user brand products status')
-      .sort({ item_id: 1 })
-      .lean()
-
-
-    res.render('branford-final.ejs', {
-      user: req.user,
-      month,
-      requests: confirmed,
-      mapId: MAP_ID
-    })
-  } catch (err) {
-    console.error(err)
-    res.send('Error loading final page')
-  }
-})
 
 // ------------------------
 // WEEKLY HOURS BUDGET
@@ -5630,116 +5675,6 @@ for (const store of STORE_LIST) {
   )
 }
 
-app.get('/stratfordstoremap/final', ...managerPage('Stratford'), async (req, res) => {
-  const MAP_ID = 'stratford'
-  try {
-    
-    const month = req.query.month || currentMonth()
-
-    const confirmed = await ItemRequest.find({
-      month,
-      map_id: MAP_ID
-    })
-      .select('item_id user brand products status')
-      .sort({ item_id: 1 })
-      .lean()
-
-
-    res.render('Stratford Final.ejs', {
-      user: req.user,
-      month,
-      requests: confirmed,
-      mapId: MAP_ID
-    })
-  } catch (err) {
-    console.error(err)
-    res.send('Error loading final page')
-  }
-})
-
-
-app.get('/New-Havenstoremap/final', ...managerPage('New Haven'), async (req, res) => {
-  const MAP_ID = 'New Haven'
-  try {
-    
-    const month = req.query.month || currentMonth()
-
-    const confirmed = await ItemRequest.find({
-      month,
-      map_id: MAP_ID
-    })
-      .select('item_id user brand products status')
-      .sort({ item_id: 1 })
-      .lean()
-
-
-    res.render('New Haven final.ejs', {
-      user: req.user,
-      month,
-      requests: confirmed,
-      mapId: MAP_ID
-    })
-  } catch (err) {
-    console.error(err)
-    res.send('Error loading final page')
-  }
-})
-
-app.get('/Hamdenstoremap/final', ...managerPage('Hamden'), async (req, res) => {
-  const MAP_ID = 'Hamden'
-  try {
-    
-    const month = req.query.month || currentMonth()
-
-    const confirmed = await ItemRequest.find({
-      month,
-      map_id: MAP_ID
-    })
-      .select('item_id user brand products status')
-      .sort({ item_id: 1 })
-      .lean()
-
-
-    res.render('Hamden-final.ejs', {
-      user: req.user,
-      month,
-      requests: confirmed,
-      mapId: MAP_ID
-    })
-  } catch (err) {
-    console.error(err)
-    res.send('Error loading final page')
-  }
-})
-
-
-
-app.get('/New-Milfordstoremap/final', ...managerPage('New Milford'), async (req, res) => {
-  const MAP_ID = 'New Milford'
-  try {
-    
-    const month = req.query.month || currentMonth()
-
-    const confirmed = await ItemRequest.find({
-      month,
-      map_id: MAP_ID
-    })
-      .select('item_id user brand products status')
-      .sort({ item_id: 1 })
-      .lean()
-
-
-    res.render('New Milford Final.ejs', {
-      user: req.user,
-      month,
-      requests: confirmed,
-      mapId: MAP_ID
-    })
-  } catch (err) {
-    console.error(err)
-    res.send('Error loading final page')
-  }
-})
 
 
 
@@ -7950,7 +7885,8 @@ async function sendNextMonthRequestsSummaryEmail() {
 
 
 function startNextMonthRequestsEmailJob() {
-  const scheduledDay = process.env.NEXT_MONTH_REQUESTS_DAY || '3'; // default Monday
+  // Cron day of week: 0 = Sunday, 1 = Monday ... 6 = Saturday (default 3 = Wednesday)
+  const scheduledDay = process.env.NEXT_MONTH_REQUESTS_DAY || '3';
 
   // Run at 9:00 AM Eastern on the selected day of week
   const cronExpression = `0 9 * * ${scheduledDay}`;
@@ -9526,6 +9462,80 @@ app.post(
   }
 });
 
+
+// ------------------------
+// NOT FOUND AND ERRORS
+// ------------------------
+//
+// These come after every route. Error details go to the server log only;
+// visitors get a plain message (never a stack trace, whatever NODE_ENV is),
+// as JSON for API calls and a simple page otherwise.
+
+function wantsJson(req) {
+  return req.path.startsWith('/api/') ||
+    req.xhr ||
+    (req.get('accept') || '').includes('application/json')
+}
+
+function errorPage(status, title, message) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    `<title>${escapeHtml(title)}</title>` +
+    '<link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png"></head>' +
+    '<body style="margin:0;background:#f6f6f6;font-family:Segoe UI,Arial,sans-serif;color:#1f2937;">' +
+    '<div style="max-width:520px;margin:12vh auto;padding:28px;background:#fff;border-radius:12px;' +
+    'box-shadow:0 6px 18px rgba(0,0,0,.08);text-align:center;">' +
+    `<div style="font-size:14px;color:#64748b;">Error ${status}</div>` +
+    `<h1 style="margin:8px 0 12px;font-size:22px;">${escapeHtml(title)}</h1>` +
+    `<p style="color:#475569;">${escapeHtml(message)}</p>` +
+    '<p><a href="/" style="display:inline-block;margin-top:8px;padding:9px 16px;background:#2120ba;' +
+    'color:#fff;border-radius:6px;text-decoration:none;">Back to home</a></p>' +
+    '</div></body></html>'
+}
+
+// No route matched
+app.use((req, res) => {
+  if (wantsJson(req)) {
+    return res.status(404).json({ success: false, error: 'Not found.' })
+  }
+  res.status(404).type('html').send(
+    errorPage(404, 'Page not found', 'That page doesn\'t exist. Check the address, or go back to the home page.')
+  )
+})
+
+// Anything a route threw or passed to next(err)
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
+
+  // Unreadable or oversized request bodies are the sender's problem, not ours
+  let status = 500
+  if (err.type === 'entity.parse.failed') status = 400
+  else if (err.type === 'entity.too.large') status = 413
+  else if (Number.isInteger(err.status) && err.status >= 400 && err.status < 500) status = err.status
+
+  if (status >= 500) {
+    console.error(`Unhandled error on ${req.method} ${req.originalUrl}:`, err)
+  }
+
+  const message =
+    status === 400 ? 'The request could not be read.' :
+    status === 413 ? 'The request was too large.' :
+    status < 500 ? 'The request could not be completed.' :
+    'Something went wrong on our end. Please try again in a moment.'
+
+  if (wantsJson(req)) {
+    return res.status(status).json({ success: false, error: message })
+  }
+  res.status(status).type('html').send(
+    errorPage(status, status >= 500 ? 'Something went wrong' : 'Request problem', message)
+  )
+})
+
+// A background task (email, cron job) that failed without its own handler
+// is logged instead of crashing the server
+process.on('unhandledRejection', err => {
+  console.error('Unhandled promise rejection:', err)
+})
 
 startNextMonthRequestsEmailJob();
 app.listen(PORT, () => {

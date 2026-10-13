@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8" />
+  <title><%= mapTitle %></title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+
+
+
+<% if (isAdmin) { /* this store's managers and admins */ %>
+    
+  <button onclick="goToFinal()" class="btn btn-final">
+    📊 Final View
+  </button>
+<button onclick="goToSchedule()" class="btn btn-final">
+    📊 Schedule
+  </button>
+
+
+<% } %>
+
+<% if (showClassEvent && user.role === 'admin') { %>
+  <a href="/class" class="btn btn-final">
+    Create Class Event
+  </a>
+<% } %>
+
+  <style>
+    path[id^="FloorSpace"] {
+      cursor: pointer;
+      transition: fill 0.2s ease;
+    }
+
+    
+    path[id^="FloorSpace"]:hover {
+      opacity: 0.8;     /* ✅ subtle visual feedback instead of color override */
+    }
+
+
+    .selected {
+      fill: #00cc66 !important;
+    }
+    
+
+    
+body {
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+}
+
+#svgContainer {
+  display: block;
+  margin: 20px auto;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ✅ ensures SVG behaves like a block */
+
+#svgContainer svg {
+  display: block;
+  margin: 0 auto;
+  width: 100%;
+  max-width: <%= mapMaxWidth %>px;
+  height: auto;
+}
+
+/* ✅ legend sits UNDER SVG, not beside it */
+#legend {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+.color-box {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    border: 1px solid #333;
+  }
+
+
+  
+.month-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  font-family: 'Inter', sans-serif;
+}
+
+.month-group label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* ✅ modern month input */
+#monthPicker {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+
+  background-color: white;
+
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+/* hover */
+#monthPicker:hover {
+  border-color: #999;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* focus */
+#monthPicker:focus {
+  outline: none;
+  border-color: #2120ba;
+  box-shadow: 0 0 6px rgba(33, 32, 186, 0.4);
+}
+
+
+
+/* ----------------------------- */
+/* Modern Modal                  */
+/* ----------------------------- */
+
+#requestModal {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  width: 360px;
+  text-align: left;
+  font-family: Arial, sans-serif;
+}
+
+/* Inputs */
+#requestModal input {
+  width: 90%;
+  padding: 10px 12px;
+  margin-top: 4px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+#requestModal input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+  outline: none;
+}
+
+/* Buttons */
+#requestModal button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 8px;
+  transition: background 0.2s ease;
+}
+
+#submitRequest {
+  background: #007bff;
+  color: white;
+}
+
+#submitRequest:hover {
+  background: #0066d6;
+}
+
+#cancelRequest {
+  background: #e5e5e5;
+}
+
+#cancelRequest:hover {
+  background: #d5d5d5;
+}
+
+/* base button style */
+.btn {
+  border: none;
+  padding: 6px 12px;
+  margin-left: 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+/* approve button */
+.btn-approve {
+  background-color: #0ad19b;
+  color: white;
+  border: 2px solid black;
+}
+
+.btn-approve:hover {
+  background-color: #09b889;
+  transform: translateY(-1px);
+}
+
+/* reject button */
+.btn-reject {
+  background-color: #dc3545;
+  color: white;
+  border: 2px solid black;
+}
+
+.btn-reject:hover {
+  background-color: #c82333;
+  transform: translateY(-1px);
+}
+
+.btn-logout {
+  background: linear-gradient(135deg,  #d94141, #d60b0b);
+  color: white;
+}
+
+.btn-logout:hover {
+  background: linear-gradient(135deg, #bf2e2e, #bd0b0b);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+
+.btn-home {
+  background-color: #2120ba; /* navy */
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-home:hover {
+  background-color: #1b1AA1;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+
+.btn-final {
+  background-color: #8c17bd; /* purple/indigo */
+  color: white;
+}
+
+.btn-final:hover {
+  background-color: #69118f;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+
+#adminPanel {
+  border: 2px solid black;
+  padding: 15px;
+  margin-top: 20px;
+  border-radius: 8px; /* optional, matches your cards */
+  background-color: rgba(255, 255, 255, 0.9); /* optional for readability */
+}
+
+
+#adminRequests {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+#adminRequests li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* text stays left */
+.req-text {
+  text-align: left;
+  flex: 1;
+  margin-right: 12px;
+}
+
+/* buttons stay together on the right */
+.btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+
+
+
+#bottomSection {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;  /* keeps everything centered */
+}
+
+.user-line {
+  display: flex;
+  align-items: center;     /* ✅ vertical alignment */
+  justify-content: center; /* ✅ center it on page */
+  gap: 12px;               /* ✅ space between name + button */
+  margin-top: 10px;
+}
+
+
+  </style>
+</head>
+
+
+<body style="background-color: lightgrey;">
+
+  
+<div id="topControls">
+  
+  <div class="user-line">
+  <label>User: <strong><%= user.name %></strong></label>
+  
+  <a href="/my-requests?store=<%= encodeURIComponent(mapId) %>" class="btn btn-final">
+    📄 My Requests
+  </a>
+  </div>
+
+
+  
+<div class="month-group">
+  <label for="monthPicker">Select Month</label>
+  <input type="month" id="monthPicker">
+</div>
+  
+
+  
+<div style="display:flex; justify-content: space-between; align-items: center; padding: 10px 20px;">
+  
+
+<a href="/" class="btn btn-home">
+  ⬅ Back to Store Index
+</a>
+
+
+  <!-- ✅ Logout -->
+ 
+  
+<form action="/logout" method="POST" style="display:inline;">
+  <button type="submit" class="btn btn-logout">
+    <span class="icon">➜</span> LOGOUT
+  </button>
+</form>
+
+
+
+</div>
+
+
+<div id="svgContainer" style="background-color: lightgrey;">
+  <%- include('maps/' + mapSvg) %>
+</div>
+<script>
+// This store's map (server-provided)
+const MAP_ID = <%- safeJson(mapId) %>;
+const FINAL_PATH = <%- safeJson(finalPath) %>;
+const SCHEDULE_PATH = <%- safeJson(schedulePath) %>;
+const IS_ADMIN = <%= JSON.stringify(isAdmin) %>;
+
+const STATUS_COLOR = {
+  available: "#00cc66",
+  requested: "#ffcc00",
+  reserved: "#ff3333"
+};
+
+let MONTH;
+let CURRENT_MODE = "requested"; // ✅ default
+let selectedBox = null;
+
+// ✅ allow buttons to change mode
+function setMode(mode) {
+  CURRENT_MODE = mode;
+}
+
+
+function goToFinal() {
+  const month = document.getElementById("monthPicker").value;
+
+  if (!month) {
+    alert("Please select a month first.");
+    return;
+  }
+
+  window.location.href = FINAL_PATH + '?month=' + encodeURIComponent(month);
+}
+function goToSchedule() {
+  window.location.href = SCHEDULE_PATH;
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const CURRENT_USER = <%- safeJson(user.name) %>;
+
+  const monthInput = document.getElementById("monthPicker");
+  const boxes = document.querySelectorAll('path[id^="FloorSpace"]');
+
+  // This month in store (Eastern) time, not UTC
+  MONTH = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).slice(0, 7);
+  monthInput.value = MONTH;
+
+  monthInput.addEventListener("change", () => {
+    MONTH = monthInput.value;
+    
+    fetch('/set-month', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month: MONTH })
+    }).catch(err => console.error(err));
+
+    loadMonthData();
+    if (IS_ADMIN) {
+      loadAdminRequests();
+    }
+  });
+
+  // ✅ CLICK HANDLER
+  boxes.forEach(el => {
+    el.addEventListener("click", () => {
+      const status = el.dataset.status || "available";
+
+      // ✅ block only reserved
+      if (status === "reserved") {
+        alert("This spot is already reserved.");
+        return;
+      }
+
+      if (!CURRENT_USER) {
+        alert("Please enter your name first.");
+        return;
+      }
+
+      selectedBox = el;
+      document.getElementById("requestModal").style.display = "block";
+    });
+  });
+
+  // ✅ LOAD COLORS
+  async function loadMonthData() {
+    const boxes = document.querySelectorAll('path[id^="FloorSpace"]');
+
+    // 1. reset everything to green
+    boxes.forEach(el => {
+      el.dataset.status = "available";
+      el.style.fill = "#00cc66";
+    });
+
+    // 2. apply backend state
+    try {
+      const data = await fetch(`/api/month?month=${MONTH}&map=${MAP_ID}`)
+        .then(r => r.json());
+
+      data.forEach(row => {
+        const el = document.getElementById(row.item_id);
+        if (el) {
+          el.dataset.status = row.status;
+          el.style.fill = STATUS_COLOR[row.status];
+        }
+      });
+
+    } catch (err) {
+      console.error("Load error:", err);
+    }
+
+  }
+
+  // ✅ ADMIN LIST
+  async function loadAdminRequests() {
+    const list = document.getElementById("adminRequests");
+    list.innerHTML = "";
+
+    const data = await fetch(`/api/requests?month=${MONTH}&map=${MAP_ID}`)
+      .then(r => r.json());
+
+    data.forEach(req => {
+      const li = document.createElement("li");
+      const textSpan = document.createElement("span");
+      textSpan.classList.add("req-text");
+      textSpan.textContent = `${req.user} → ${req.item_id} → ${req.brand} → ${req.products}`;
+      const btnGroup = document.createElement("div");
+      btnGroup.classList.add("btn-group");
+
+      const approveBtn = document.createElement("button");
+      approveBtn.textContent = "Approve";
+      approveBtn.classList.add("btn", "btn-approve");
+
+      approveBtn.onclick = async () => {
+        await fetch(`/api/approve`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            request_id: req._id,
+            item_id: req.item_id,
+            month: MONTH,
+            map: MAP_ID
+          })
+        });
+
+        loadMonthData();
+        if (IS_ADMIN) {
+          loadAdminRequests();
+        }
+      };
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.textContent = "Reject";
+      rejectBtn.classList.add("btn", "btn-reject");
+
+      rejectBtn.onclick = async () => {
+        await fetch(`/api/reject`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            request_id: req._id
+          })
+        });
+        loadMonthData();
+        if (IS_ADMIN) {
+          loadAdminRequests();
+        }
+      };
+
+      
+      btnGroup.appendChild(approveBtn);
+      btnGroup.appendChild(rejectBtn);
+      li.appendChild(textSpan);
+      li.appendChild(btnGroup);
+      list.appendChild(li);
+    });
+  }
+
+  // ✅ SUBMIT REQUEST
+  document.getElementById("submitRequest").addEventListener("click", async () => {
+    const brand = document.getElementById("brand").value;
+    const products = document.getElementById("products").value;
+
+    if (!selectedBox) return;
+
+    await fetch(`/api/request`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        item_id: selectedBox.id,
+        month: MONTH,
+        user: CURRENT_USER,
+        brand: brand,
+        products: products,
+        map: MAP_ID
+      })
+    });
+
+    document.getElementById("requestModal").style.display = "none";
+
+    loadMonthData();
+    if (IS_ADMIN) {
+      loadAdminRequests();
+    }
+  });
+
+  // ✅ CANCEL
+  document.getElementById("cancelRequest").addEventListener("click", () => {
+    document.getElementById("requestModal").style.display = "none";
+  });
+
+  // ✅ INITIAL LOAD
+  loadMonthData();
+  if (IS_ADMIN) {
+      loadAdminRequests();
+    }
+});
+
+
+
+
+</script>
+</div>
+
+<div id="bottomSection">
+  <div id="legend">
+    <div class="legend-item">
+      <span class="color-box" style="background:#00cc66;"></span>
+      Available |
+    </div>
+    <div class="legend-item">
+      <span class="color-box" style="background:#ffcc00;"></span>
+      Requested |
+    </div>
+    <div class="legend-item">
+      <span class="color-box" style="background:#ff3333;"></span>
+      Reserved
+    </div>
+  </div>
+
+  
+
+  <% if (isAdmin) { %>
+    <div id="adminPanel">
+      <h2>Pending Requests</h2>
+      <ul id="adminRequests"></ul>
+    </div>
+  <% } %>
+</div>
+
+
+<div id="requestModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%);
+  background:white; padding:20px; border:1px solid #ccc;">
+
+  <h3>Request Reservation</h3>
+
+  <label>Brand:</label><br>
+  <input type="text" id="brand"><br><br>
+
+  <label>Products:</label><br>
+  <input type="text" id="products"><br><br>
+
+  <button id="submitRequest">Submit</button>
+  <button id="cancelRequest">Cancel</button>
+
+  
+</div>
+
+<!-- ✅ LEGEND -->
+
+
+
+
+
+</body>
+</html>
+
+

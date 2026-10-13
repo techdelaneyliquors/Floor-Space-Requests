@@ -8,9 +8,10 @@
   "engines": {
     "node": ">=18"
   },
-  "main": "password.js",
+  "main": "compiledbuild.js",
   "scripts": {
-    "devStart": "nodemon password.js"
+    "start": "node compiledbuild.js",
+    "dev": "nodemon compiledbuild.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -21,7 +22,9 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.3",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
     "nodemon": "^3.1.14"
   }
 }

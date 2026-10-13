@@ -395,6 +395,24 @@ td.conflict-cell {
   font-weight: 700;
 }
 
+/* "Load rejected schedule" buttons in the tab bar */
+.rejected-tab-buttons { display: contents; }
+.module-tabs button.rejected-tab-button {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+.module-tabs button.rejected-tab-button:hover { background: #fecaca; }
+
+.rejection-note .rejection-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-bottom: 4px;
+}
+
 .rejection-note {
   margin-top: 14px;
   background: #fef2f2;
@@ -1523,6 +1541,8 @@ td.budget-within, td.budget-over {
     <button data-module="module-3">3. Printable Schedule</button>
     <button data-module="module-4">4. Attendance</button>
     <button data-module="module-5">5. Previous Week</button>
+    <!-- "Load rejected schedule" for weeks an admin rejected (filled in by renderPostedWeeks) -->
+    <span id="rejectedTabButtons" class="rejected-tab-buttons"></span>
   </nav>
 
   <!-- MODULE 1, SECTION 1 -->
@@ -1578,6 +1598,7 @@ td.budget-within, td.budget-over {
 </div>
         <div id="timeOffPanel" class="time-off-panel"></div>
         <div id="buildWarnings" class="schedule-warnings"></div>
+        <div id="buildRejectionNote" class="rejection-note no-print" hidden></div>
         <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Preset coverage windows for <%= storeName %>. Add or remove rows as needed.</small></div></div>
         <div class="table-wrap"><table id="managerTable"><thead><tr><th>Manager coverage</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr></thead><tbody></tbody></table></div>
         <button type="button" class="secondary add-row-button no-print" onclick="addCoverageRow('manager')">+ Add manager row</button>
@@ -1730,6 +1751,7 @@ td.budget-within, td.budget-over {
           </p>
 
           <div id="scheduleWarnings" class="schedule-warnings"></div>
+          <div id="postRejectionNote" class="rejection-note no-print" hidden></div>
 
           <div class="post-controls">
             <label for="postWeekSelect">Week</label>
@@ -8404,7 +8426,31 @@ document.addEventListener('change', async event => {
   }
 });
 
+// A red "Load rejected schedule" button in the tab bar for each week an admin
+// rejected that hasn't been resubmitted yet
+function renderRejectedTabButtons(weeks) {
+  const holder = document.getElementById('rejectedTabButtons');
+  if (!holder) return;
+
+  holder.innerHTML = weeks
+    .filter(week => week.lastRejection && week.lastRejection.canLoad && !week.pending)
+    .map(week => {
+      const label = postingWeekLabel(week.weekStart);
+      const reason = week.lastRejection.reason ? `Rejected: ${week.lastRejection.reason}` : 'Rejected by an admin';
+      return `
+        <button type="button" class="rejected-tab-button"
+          data-load-rejected-week="${escapeHtml(week.weekStart)}"
+          title="${escapeHtml(reason)}">
+          ⚠ Load rejected schedule (${escapeHtml(label)})
+        </button>
+      `;
+    })
+    .join('');
+}
+
 function renderPostedWeeks(weeks) {
+  renderRejectedTabButtons(weeks);
+
   const table = document.getElementById('postedWeeksTable');
   if (!table) return;
 
@@ -8731,13 +8777,18 @@ function restoreBuilderState(saved) {
   renderAllTables();
 }
 
+// The loaded rejection's reason, shown below the warnings on the Build tab,
+// in the Post panel, and under the printable schedule
 function renderRejectionNote() {
-  const note = document.getElementById('rejectionNote');
-  if (!note) return;
+  const notes = ['buildRejectionNote', 'postRejectionNote', 'rejectionNote']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
 
   if (!loadedRejection) {
-    note.hidden = true;
-    note.innerHTML = '';
+    notes.forEach(note => {
+      note.hidden = true;
+      note.innerHTML = '';
+    });
     return;
   }
 
@@ -8745,14 +8796,19 @@ function renderRejectionNote() {
     ? new Date(loadedRejection.rejectedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
     : '';
 
-  note.hidden = false;
-  note.innerHTML = `
+  const html = `
+    <span class="rejection-label">Rejection reason</span>
     <strong>Rejected</strong> by ${escapeHtml(loadedRejection.rejectedBy || 'an admin')}
     ${when ? `on ${escapeHtml(when)}` : ''}:
     ${escapeHtml(loadedRejection.reason)}
     <br><small>This is the schedule that was rejected for ${escapeHtml(postingWeekLabel(loadedRejection.weekStart))}.
     Fix it and submit again; the admin will see this reason with your resubmission.</small>
   `;
+
+  notes.forEach(note => {
+    note.hidden = false;
+    note.innerHTML = html;
+  });
 }
 
 async function loadRejectedSchedule(weekStart) {
@@ -8783,6 +8839,9 @@ async function loadRejectedSchedule(weekStart) {
   if (select) select.value = weekStart;
 
   renderRejectionNote();
+
+  // Show the loaded schedule on the Build tab, with the reason below the warnings
+  document.querySelector('.module-tabs button[data-module="module-1"]')?.click();
 
   if (timeOffData.week !== weekStart) {
     await loadTimeOffForWeek(weekStart);

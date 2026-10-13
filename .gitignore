@@ -1,2 +1,5 @@
 .env
 node_modules
+
+# Local tool state (e.g. Cloudflare wrangler test databases)
+.wrangler/
