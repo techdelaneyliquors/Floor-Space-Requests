@@ -20,9 +20,12 @@ const UserSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  // Required for new accounts. Accounts restored from a backup have none
+  // (backups leave passwords out) until "Forgot password" sets one, and must
+  // still save (access reviews, reset tokens).
   password: {
     type: String,
-    required: true
+    required: function () { return this.isNew }
   },
 
   // 'none' until an access request is approved

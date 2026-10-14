@@ -234,6 +234,37 @@
   color: #1e3a8a;
 }
 
+.previous-week-history {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.previous-week-history label {
+  display: inline;
+  margin: 0;
+  font-weight: 600;
+}
+
+.previous-week-history select {
+  width: auto;
+  min-width: 200px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+.previous-week-history-status {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.previous-week-history-status.error {
+  color: #b91c1c;
+}
+
 .row-label {
   display: block;
   font-weight: 700;
@@ -1832,6 +1863,12 @@ td.budget-within, td.budget-over {
       </h3>
 
       <div id="previousWeekDates" class="previous-week-dates"></div>
+
+      <div id="previousWeekHistory" class="previous-week-history" hidden>
+        <label for="previousWeekSelect">Uploaded weeks:</label>
+        <select id="previousWeekSelect"></select>
+        <span id="previousWeekHistoryStatus" class="previous-week-history-status" aria-live="polite"></span>
+      </div>
 
       <small>
         Planned shifts are shown first. Actual shifts are
@@ -8314,7 +8351,13 @@ function renderPreviousWeekPing(message, kind) {
   if (!button || !status) return;
 
   const week = previousBudgetWeek();
-  button.disabled = !week;
+  button.disabled = !week || viewingEarlierWeek();
+
+  if (week && viewingEarlierWeek() && !message) {
+    status.textContent = 'This is an earlier week. Switch back to the latest week to ping the admin.';
+    status.className = 'review-ping-status';
+    return;
+  }
 
   if (message) {
     status.textContent = message;
@@ -8359,11 +8402,109 @@ document.getElementById('previousWeekPingBtn')?.addEventListener('click', async 
   } catch (err) {
     renderPreviousWeekPing(err.message, 'error');
   } finally {
-    button.disabled = !previousBudgetWeek();
+    button.disabled = !previousBudgetWeek() || viewingEarlierWeek();
   }
 });
 
+/*
+ * Earlier weeks' previous-week reviews. Every upload is kept per week; the
+ * page opens on the latest one (from ScheduleSettings) and the "Uploaded
+ * weeks" picker swaps the review data in place, then re-renders the tab.
+ */
+const PREVIOUS_WEEK_STATE_FIELDS = [
+  'previousWeekStart', 'previousWeekEnd', 'employeeIdentifiers',
+  'previousScheduledShifts', 'previousActualShifts',
+  'previousActualHours', 'previousScheduledHours', 'sickDays'
+];
+const latestPreviousWeek = previousBudgetWeek();
+// Weeks already opened, so switching back keeps any sick days saved meanwhile
+const previousWeekCache = {};
+
+function viewingEarlierWeek() {
+  return Boolean(latestPreviousWeek) && previousBudgetWeek() !== latestPreviousWeek;
+}
+
+function showPreviousWeekHistoryStatus(text, isError) {
+  const status = document.getElementById('previousWeekHistoryStatus');
+  status.textContent = text || '';
+  status.classList.toggle('error', Boolean(isError));
+}
+
+async function loadPreviousWeekHistory() {
+  const box = document.getElementById('previousWeekHistory');
+  const select = document.getElementById('previousWeekSelect');
+  if (!box || !select) return;
+
+  try {
+    const response = await fetch(
+      `/api/previous-week-reviews?${new URLSearchParams({ store: state.store })}`,
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) return;
+
+    const weeks = result.weeks || [];
+    // The latest week is always offered, even before it reaches the history
+    if (latestPreviousWeek && !weeks.some(week => week.weekStart === latestPreviousWeek)) {
+      weeks.unshift({ weekStart: latestPreviousWeek, range: '' });
+    }
+    if (weeks.length < 2) return;
+
+    const current = previousBudgetWeek();
+    select.innerHTML = weeks.map(week => {
+      const range = week.range ||
+        `${formatYmdForPosting(week.weekStart, { month: 'short', day: 'numeric' })} – ` +
+        formatYmdForPosting(addDaysToYmd(week.weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' });
+      const latest = week.weekStart === latestPreviousWeek ? ' (latest)' : '';
+      return `<option value="${escapeHtml(week.weekStart)}" ${week.weekStart === current ? 'selected' : ''}>${escapeHtml(range + latest)}</option>`;
+    }).join('');
+    box.hidden = false;
+  } catch (err) {
+    console.error('Earlier weeks could not be listed:', err);
+  }
+}
+
+document.getElementById('previousWeekSelect')?.addEventListener('change', async event => {
+  const select = event.currentTarget;
+  const leaving = previousBudgetWeek();
+  const week = select.value;
+  if (!week || week === leaving) return;
+
+  let data = previousWeekCache[week];
+  if (!data) {
+    select.disabled = true;
+    showPreviousWeekHistoryStatus('Loading…');
+    try {
+      const response = await fetch(
+        `/api/previous-week-reviews/${encodeURIComponent(week)}?${new URLSearchParams({ store: state.store })}`,
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) throw new Error(result.error || 'That week could not be loaded.');
+      data = Object.fromEntries(PREVIOUS_WEEK_STATE_FIELDS.map(field => [field, result[field]]));
+    } catch (err) {
+      showPreviousWeekHistoryStatus(err.message, true);
+      select.value = leaving;
+      select.disabled = false;
+      return;
+    }
+    select.disabled = false;
+  }
+
+  if (leaving) {
+    previousWeekCache[leaving] = Object.fromEntries(PREVIOUS_WEEK_STATE_FIELDS.map(field => [field, state[field]]));
+  }
+  PREVIOUS_WEEK_STATE_FIELDS.forEach(field => {
+    state[field] = data[field] ?? (field === 'sickDays' ? [] : field.endsWith('Start') || field.endsWith('End') ? null : {});
+  });
+
+  showPreviousWeekHistoryStatus(viewingEarlierWeek() ? 'Viewing an earlier week.' : '');
+  renderPrevious();
+  renderPreviousWeekPing();
+});
+
 renderPreviousWeekPing();
+loadPreviousWeekHistory();
 
 // Saves a person's PTO whenever a "Paid" box or a day's hours change
 document.addEventListener('change', async event => {

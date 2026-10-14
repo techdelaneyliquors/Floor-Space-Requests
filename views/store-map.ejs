@@ -420,11 +420,6 @@ window.addEventListener("DOMContentLoaded", () => {
   monthInput.addEventListener("change", () => {
     MONTH = monthInput.value;
     
-    fetch('/set-month', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ month: MONTH })
-    }).catch(err => console.error(err));
 
     loadMonthData();
     if (IS_ADMIN) {

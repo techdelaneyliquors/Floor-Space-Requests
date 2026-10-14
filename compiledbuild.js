@@ -77,6 +77,8 @@ const PaychexEmployeeLink = require('./models/PaychexEmployeeLink')
 const PaychexSentShift = require('./models/PaychexSentShift')
 const PtoHours = require('./models/PtoHours')
 const SickDay = require('./models/SickDay')
+const PreviousWeekReview = require('./models/PreviousWeekReview')
+const { buildBackup } = require('./lib/backup')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -103,7 +105,8 @@ async function sendBrevoEmail({
   to,
   subject,
   text,
-  html
+  html,
+  attachments
 }) {
   const body = {
     sender: {
@@ -123,6 +126,9 @@ async function sendBrevoEmail({
   // Brevo rejects empty content fields
   if (html) body.htmlContent = html;
   if (text) body.textContent = text;
+
+  // [{ name, content: base64 }]
+  if (attachments?.length) body.attachment = attachments;
 
   const response = await fetch(
     BREVO_SEND_URL,
@@ -166,7 +172,8 @@ async function sendEmail({
   to,
   subject,
   text,
-  html
+  html,
+  attachments
 }) {
   if (!process.env.BREVO_API_KEY) {
     throw new Error(
@@ -210,7 +217,8 @@ async function sendEmail({
         to: recipient,
         subject: cleanSubject,
         text: String(text || ''),
-        html: String(html || '')
+        html: String(html || ''),
+        attachments
       })
     )
   );
@@ -286,9 +294,12 @@ mongoose.connect(process.env.MONGO_URI)
     try {
       await migrateUserRoles()
       await linkItemRequestsToUsers()
+      await backfillWeekHistory()
     } catch (err) {
       console.error('Startup data update failed:', err)
     }
+    // Catch up a backup missed while the server was asleep
+    sendWeeklyBackupIfDue().catch(err => console.error('[backup] check failed:', err))
   })
 
 // One-time, idempotent: floor-space requests used to identify their owner
@@ -2209,7 +2220,11 @@ async function attemptLogin(email, password, ip) {
     })
   }
 
-  const ok = await bcrypt.compare(String(password || ''), user.password)
+  // Accounts restored from a backup have no password (backups leave them
+  // out) until "Forgot password" sets one: treat that as a wrong password
+  const ok = user.password
+    ? await bcrypt.compare(String(password || ''), user.password)
+    : false
 
   if (ok) {
     await User.updateOne(
@@ -3685,6 +3700,35 @@ async function notifyScheduleApprovers(store, weekStart, submitter) {
   })
 }
 
+// The store's managers hear when its schedule is approved (whoever approved
+// it, including an admin's own submission). Managers covering all stores
+// are included; admins are not.
+async function notifyStoreManagersApproved(store, weekStart, approver) {
+  const managers = await User.find({
+    role: 'manager',
+    stores: { $in: [store, ALL_STORES_VALUE] }
+  })
+    .select('email emailVerified accessStatus role stores')
+    .lean()
+
+  const recipients = managers.filter(isApproved).map(user => user.email)
+  if (!recipients.length) return
+
+  const link = `${getAppBaseUrl()}/posted-schedules`
+  const summary =
+    `The ${store} schedule for the week of ${weekRangeText(weekStart)} ` +
+    `was approved by ${approver.name}. Employees can see it now.`
+
+  await sendEmail({
+    to: recipients,
+    subject: `${store} schedule approved: week of ${weekRangeText(weekStart)}`,
+    text: `${summary}\n\nView it here: ${link}`,
+    html:
+      `<p>${escapeHtml(summary)}</p>` +
+      `<p><a href="${escapeHtml(link)}">View posted schedules</a></p>`
+  })
+}
+
 // Manager submits a week. Admins' own submissions are approved at once.
 app.post(
   '/api/posted-schedules',
@@ -3756,7 +3800,11 @@ app.post(
         { upsert: true }
       )
 
-      if (!autoApprove) {
+      if (autoApprove) {
+        notifyStoreManagersApproved(store, weekStart, req.user).catch(err =>
+          console.error('Schedule approved notification failed:', err)
+        )
+      } else {
         notifyScheduleApprovers(store, weekStart, req.user).catch(err =>
           console.error('Schedule approval notification failed:', err)
         )
@@ -4170,6 +4218,10 @@ app.post('/schedule-approvals/:id/approve', ...adminPage, async (req, res) => {
     }
 
     console.log('Schedule approved:', { store: doc.store, weekStart: doc.weekStart, by: req.user.email })
+
+    notifyStoreManagersApproved(doc.store, doc.weekStart, req.user).catch(err =>
+      console.error('Schedule approved notification failed:', err)
+    )
 
     return redirectWithMessage(res, '/schedule-approvals', {
       message: `Approved the ${doc.store} schedule for ${weekRangeText(doc.weekStart)}. Employees can see it now.`
@@ -5475,6 +5527,137 @@ app.put(
     } catch (err) {
       console.error('Sick day save error:', err)
       return res.status(500).json({ success: false, error: 'The sick day could not be saved.' })
+    }
+  }
+)
+
+// ------------------------
+// PREVIOUS WEEK REVIEW HISTORY
+// ------------------------
+//
+// Uploads still update ScheduleSettings (the latest week, what the page opens
+// with); a copy of each week is also kept in PreviousWeekReview so earlier
+// weeks can be opened again from the Previous Week tab. Only a rolling 4 weeks
+// are kept: older weeks are deleted on each upload and at startup.
+
+const WEEK_HISTORY_WEEKS = 4
+
+// Monday of the oldest week still kept (4 weeks before this week)
+const oldestKeptWeek = () =>
+  addDaysYmd(mondayOf(storeToday()), -7 * WEEK_HISTORY_WEEKS)
+
+async function pruneWeekHistory() {
+  const { deletedCount } = await PreviousWeekReview.deleteMany({
+    weekStart: { $lt: oldestKeptWeek() }
+  })
+  if (deletedCount) console.log(`Deleted ${deletedCount} previous week review(s) older than ${WEEK_HISTORY_WEEKS} weeks`)
+}
+
+const PREVIOUS_WEEK_FIELDS = [
+  'employeeIdentifiers', 'previousScheduledShifts', 'previousActualShifts',
+  'previousActualHours', 'previousScheduledHours'
+]
+
+const previousWeekMonday = date =>
+  date ? mondayOf(new Date(date).toISOString().slice(0, 10)) : ''
+
+// Copies the store's current previous-week data into the history
+async function saveWeekHistory(store, uploadedBy) {
+  const settings = await ScheduleSettings.findOne({ store }).lean()
+  const weekStart = settings && previousWeekMonday(settings.previousWeekStart)
+  await pruneWeekHistory()
+  if (!isMonday(weekStart) || weekStart < oldestKeptWeek()) return
+
+  await PreviousWeekReview.findOneAndUpdate(
+    { store, weekStart },
+    {
+      $set: {
+        previousWeekStart: settings.previousWeekStart,
+        previousWeekEnd: settings.previousWeekEnd || null,
+        ...Object.fromEntries(PREVIOUS_WEEK_FIELDS.map(field => [field, settings[field] || {}])),
+        ...(uploadedBy ? { uploadedBy } : {})
+      },
+      $setOnInsert: { store, weekStart }
+    },
+    { upsert: true }
+  )
+}
+
+const uploaderOf = (req, store) =>
+  req.user ? personRef(req.user) : { name: `${store} workbook` }
+
+// One-time, repeatable: each store's current week goes into the history
+async function backfillWeekHistory() {
+  await pruneWeekHistory()
+  const stores = await ScheduleSettings.find({ previousWeekStart: { $ne: null } }).select('store').lean()
+  for (const { store } of stores) {
+    const settings = await ScheduleSettings.findOne({ store }).select('previousWeekStart').lean()
+    const weekStart = previousWeekMonday(settings.previousWeekStart)
+    if (isMonday(weekStart) && !(await PreviousWeekReview.exists({ store, weekStart }))) {
+      await saveWeekHistory(store, null)
+      console.log(`Saved ${store}'s previous week (${weekStart}) to the history`)
+    }
+  }
+}
+
+// Weeks with a saved review, newest first
+app.get(
+  '/api/previous-week-reviews',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const weeks = await PreviousWeekReview.find({ store: req.storeName, weekStart: { $gte: oldestKeptWeek() } })
+        .select('weekStart updatedAt uploadedBy')
+        .sort({ weekStart: -1 })
+        .lean()
+
+      return res.json({
+        success: true,
+        weeks: weeks.map(week => ({
+          weekStart: week.weekStart,
+          range: weekRangeText(week.weekStart),
+          uploadedAt: week.updatedAt,
+          uploadedBy: week.uploadedBy && week.uploadedBy.name
+        }))
+      })
+    } catch (err) {
+      console.error('Previous week list error:', err)
+      return res.status(500).json({ success: false, error: 'Earlier weeks could not be loaded.' })
+    }
+  }
+)
+
+// One saved week's review data, plus its sick days
+app.get(
+  '/api/previous-week-reviews/:week',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const weekStart = String(req.params.week || '')
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'Choose a week (it must start on a Monday).' })
+      }
+
+      const review = weekStart >= oldestKeptWeek()
+        ? await PreviousWeekReview.findOne({ store: req.storeName, weekStart }).lean()
+        : null
+      if (!review) {
+        return res.status(404).json({ success: false, error: `No review is saved for that week (only the last ${WEEK_HISTORY_WEEKS} weeks are kept).` })
+      }
+
+      return res.json({
+        success: true,
+        weekStart,
+        previousWeekStart: review.previousWeekStart,
+        previousWeekEnd: review.previousWeekEnd,
+        ...Object.fromEntries(PREVIOUS_WEEK_FIELDS.map(field => [field, review[field] || {}])),
+        sickDays: await sickDaysForWeek(req.storeName, weekStart)
+      })
+    } catch (err) {
+      console.error('Previous week load error:', err)
+      return res.status(500).json({ success: false, error: 'That week could not be loaded.' })
     }
   }
 )
@@ -7630,28 +7813,9 @@ app.get('/api/final-data', ...floorSpaceApi('manager'), async (req, res) => {
 
 
 
-app.post("/set-month", ...approvedApi, (req, res) => {
-  const { month } = req.body
-
-  //console.log("Set month:", month)
-
-  res.json({ success: true })
-})
 
 
-app.get("/debug-db", ...adminPage, async (req, res) => {
-  try {
-    const rows = await ItemRequest.find()
-      .select('item_id user brand products status month map_id created_at')
-      .lean()
 
-    res.json(rows);      // ✅ shows in browser
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
 
 
 
@@ -7908,6 +8072,113 @@ function startNextMonthRequestsEmailJob() {
   console.log(`[next-month-email] Weekly summary job scheduled with cron: ${cronExpression} (America/New_York)`);
 }
 
+
+// ------------------------
+// WEEKLY DATABASE BACKUP EMAIL
+// ------------------------
+//
+// Emails a .zip of the whole database (minus passwords and login secrets, see
+// lib/backup.js) to BACKUP_EMAIL_TO once a week. Render's free tier sleeps,
+// so instead of a fixed time it checks every hour and at startup, and sends
+// whenever the last backup is 7+ days old. Restore: scripts/restore-backup.js.
+// Set BACKUP_EMAIL_TO to an empty value to turn it off.
+
+const BACKUP_EVERY_MS = 7 * 24 * 60 * 60 * 1000
+// After a failed attempt, wait an hour before trying again
+const BACKUP_RETRY_MS = 60 * 60 * 1000
+// Brevo refuses larger emails; leave room for base64 growth
+const BACKUP_MAX_BYTES = 7 * 1024 * 1024
+
+const backupRecipient = () =>
+  process.env.BACKUP_EMAIL_TO ?? 'zzipkis@delaneyliquors.com'
+
+const backupBytes = bytes =>
+  bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+async function sendWeeklyBackupIfDue() {
+  const recipient = String(backupRecipient()).trim()
+  if (!recipient || mongoose.connection.readyState !== 1) return
+
+  // Claim this run atomically, so a restart mid-send can't email twice
+  const now = new Date()
+  const log = mongoose.connection.db.collection('backuplogs')
+  await log.updateOne({ _id: 'weekly-email' }, { $setOnInsert: { lastSentAt: null, lastAttemptAt: null } }, { upsert: true })
+  const claimed = await log.findOneAndUpdate(
+    {
+      _id: 'weekly-email',
+      $and: [
+        { $or: [{ lastSentAt: null }, { lastSentAt: { $lte: new Date(now - BACKUP_EVERY_MS) } }] },
+        { $or: [{ lastAttemptAt: null }, { lastAttemptAt: { $lte: new Date(now - BACKUP_RETRY_MS) } }] }
+      ]
+    },
+    { $set: { lastAttemptAt: now } }
+  )
+  if (!claimed) return
+
+  try {
+    const { zip, counts } = await buildBackup(mongoose.connection.db)
+    const day = storeToday()
+    const total = Object.values(counts).reduce((sum, n) => sum + n, 0)
+    const lines = Object.entries(counts).map(([name, n]) => `  ${name}: ${n}`)
+
+    if (zip.length > BACKUP_MAX_BYTES) {
+      await sendEmail({
+        to: recipient,
+        subject: `Weekly backup FAILED: too large to email (${day})`,
+        text: [
+          `The database backup is ${backupBytes(zip.length)}, over the ${backupBytes(BACKUP_MAX_BYTES)} email limit, so it was not attached.`,
+          '',
+          `Download it instead while signed in as an admin: ${getAppBaseUrl()}/admin/backup.zip`,
+          '',
+          ...lines
+        ].join('\n')
+      })
+    } else {
+      await sendEmail({
+        to: recipient,
+        subject: `Weekly backup ${day} (${backupBytes(zip.length)})`,
+        text: [
+          `Attached is this week's backup of the Delaney app database: ${total} records.`,
+          '',
+          ...lines,
+          '',
+          'Passwords and login secrets are left out. To restore:',
+          '  node scripts/restore-backup.js <the .zip> <MongoDB URI>',
+          '(after a restore, people sign in with "Forgot password").',
+          '',
+          'Keep this file private: it holds employee names, emails and schedules.'
+        ].join('\n'),
+        attachments: [{ name: `delaney-backup-${day}.zip`, content: zip.toString('base64') }]
+      })
+    }
+
+    await log.updateOne({ _id: 'weekly-email' }, { $set: { lastSentAt: now, lastSize: zip.length } })
+    console.log(`[backup] Sent weekly backup (${backupBytes(zip.length)}) to ${recipient}`)
+  } catch (err) {
+    console.error('[backup] Weekly backup email failed; will retry in an hour:', err)
+  }
+}
+
+function startWeeklyBackupJob() {
+  cron.schedule('17 * * * *', () => sendWeeklyBackupIfDue().catch(err =>
+    console.error('[backup] check failed:', err)), { timezone: 'America/New_York' })
+}
+
+// The same backup as a download, for admins
+app.get('/admin/backup.zip', ...adminPage, async (req, res) => {
+  try {
+    const { zip } = await buildBackup(mongoose.connection.db)
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="delaney-backup-${storeToday()}.zip"`,
+      'Cache-Control': 'no-store'
+    })
+    return res.send(zip)
+  } catch (err) {
+    console.error('Backup download error:', err)
+    return res.status(500).send('The backup could not be made.')
+  }
+})
 
 app.get('/admin/test-next-month-email', ...adminPage, async (req, res) => {
   try {
@@ -8918,6 +9189,9 @@ app.post(
       }
     );
 
+    // Keep a copy of this week in the history
+    await saveWeekHistory(store, uploaderOf(req, store));
+
     res.json({
       success: true
     });
@@ -9447,6 +9721,9 @@ app.post(
       }
     );
 
+    // The actuals belong to the current previous week: update its history copy
+    await saveWeekHistory(store, uploaderOf(req, store));
+
     res.json({
       success: true
     });
@@ -9538,6 +9815,7 @@ process.on('unhandledRejection', err => {
 })
 
 startNextMonthRequestsEmailJob();
+startWeeklyBackupJob();
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })
