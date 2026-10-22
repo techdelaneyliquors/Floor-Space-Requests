@@ -3674,7 +3674,7 @@ const pipelinePersonRef = user => ({
 // Who hears about schedules waiting for approval. SCHEDULE_APPROVAL_NOTIFY_TO
 // (comma-separated) overrides the default reviewer.
 function scheduleApprovalRecipients() {
-  return String(process.env.SCHEDULE_APPROVAL_NOTIFY_TO || 'sclark@delaneyliquors.com')
+  return String(process.env.SCHEDULE_APPROVAL_NOTIFY_TO || 'msimione@delaneyliquors.com')
     .split(',')
     .map(email => email.trim())
     .filter(Boolean)
@@ -3683,14 +3683,14 @@ function scheduleApprovalRecipients() {
 async function notifyScheduleApprovers(store, weekStart, submitter) {
   const recipients = scheduleApprovalRecipients()
 
-  if (!recipients.length) return
+  if (!recipients.length) return null
 
   const link = `${getAppBaseUrl()}/schedule-approvals`
   const summary =
     `${submitter.name} submitted the ${store} schedule for the week of ` +
     `${weekRangeText(weekStart)} for approval.`
 
-  await sendEmail({
+  return sendEmail({
     to: recipients,
     subject: `${store} schedule waiting for approval`,
     text: `${summary}\n\nReview it here: ${link}`,
@@ -3800,14 +3800,29 @@ app.post(
         { upsert: true }
       )
 
+      // The schedule is saved either way; a failed approval email is
+      // reported back so the manager knows to tell the reviewer directly
+      let emailWarning = ''
+
       if (autoApprove) {
         notifyStoreManagersApproved(store, weekStart, req.user).catch(err =>
           console.error('Schedule approved notification failed:', err)
         )
       } else {
-        notifyScheduleApprovers(store, weekStart, req.user).catch(err =>
+        try {
+          const result = await notifyScheduleApprovers(store, weekStart, req.user)
+
+          if (!result) {
+            emailWarning = 'No approval reviewer is set up to receive the email.'
+          } else if (result.failed.length) {
+            emailWarning =
+              'The approval email could not be sent to ' +
+              result.failed.map(item => item.to).join(', ') + '.'
+          }
+        } catch (err) {
           console.error('Schedule approval notification failed:', err)
-        )
+          emailWarning = 'The approval email could not be sent.'
+        }
       }
 
       console.log('Schedule posted:', {
@@ -3820,7 +3835,8 @@ app.post(
       return res.json({
         success: true,
         status: autoApprove ? 'approved' : 'pending',
-        weekStart
+        weekStart,
+        emailWarning
       })
     } catch (err) {
       console.error('Post schedule error:', err)

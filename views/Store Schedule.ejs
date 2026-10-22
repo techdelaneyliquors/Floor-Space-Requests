@@ -9297,26 +9297,44 @@ async function postScheduleForApproval() {
 
   if (!confirmed) return;
 
-  const response = await fetch('/api/posted-schedules', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      store: state.store,
-      weekStart,
-      snapshot,
-      // Lets a rejected week be loaded back exactly as submitted
-      builderState: JSON.stringify(captureBuilderState())
-    })
-  });
+  let response;
+
+  try {
+    response = await fetch('/api/posted-schedules', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        store: state.store,
+        weekStart,
+        snapshot,
+        // Lets a rejected week be loaded back exactly as submitted
+        builderState: JSON.stringify(captureBuilderState())
+      })
+    });
+  } catch (err) {
+    // Never reached the server (offline, server down, connection dropped)
+    throw new Error(
+      'The schedule was NOT submitted. The server could not be reached.\n\n' +
+      'Check your internet connection and try again. Your schedule is still on this page.'
+    );
+  }
 
   const result = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    throw new Error(result.error || 'The schedule could not be posted.');
+  if (!response.ok || result.success === false) {
+    const reason =
+      response.status === 401
+        ? 'You have been signed out. Sign in again in another tab, then submit again.'
+        : result.error || `The server returned an error (${response.status}).`;
+
+    throw new Error(
+      'The schedule was NOT submitted.\n\n' + reason +
+      '\n\nYour schedule is still on this page.'
+    );
   }
 
   if (answeringRejection) {
@@ -9324,12 +9342,19 @@ async function postScheduleForApproval() {
     renderRejectionNote();
   }
 
-  await loadPostedWeeks();
+  // The submission is saved; a failed refresh must not look like a failed submit
+  await loadPostedWeeks().catch(err =>
+    console.error('Refreshing posted weeks failed:', err)
+  );
 
   alert(
     result.status === 'approved'
       ? 'Posted. Because you are an admin, it was approved right away and employees can see it now.'
-      : 'Submitted for approval. Employees will see it once an admin approves it.'
+      : result.emailWarning
+        ? 'Submitted for approval, but the reviewer was not notified.\n\n' +
+          result.emailWarning +
+          '\n\nThe schedule is saved. Let the reviewer know it is waiting for approval.'
+        : 'Submitted for approval. Employees will see it once an admin approves it.'
   );
 }
 
