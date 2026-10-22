@@ -53,6 +53,13 @@ const paychexEmployeeLinkSchema = new mongoose.Schema({
     default: false
   },
 
+  // Keyholders can open and close the store; the printable schedule marks
+  // which keyholder opens (green) and closes (red) each day
+  keyholder: {
+    type: Boolean,
+    default: false
+  },
+
   // Where the last change came from: the admin page, a paste, a workbook
   source: {
     type: String,

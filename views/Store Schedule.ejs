@@ -223,6 +223,65 @@
   font-weight:800;
 }
 
+/* Printable schedule: the keyholder who opens (green) and closes (red) */
+.opener-shift,
+.closer-shift {
+  display:inline-block;
+  padding:1px 5px;
+  border-radius:4px;
+}
+
+.opener-shift {
+  background:#bbf7d0;
+  box-shadow:inset 3px 0 0 #15803d;
+}
+
+.closer-shift {
+  background:#fecaca;
+  box-shadow:inset -3px 0 0 #b91c1c;
+}
+
+/* Opens and closes: green half, red half */
+.opener-shift.closer-shift {
+  background:linear-gradient(90deg, #bbf7d0 50%, #fecaca 50%);
+  box-shadow:inset 3px 0 0 #15803d, inset -3px 0 0 #b91c1c;
+}
+
+.keyholder-legend {
+  margin-top:10px;
+  font-size:12px;
+  color:#334155;
+}
+
+.keyholder-legend-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 18px;
+  align-items:center;
+}
+
+.keyholder-swatch {
+  display:inline-block;
+  width:22px;
+  height:12px;
+  padding:0;
+  vertical-align:middle;
+}
+
+.keyholder-hours {
+  color:#64748b;
+}
+
+.keyholder-missing {
+  margin-top:4px;
+  color:#b91c1c;
+  font-weight:700;
+}
+
+.keyholder-note {
+  color:#64748b;
+}
+
 .add-row-button {
   margin-top: 10px;
 }
@@ -959,7 +1018,7 @@ td.budget-within, td.budget-over {
   display:grid;
   grid-template-columns:
     auto minmax(220px, 1fr)
-    auto auto auto auto;
+    auto auto auto auto auto auto;
   gap:10px;
   align-items:center;
   margin-bottom:18px;
@@ -978,6 +1037,22 @@ td.budget-within, td.budget-over {
 
 .template-toolbar select {
   min-width:220px;
+}
+
+/* "Saved by … at …" under the toolbar buttons */
+.save-progress-status {
+  grid-column:1 / -1;
+  color:#64748b;
+  font-size:13px;
+}
+
+.save-progress-status:empty {
+  display:none;
+}
+
+.save-progress-status.is-error {
+  color:#b91c1c;
+  font-weight:700;
 }
 
 @media(max-width:950px) {
@@ -1626,6 +1701,26 @@ td.budget-within, td.budget-over {
     Delete Template
   </button>
 
+  <button
+    type="button"
+    class="primary"
+    id="saveProgressBtn"
+    title="Save this schedule as it is now. It loads again the next time the page opens, on any computer, until it is submitted."
+  >
+    Save Progress
+  </button>
+
+  <button
+    type="button"
+    class="secondary"
+    id="loadProgressBtn"
+    title="Replace what is on the page with the progress last saved for this store."
+  >
+    Load Saved Progress
+  </button>
+
+  <span id="saveProgressStatus" class="save-progress-status" aria-live="polite"></span>
+
 </div>
         <div id="timeOffPanel" class="time-off-panel"></div>
         <div id="buildWarnings" class="schedule-warnings"></div>
@@ -1813,6 +1908,7 @@ td.budget-within, td.budget-over {
   "
 ></div>
         <div class="table-wrap"><table id="printSchedule"></table></div>
+        <div id="keyholderLegend" class="keyholder-legend"></div>
         <div id="rejectionNote" class="rejection-note no-print" hidden></div>
       </div>
     </div>
@@ -2065,6 +2161,14 @@ previousWeekEnd:
   salariedEmployeeNumbers:
     <%- safeJson(incoming.salariedEmployeeNumbers || []) %>,
 
+  // Employee numbers marked keyholder on the Paychex IDs page
+  keyholderEmployeeNumbers:
+    <%- safeJson(incoming.keyholderEmployeeNumbers || []) %>,
+
+  // From the Store Hours page: { monday: { closed, open: 'HH:MM', close: 'HH:MM' }, ... }
+  storeHours:
+    <%- safeJson(incoming.storeHours || {}) %>,
+
   // Last "previous week review is ready" email: { sentAt, weekStart, sentBy }
   previousWeekReviewPing:
     <%- safeJson(incoming.previousWeekReviewPing || null) %>,
@@ -2072,6 +2176,9 @@ previousWeekEnd:
 
   const isSalaried = employeeNumber =>
     Boolean(employeeNumber) && state.salariedEmployeeNumbers.includes(String(employeeNumber));
+
+  const isKeyholder = employeeNumber =>
+    Boolean(employeeNumber) && state.keyholderEmployeeNumbers.includes(String(employeeNumber));
 
   // Hourly employees are paid overtime for every hour over 40; salaried, none
   const paidOvertimeFor = (employeeNumber, workedHours) =>
@@ -4914,8 +5021,125 @@ function generateScheduleComments() {
 
   return comments;
 }
+  // Store Hours "HH:MM" -> hours as a decimal (like parseTime), or null
+  function hoursFromClock(text) {
+    const match = /^(\d{2}):(\d{2})$/.exec(text || '');
+    return match ? Number(match[1]) + Number(match[2]) / 60 : null;
+  }
+
+  // "13:30" -> "1:30 PM"
+  function clockLabel(text) {
+    const value = hoursFromClock(text);
+    if (value == null) return '';
+    const hour = Math.floor(value);
+    return `${hour % 12 || 12}:${text.slice(3)} ${hour < 12 ? 'AM' : 'PM'}`;
+  }
+
+  /*
+   * Keyholder openers and closers for each day of the printable schedule.
+   * The opener is the keyholder who starts earliest, if that is at or before
+   * the store's opening time; the closer is the keyholder who finishes
+   * latest, if that is at or after closing. Without store hours for a day,
+   * the earliest and latest keyholders are marked. Shifts are identified as
+   * "name|index" within that day's shifts.
+   */
+  function findOpenersAndClosers(data) {
+    const result = {};
+
+    DAY_KEYS.forEach(day => {
+      const hours = (state.storeHours && state.storeHours[day]) || {};
+      const open = hoursFromClock(hours.open);
+      const close = hoursFromClock(hours.close);
+      const openers = new Set();
+      const closers = new Set();
+      const keyholderShifts = [];
+
+      Object.keys(data).forEach(name => {
+        const employeeNumber = String(state.buildEmployeeIdentifiers?.[name] || '').trim();
+        if (!isKeyholder(employeeNumber)) return;
+
+        data[name][day].shifts.forEach((shift, index) => {
+          if (!shift.text.includes(' to ')) return;
+          const [start, rawEnd] = shift.text.split(' to ').map(parseTime);
+          if (start == null || rawEnd == null) return;
+          // A shift ending past midnight
+          const end = rawEnd < start ? rawEnd + 24 : rawEnd;
+          keyholderShifts.push({ key: `${name}|${index}`, start, end });
+        });
+      });
+
+      if (!hours.closed && keyholderShifts.length) {
+        const earliest = Math.min(...keyholderShifts.map(shift => shift.start));
+        const latest = Math.max(...keyholderShifts.map(shift => shift.end));
+
+        keyholderShifts.forEach(shift => {
+          if (shift.start === earliest && (open == null || shift.start <= open)) openers.add(shift.key);
+          if (shift.end === latest && (close == null || shift.end >= close)) closers.add(shift.key);
+        });
+      }
+
+      result[day] = {
+        openers,
+        closers,
+        closed: hours.closed === true,
+        hasHours: open != null && close != null,
+        open: hours.open,
+        close: hours.close
+      };
+    });
+
+    return result;
+  }
+
+  // Under the printable schedule: what green and red mean, the store hours,
+  // and days with no keyholder opening or closing
+  function renderKeyholderLegend(keyholderDays) {
+    const legend = document.getElementById('keyholderLegend');
+    if (!legend) return;
+
+    if (!state.keyholderEmployeeNumbers.length) {
+      legend.innerHTML = `
+        <div class="keyholder-note no-print">
+          No keyholders are marked for this store yet. Mark them on the
+          <a href="/paychex-ids?store=${encodeURIComponent(state.store)}">Paychex IDs</a> page
+          to show openers (green) and closers (red).
+        </div>
+      `;
+      return;
+    }
+
+    const hoursText = DAY_KEYS.map((day, index) => {
+      const info = keyholderDays[day];
+      const label = DAYS[index].slice(0, 3);
+      if (info.closed) return `${label} closed`;
+      if (!info.hasHours) return `${label} not set`;
+      return `${label} ${clockLabel(info.open)}–${clockLabel(info.close)}`;
+    }).join(' · ');
+
+    const missing = (list, kind) => list.length
+      ? `<div class="keyholder-missing">No keyholder ${kind}: ${escapeHtml(list.join(', '))}</div>`
+      : '';
+
+    // Only days with store hours, so blank days don't all show as missing
+    const openDays = DAY_KEYS
+      .map((day, index) => ({ label: DAYS[index], info: keyholderDays[day] }))
+      .filter(item => !item.info.closed && item.info.hasHours);
+
+    legend.innerHTML = `
+      <div class="keyholder-legend-row">
+        <span><span class="keyholder-swatch opener-shift"></span> Opens (keyholder)</span>
+        <span><span class="keyholder-swatch closer-shift"></span> Closes (keyholder)</span>
+        <span class="keyholder-hours">Store hours: ${escapeHtml(hoursText)}</span>
+      </div>
+      ${missing(openDays.filter(item => !item.info.openers.size).map(item => item.label), 'opening')}
+      ${missing(openDays.filter(item => !item.info.closers.size).map(item => item.label), 'closing')}
+    `;
+  }
+
   function renderPrintSchedule() {
   const data = gatherScheduled();
+  const keyholderDays = findOpenersAndClosers(data);
+  renderKeyholderLegend(keyholderDays);
 
   // Everyone with a shift, plus anyone with only paid time off
   const employees = Object.keys(data).filter(
@@ -4967,17 +5191,24 @@ function generateScheduleComments() {
 
       const shiftsHtml =
         dayData.shifts
-          .map(shift => `
-            <span class="${
-              shift.modified
-                ? 'temporary-shift'
-                : ''
-            }">
+          .map((shift, index) => {
+            const opens = keyholderDays[day].openers.has(`${name}|${index}`);
+            const closes = keyholderDays[day].closers.has(`${name}|${index}`);
+            const classes = [
+              shift.modified ? 'temporary-shift' : '',
+              opens ? 'opener-shift' : '',
+              closes ? 'closer-shift' : ''
+            ].filter(Boolean).join(' ');
+            const title = opens && closes ? 'Opens and closes' : opens ? 'Opens' : closes ? 'Closes' : '';
+
+            return `
+            <span class="${classes}"${title ? ` title="${title}"` : ''}>
               ${escapeHtml(
                 shift.text
               )}
             </span>
-          `)
+          `;
+          })
           .join('<br>');
 
       return `
@@ -8667,6 +8898,8 @@ async function loadPostedWeeks() {
   if (selectedWeek && selectedWeek !== timeOffData.week) {
     await loadTimeOffForWeek(selectedWeek);
   }
+
+  return result.weeks || [];
 }
 
 // The schedule employees will see (each employee's shifts by day, grouped
@@ -8952,13 +9185,16 @@ function renderRejectionNote() {
   });
 }
 
-async function loadRejectedSchedule(weekStart) {
-  const confirmed = window.confirm(
-    `Load the rejected schedule for ${postingWeekLabel(weekStart)}?\n\n` +
-    'This replaces what is on the page now, including any unsaved changes.'
-  );
+// ask: false when the page loads it on opening (nothing to replace yet)
+async function loadRejectedSchedule(weekStart, { ask = true } = {}) {
+  if (ask) {
+    const confirmed = window.confirm(
+      `Load the rejected schedule for ${postingWeekLabel(weekStart)}?\n\n` +
+      'This replaces what is on the page now, including any unsaved changes.'
+    );
 
-  if (!confirmed) return;
+    if (!confirmed) return;
+  }
 
   const response = await fetch(
     `/api/posted-schedules/rejected?store=${encodeURIComponent(state.store)}` +
@@ -8987,6 +9223,316 @@ async function loadRejectedSchedule(weekStart) {
   if (timeOffData.week !== weekStart) {
     await loadTimeOffForWeek(weekStart);
   }
+
+  markProgressSaved();
+}
+
+/*
+ * Save Progress: the page's working state is saved on the server for the
+ * store (shared by its managers) and loaded again when the page next opens,
+ * until a schedule is submitted. Leaving with unsaved changes asks first.
+ */
+let savedProgressJson = '';
+
+function currentProgressJson() {
+  return JSON.stringify(captureBuilderState());
+}
+
+// What is on the page now counts as saved (saved, submitted or just loaded)
+function markProgressSaved() {
+  savedProgressJson = currentProgressJson();
+}
+
+function showProgressStatus(message, isError = false) {
+  const status = document.getElementById('saveProgressStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('is-error', isError);
+}
+
+// Signed out mid-session: open the sign-in page in a new tab, so this tab
+// and its unsaved work stay put. Returns the message to show. retry is
+// what to click again, e.g. "submit".
+function signedOutMessage(retry) {
+  let opened = null;
+  try {
+    opened = window.open('/login', '_blank');
+  } catch (err) {
+    // Blocked; the message says where to go instead
+  }
+
+  return (opened
+    ? 'You have been signed out. A sign-in page opened in a new tab. Sign in there, '
+    : `You have been signed out. Open ${location.origin}/login in a new tab and sign in there, `) +
+    `then come back to this tab and ${retry} again. Don't reload this tab.`;
+}
+
+function savedText(savedBy, savedAt) {
+  const when = savedAt
+    ? new Date(savedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+  return `Progress saved${savedBy ? ` by ${savedBy}` : ''}${when ? ` on ${when}` : ''}.`;
+}
+
+async function saveProgress() {
+  const button = document.getElementById('saveProgressBtn');
+  if (button) button.disabled = true;
+  showProgressStatus('Saving…');
+
+  try {
+    let response;
+
+    try {
+      response = await fetch('/api/schedule-draft', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({
+          store: state.store,
+          builderState: currentProgressJson(),
+          weekStart: document.getElementById('postWeekSelect')?.value || '',
+          rejection: loadedRejection
+        })
+      });
+    } catch (err) {
+      throw new Error('Progress was NOT saved. The server could not be reached. Check your connection and try again.');
+    }
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.success === false) {
+      throw new Error(
+        'Progress was NOT saved. ' +
+        (response.status === 401
+          ? signedOutMessage('save')
+          : result.error || `The server returned an error (${response.status}).`)
+      );
+    }
+
+    markProgressSaved();
+    showProgressStatus(savedText(result.savedBy, result.savedAt));
+  } catch (err) {
+    showProgressStatus(err.message, true);
+    alert(err.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+document
+  .getElementById('saveProgressBtn')
+  ?.addEventListener('click', saveProgress);
+
+async function loadProgress() {
+  const button = document.getElementById('loadProgressBtn');
+  if (button) button.disabled = true;
+
+  try {
+    let draft;
+
+    try {
+      draft = await fetchSavedProgress();
+    } catch (err) {
+      throw new Error(
+        err.signedOut
+          ? 'Saved progress was NOT loaded. ' + signedOutMessage('click Load Saved Progress')
+          : err instanceof TypeError
+            ? 'Saved progress could not be loaded. The server could not be reached. Check your connection and try again.'
+            : err.message
+      );
+    }
+
+    if (!draft) {
+      alert('There is no saved progress for this store. It is cleared once a schedule is submitted.');
+      return;
+    }
+
+    const unsaved = currentProgressJson() !== savedProgressJson;
+    const confirmed = window.confirm(
+      `Load the progress ${savedText(draft.savedBy, draft.savedAt).replace(/^Progress saved/, 'saved').replace(/\.$/, '')}?\n\n` +
+      'This replaces what is on the page now' +
+      (unsaved ? ', including changes you have not saved.' : '.')
+    );
+
+    if (!confirmed) return;
+
+    await applySavedProgress(draft);
+  } catch (err) {
+    showProgressStatus(err.message, true);
+    alert(err.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+document
+  .getElementById('loadProgressBtn')
+  ?.addEventListener('click', loadProgress);
+
+async function fetchSavedProgress() {
+  const response = await fetch(
+    `/api/schedule-draft?store=${encodeURIComponent(state.store)}`,
+    { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+  );
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(result.error || 'The saved progress could not be loaded.');
+    error.signedOut = response.status === 401;
+    throw error;
+  }
+
+  return result.draft || null;
+}
+
+async function applySavedProgress(draft) {
+  restoreBuilderState(draft.builderState || {});
+
+  loadedRejection = draft.rejection || null;
+  renderRejectionNote();
+
+  await selectPostWeek(draft.weekStart);
+
+  markProgressSaved();
+  showProgressStatus(`Loaded saved progress. ${savedText(draft.savedBy, draft.savedAt)}`);
+}
+
+// Picks a week under "Post this schedule" (if it's one of the choices)
+async function selectPostWeek(weekStart) {
+  const select = document.getElementById('postWeekSelect');
+  if (!select || !weekStart || ![...select.options].some(option => option.value === weekStart)) return;
+
+  select.value = weekStart;
+  if (timeOffData.week !== weekStart) {
+    await loadTimeOffForWeek(weekStart);
+  }
+}
+
+window.addEventListener('beforeunload', event => {
+  if (!savedProgressJson || currentProgressJson() === savedProgressJson) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
+/*
+ * Unsaved-work backup: while the page has changes that aren't saved or
+ * submitted, a copy is kept in this browser (this computer only), so a
+ * closed tab, crash, or reload while signed out or offline doesn't lose
+ * them. When the page next opens, it offers to restore a copy newer than
+ * anything on the server. Saving or submitting deletes the copy.
+ */
+const BACKUP_KEY = `scheduleBackup:${state.store}`;
+const BACKUP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+// Off until the page has loaded what it opens on and offered any restore
+let backupReady = false;
+let lastBackupJson = '';
+
+function readBackup() {
+  try {
+    const backup = JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null');
+    return backup && typeof backup.builderStateJson === 'string' && backup.savedAt ? backup : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function clearBackup() {
+  lastBackupJson = '';
+  try {
+    localStorage.removeItem(BACKUP_KEY);
+  } catch (err) {
+    // Storage blocked; nothing to clear
+  }
+}
+
+function updateBackup() {
+  if (!backupReady) return;
+
+  const current = currentProgressJson();
+
+  // Saved or submitted: no unsaved work to keep
+  if (current === savedProgressJson) {
+    if (lastBackupJson) clearBackup();
+    return;
+  }
+
+  if (current === lastBackupJson) return;
+
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify({
+      builderStateJson: current,
+      weekStart: document.getElementById('postWeekSelect')?.value || '',
+      rejection: loadedRejection,
+      savedAt: new Date().toISOString()
+    }));
+    lastBackupJson = current;
+  } catch (err) {
+    // Storage full or blocked (e.g. private browsing); the page still works
+  }
+}
+
+setInterval(updateBackup, 5000);
+window.addEventListener('pagehide', updateBackup);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') updateBackup();
+});
+
+// "10:42 AM" today, otherwise "Oct 21 at 10:42 AM"
+function backupTimeLabel(time) {
+  const date = new Date(time);
+  const clock = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString()
+    ? clock
+    : `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${clock}`;
+}
+
+// newestServerTime: the latest saved progress, rejection or submission (ms)
+async function offerBackupRestore(newestServerTime) {
+  const backup = readBackup();
+  if (!backup) return;
+
+  const backupTime = new Date(backup.savedAt).getTime();
+
+  if (
+    !(backupTime > newestServerTime) ||
+    Date.now() - backupTime > BACKUP_MAX_AGE_MS ||
+    backup.builderStateJson === currentProgressJson()
+  ) {
+    clearBackup();
+    return;
+  }
+
+  const restore = window.confirm(
+    `Restore your unsaved schedule from ${backupTimeLabel(backupTime)}?\n\n` +
+    'It was not saved or submitted before the page was closed. ' +
+    'OK brings it back. Cancel discards it.'
+  );
+
+  if (!restore) {
+    clearBackup();
+    return;
+  }
+
+  try {
+    restoreBuilderState(JSON.parse(backup.builderStateJson));
+  } catch (err) {
+    console.error('Unsaved schedule could not be restored:', err);
+    clearBackup();
+    return;
+  }
+
+  loadedRejection = backup.rejection || null;
+  renderRejectionNote();
+  await selectPostWeek(backup.weekStart);
+
+  // Still unsaved: the copy is kept until it is saved or submitted
+  lastBackupJson = currentProgressJson();
+  showProgressStatus('Restored your unsaved schedule. Click Save Progress or submit it to keep it.');
 }
 
 // Close the header's "Me" menu when clicking anywhere else
@@ -9328,7 +9874,7 @@ async function postScheduleForApproval() {
   if (!response.ok || result.success === false) {
     const reason =
       response.status === 401
-        ? 'You have been signed out. Sign in again in another tab, then submit again.'
+        ? signedOutMessage('submit')
         : result.error || `The server returned an error (${response.status}).`;
 
     throw new Error(
@@ -9341,6 +9887,10 @@ async function postScheduleForApproval() {
     loadedRejection = null;
     renderRejectionNote();
   }
+
+  // Submitting clears the store's saved progress on the server
+  markProgressSaved();
+  showProgressStatus('');
 
   // The submission is saved; a failed refresh must not look like a failed submit
   await loadPostedWeeks().catch(err =>
@@ -10749,15 +11299,25 @@ document.addEventListener(
 
   window.setAssignment = setAssignment;
   async function initializeSchedulePage() {
+  // Latest server-side work (ms), set below; compared with the browser backup
+  let newestServerTime = 0;
+
   /*
    * Render the page immediately so the normal schedule
    * is not delayed while point records are downloaded.
    */
   renderAllTables();
 
-  loadPostedWeeks().catch(err =>
-    console.error('Posted schedules could not be loaded:', err)
-  );
+  const postedWeeksLoad = loadPostedWeeks().catch(err => {
+    console.error('Posted schedules could not be loaded:', err);
+    return [];
+  });
+
+  const savedProgressLoad = fetchSavedProgress().catch(err => {
+    console.error('Saved progress could not be loaded:', err);
+    showProgressStatus('Saved progress could not be loaded. Reload the page to try again.', true);
+    return null;
+  });
 
   try {
     await Promise.all([
@@ -10767,6 +11327,46 @@ document.addEventListener(
       loadExistingPointRecommendations(),
       loadExistingOvertimeReviews()
     ]);
+
+    // Open on the newest work: saved progress or a rejected week waiting
+    // to be fixed. Without either, the default template.
+    const [weeks, draft] = await Promise.all([postedWeeksLoad, savedProgressLoad]);
+
+    // An unsaved-work backup older than this is out of date
+    const time = value => {
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+    newestServerTime = Math.max(
+      draft ? time(draft.savedAt) : 0,
+      ...weeks.map(week => Math.max(
+        week.lastRejection ? time(week.lastRejection.rejectedAt) : 0,
+        week.pending ? time(week.pending.submittedAt) : 0
+      ))
+    );
+
+    const rejected = weeks
+      .filter(week => week.lastRejection && week.lastRejection.canLoad && !week.pending)
+      .sort((a, b) => new Date(b.lastRejection.rejectedAt) - new Date(a.lastRejection.rejectedAt))[0];
+
+    const rejectedIsNewer = rejected && (
+      !draft || new Date(rejected.lastRejection.rejectedAt) > new Date(draft.savedAt)
+    );
+
+    if (rejectedIsNewer) {
+      try {
+        await loadRejectedSchedule(rejected.weekStart, { ask: false });
+        return;
+      } catch (err) {
+        // Fall back to saved progress or the default template
+        console.error('Rejected schedule could not be loaded:', err);
+      }
+    }
+
+    if (draft) {
+      await applySavedProgress(draft);
+      return;
+    }
 
     const defaultTemplate =
       state.templates.find(
@@ -10792,6 +11392,17 @@ document.addEventListener(
       'Schedule initialization error:',
       err
     );
+  } finally {
+    // Changes from here on count as unsaved
+    markProgressSaved();
+
+    // Then offer back any unsaved work this browser kept
+    try {
+      await offerBackupRestore(newestServerTime);
+    } catch (err) {
+      console.error('Unsaved schedule backup check failed:', err);
+    }
+    backupReady = true;
   }
 }
 

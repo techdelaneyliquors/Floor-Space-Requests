@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Store Hours</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+
+  <style>
+    .pickers { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .pickers label { font-size: 14px; font-weight: 600; }
+    .pickers select {
+      padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: 14px; font-family: inherit; margin-left: 6px;
+    }
+    .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .muted { color: #64748b; font-size: 12px; }
+
+    .hours-table { border-collapse: collapse; font-size: 14px; }
+    .hours-table th, .hours-table td {
+      border-bottom: 1px solid #e5e7eb; padding: 8px 14px; text-align: left; vertical-align: middle;
+    }
+    .hours-table th { background: #f3f4f6; font-weight: 600; white-space: nowrap; }
+    .hours-table td.day { font-weight: 600; }
+    .hours-table td.closed-cell { text-align: center; }
+    .hours-table input[type="time"] {
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px;
+      font-family: inherit; font-size: 14px;
+    }
+    .hours-table input[type="checkbox"] { width: 18px; height: 18px; }
+    .hours-table tr.is-closed input[type="time"] { opacity: .4; }
+
+    .table-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+    .message { min-height: 1.3em; font-size: 14px; }
+    .message.error { color: #b91c1c; }
+    .message.ok { color: #15803d; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h1>Store Hours</h1>
+    <div class="top-actions">
+      <a href="/paychex-ids?store=<%= encodeURIComponent(store) %>" class="btn btn-back">Paychex IDs</a>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <form class="pickers" method="GET">
+      <label>
+        Store
+        <select name="store" onchange="this.form.submit()">
+          <% stores.forEach(name => { %>
+            <option value="<%= name %>" <%= name === store ? 'selected' : '' %>><%= name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
+    </form>
+    <p class="muted" style="margin:10px 0 0;">
+      When <%= store %> opens and closes each day. On the printable schedule, the keyholder whose shift
+      starts at or before opening is marked as the <strong style="color:#15803d;">opener</strong> (green), and
+      the keyholder whose shift ends at or after closing is the <strong style="color:#b91c1c;">closer</strong>
+      (red). Mark keyholders on the <a href="/paychex-ids?store=<%= encodeURIComponent(store) %>">Paychex IDs</a> page.
+      Leave a day blank if its hours aren't set.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table class="hours-table" id="hoursTable">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Closed</th>
+            <th>Opens</th>
+            <th>Closes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% Object.entries(days).forEach(([day, hours]) => { %>
+            <tr data-day="<%= day %>" class="<%= hours.closed ? 'is-closed' : '' %>">
+              <td class="day"><%= day[0].toUpperCase() + day.slice(1) %></td>
+              <td class="closed-cell">
+                <input type="checkbox" class="closed-input" aria-label="Closed on <%= day %>"
+                       <%= hours.closed ? 'checked' : '' %>>
+              </td>
+              <td><input type="time" class="open-input" aria-label="Opens on <%= day %>"
+                         value="<%= hours.open %>" <%= hours.closed ? 'disabled' : '' %>></td>
+              <td><input type="time" class="close-input" aria-label="Closes on <%= day %>"
+                         value="<%= hours.close %>" <%= hours.closed ? 'disabled' : '' %>></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-actions">
+      <button type="button" class="btn btn-approve" id="saveHoursBtn">Save hours</button>
+      <span id="hoursMessage" class="message" role="status"></span>
+    </div>
+    <% if (updatedAt) { %>
+      <p class="muted">
+        Last changed<%= updatedBy ? ` by ${updatedBy}` : '' %>,
+        <%= new Date(updatedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>.
+      </p>
+    <% } %>
+  </div>
+
+</div>
+
+<script>
+const STORE = <%- safeJson(store) %>;
+
+function showMessage(text, kind) {
+  const message = document.getElementById('hoursMessage');
+  message.className = `message ${kind || ''}`;
+  message.textContent = text;
+}
+
+// A closed day has no times
+document.getElementById('hoursTable').addEventListener('change', event => {
+  if (!event.target.classList.contains('closed-input')) return;
+  const row = event.target.closest('tr');
+  row.classList.toggle('is-closed', event.target.checked);
+  row.querySelectorAll('input[type="time"]').forEach(input => {
+    input.disabled = event.target.checked;
+  });
+});
+
+document.getElementById('saveHoursBtn').addEventListener('click', async () => {
+  const button = document.getElementById('saveHoursBtn');
+  const days = {};
+
+  document.querySelectorAll('#hoursTable tbody tr').forEach(row => {
+    days[row.dataset.day] = {
+      closed: row.querySelector('.closed-input').checked,
+      open: row.querySelector('.open-input').value,
+      close: row.querySelector('.close-input').value
+    };
+  });
+
+  button.disabled = true;
+  showMessage('Saving…');
+
+  try {
+    let response;
+    try {
+      response = await fetch('/api/store-hours', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ store: STORE, days })
+      });
+    } catch (err) {
+      throw new Error('The hours were NOT saved. The server could not be reached. Check your connection and try again.');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(
+        response.status === 401
+          ? 'You have been signed out. Sign in again in another tab, then save again.'
+          : result.error || `The hours could not be saved (${response.status}).`
+      );
+    }
+
+    showMessage('Saved.', 'ok');
+  } catch (err) {
+    showMessage(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

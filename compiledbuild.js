@@ -88,6 +88,8 @@ const ScheduleSettings = require(
   './models/ScheduleSettings'
 )
 const ScheduleTemplate = require('./models/ScheduleTemplate')
+const ScheduleDraft = require('./models/ScheduleDraft')
+const StoreHours = require('./models/StoreHours')
 const AttendanceOvertimeReview = require(
   './models/AttendanceOvertimeReview'
 );
@@ -3674,7 +3676,7 @@ const pipelinePersonRef = user => ({
 // Who hears about schedules waiting for approval. SCHEDULE_APPROVAL_NOTIFY_TO
 // (comma-separated) overrides the default reviewer.
 function scheduleApprovalRecipients() {
-  return String(process.env.SCHEDULE_APPROVAL_NOTIFY_TO || 'msimione@delaneyliquors.com')
+  return String(process.env.SCHEDULE_APPROVAL_NOTIFY_TO || 'msimione@delaneyliquors.com,sclark@delaneyliquors.com')
     .split(',')
     .map(email => email.trim())
     .filter(Boolean)
@@ -3800,6 +3802,9 @@ app.post(
         { upsert: true }
       )
 
+      // The submitted schedule replaces any saved progress
+      await ScheduleDraft.deleteOne({ store })
+
       // The schedule is saved either way; a failed approval email is
       // reported back so the manager knows to tell the reviewer directly
       let emailWarning = ''
@@ -3903,6 +3908,89 @@ app.get(
       return res.status(500).json({
         success: false,
         error: 'The rejected schedule could not be loaded.'
+      })
+    }
+  }
+)
+
+// The store's saved in-progress schedule ("Save Progress"), or null
+app.get(
+  '/api/schedule-draft',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const draft = await ScheduleDraft.findOne({ store: req.storeName }).lean()
+
+      if (!draft) return res.json({ success: true, draft: null })
+
+      return res.json({
+        success: true,
+        draft: {
+          builderState: JSON.parse(draft.builderStateJson),
+          weekStart: draft.weekStart || '',
+          rejection: draft.rejection && draft.rejection.weekStart ? draft.rejection : null,
+          savedBy: draft.savedBy && draft.savedBy.name,
+          savedAt: draft.savedAt
+        }
+      })
+    } catch (err) {
+      console.error('Load schedule draft error:', err)
+      return res.status(500).json({
+        success: false,
+        error: 'The saved progress could not be loaded.'
+      })
+    }
+  }
+)
+
+app.put(
+  '/api/schedule-draft',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const builderStateJson = cleanBuilderState(req.body.builderState)
+
+      if (!builderStateJson) {
+        return res.status(400).json({
+          success: false,
+          error: 'There is no schedule to save, or it is too large.'
+        })
+      }
+
+      const weekStart = String(req.body.weekStart || '')
+      const rejection = req.body.rejection
+      const rejectedAt = rejection && new Date(rejection.rejectedAt)
+      const savedAt = new Date()
+
+      await ScheduleDraft.updateOne(
+        { store: req.storeName },
+        {
+          $set: {
+            builderStateJson,
+            weekStart: isMonday(weekStart) ? weekStart : '',
+            rejection: rejection && typeof rejection === 'object' && isMonday(String(rejection.weekStart || ''))
+              ? {
+                  weekStart: String(rejection.weekStart),
+                  reason: cleanText(rejection.reason, 500),
+                  rejectedBy: cleanText(rejection.rejectedBy, 100),
+                  rejectedAt: isNaN(rejectedAt) ? null : rejectedAt
+                }
+              : null,
+            savedBy: personRef(req.user),
+            savedAt
+          }
+        },
+        { upsert: true }
+      )
+
+      return res.json({ success: true, savedAt, savedBy: req.user.name })
+    } catch (err) {
+      console.error('Save schedule draft error:', err)
+      return res.status(500).json({
+        success: false,
+        error: 'The progress could not be saved.'
       })
     }
   }
@@ -5829,10 +5917,23 @@ for (const store of STORE_LIST) {
           : ''
         const sickDays = previousMonday ? await sickDaysForWeek(store, previousMonday) : []
 
-        // Employee numbers marked salaried on the Paychex IDs page (no paid OT)
-        const salariedEmployeeNumbers = (await PaychexEmployeeLink.find({ store, salaried: true })
-          .select('employeeNumber')
-          .lean()).map(link => link.employeeNumber)
+        // Employee numbers marked salaried (no paid OT) or keyholder on the
+        // Paychex IDs page
+        const flaggedLinks = await PaychexEmployeeLink.find({
+          store,
+          $or: [{ salaried: true }, { keyholder: true }]
+        })
+          .select('employeeNumber salaried keyholder')
+          .lean()
+        const salariedEmployeeNumbers = flaggedLinks
+          .filter(link => link.salaried)
+          .map(link => link.employeeNumber)
+        const keyholderEmployeeNumbers = flaggedLinks
+          .filter(link => link.keyholder)
+          .map(link => link.employeeNumber)
+
+        // Opening and closing times, for marking the keyholder openers/closers
+        const storeHours = storeHoursView(await StoreHours.findOne({ store }).lean())
 
         return res.render('Store Schedule.ejs', {
           user: req.user,
@@ -5863,7 +5964,9 @@ for (const store of STORE_LIST) {
             hoursBudget,
             sickDays,
             salariedEmployeeNumbers,
-            previousWeekReviewPing: previousWeekPingView(settings.previousWeekReviewPing)
+            keyholderEmployeeNumbers,
+            storeHours,
+            previousWeekReviewPing:previousWeekPingView(settings.previousWeekReviewPing)
           }
         })
       } catch (err) {
@@ -6093,6 +6196,7 @@ function paychexLinkView(link) {
     paychexUserId: typeof link.paychexUserId === 'number' ? link.paychexUserId : null,
     ll1: typeof link.ll1 === 'number' ? link.ll1 : null,
     salaried: link.salaried === true,
+    keyholder: link.keyholder === true,
     source: link.source,
     updatedBy: link.updatedBy && link.updatedBy.name,
     updatedAt: link.updatedAt
@@ -6121,6 +6225,16 @@ function cleanSalaried(value) {
   return null
 }
 
+// Same as cleanSalaried, for the keyholder column
+function cleanKeyholder(value) {
+  if (value === true || value === false) return value
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text) return undefined
+  if (['yes', 'y', 'true', '1', 'keyholder', 'key', 'x'].includes(text)) return true
+  if (['no', 'n', 'false', '0'].includes(text)) return false
+  return null
+}
+
 // One incoming row -> { link } or { error }
 function cleanPaychexLink(row) {
   const employeeNumber = String((row && row.employeeNumber) ?? '').trim()
@@ -6136,13 +6250,17 @@ function cleanPaychexLink(row) {
   const salaried = cleanSalaried(row.salaried)
   if (salaried === null) return { error: 'Salaried must be yes or no.' }
 
+  const keyholder = cleanKeyholder(row.keyholder)
+  if (keyholder === null) return { error: 'Keyholder must be yes or no.' }
+
   return {
     link: {
       employeeNumber,
       employeeName: cleanText(row.employeeName, 120),
       paychexUserId: userId.value,
       ll1: ll1.value,
-      ...(salaried === undefined ? {} : { salaried })
+      ...(salaried === undefined ? {} : { salaried }),
+      ...(keyholder === undefined ? {} : { keyholder })
     }
   }
 }
@@ -6207,8 +6325,8 @@ app.put(
 
         const { employeeName, ...ids } = cleaned.link
 
-        // Nothing left to keep (no IDs, not salaried): remove the record
-        if (ids.paychexUserId === null && ids.ll1 === null && ids.salaried === false) {
+        // Nothing left to keep (no IDs, not salaried, not a keyholder): remove the record
+        if (ids.paychexUserId === null && ids.ll1 === null && ids.salaried === false && ids.keyholder === false) {
           operations.push({ deleteOne: { filter: { store, employeeNumber: ids.employeeNumber } } })
           return
         }
@@ -6300,6 +6418,7 @@ app.get('/paychex-ids', ...adminPage, async (req, res) => {
       rows,
       linkedCount: rows.filter(row => row.onRoster && row.link && row.link.paychexUserId).length,
       salariedCount: rows.filter(row => row.onRoster && row.link && row.link.salaried).length,
+      keyholderCount: rows.filter(row => row.onRoster && row.link && row.link.keyholder).length,
       rosterCount: roster.length
     })
   } catch (err) {
@@ -6307,6 +6426,105 @@ app.get('/paychex-ids', ...adminPage, async (req, res) => {
     return res.status(500).send('Error loading Paychex IDs')
   }
 })
+
+// ------------------------
+// STORE HOURS
+// ------------------------
+
+const STORE_HOURS_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+const HOURS_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+
+// { monday: { closed, open: 'HH:MM', close: 'HH:MM' }, ... } with every day
+function storeHoursView(doc) {
+  const days = (doc && doc.days) || {}
+  return Object.fromEntries(STORE_HOURS_DAYS.map(day => {
+    const hours = days[day] || {}
+    return [day, {
+      closed: hours.closed === true,
+      open: hours.open || '',
+      close: hours.close || ''
+    }]
+  }))
+}
+
+// Incoming days -> { days } or { error }. A day is closed, or has both times
+// (closing after opening), or is left blank (not set).
+function cleanStoreHours(input) {
+  if (!input || typeof input !== 'object') return { error: 'Send the hours for each day.' }
+
+  const days = {}
+
+  for (const day of STORE_HOURS_DAYS) {
+    const row = input[day] || {}
+    const label = day[0].toUpperCase() + day.slice(1)
+    const closed = row.closed === true
+    const open = String(row.open || '').trim()
+    const close = String(row.close || '').trim()
+
+    if (closed) {
+      days[day] = { closed: true, open: '', close: '' }
+      continue
+    }
+    if (!open && !close) {
+      days[day] = { closed: false, open: '', close: '' }
+      continue
+    }
+    if (!HOURS_TIME.test(open) || !HOURS_TIME.test(close)) {
+      return { error: `${label}: enter both an opening and a closing time, or mark it closed.` }
+    }
+    if (close <= open) {
+      return { error: `${label}: the closing time must be after the opening time.` }
+    }
+    days[day] = { closed: false, open, close }
+  }
+
+  return { days }
+}
+
+app.get('/store-hours', ...adminPage, async (req, res) => {
+  try {
+    const store = getCanonicalStoreName(req.query.store) || STORE_LIST[0]
+    const doc = await StoreHours.findOne({ store }).lean()
+
+    return res.render('store-hours.ejs', {
+      user: req.user,
+      stores: STORE_LIST,
+      store,
+      days: storeHoursView(doc),
+      updatedBy: doc && doc.updatedBy && doc.updatedBy.name,
+      updatedAt: doc && doc.updatedAt
+    })
+  } catch (err) {
+    console.error('Store hours page error:', err)
+    return res.status(500).send('Error loading store hours')
+  }
+})
+
+// Body: { store, days: { monday: { closed, open, close }, ... } }
+app.put(
+  '/api/store-hours',
+  ...adminApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    try {
+      const cleaned = cleanStoreHours(req.body && req.body.days)
+      if (cleaned.error) {
+        return res.status(400).json({ success: false, error: cleaned.error })
+      }
+
+      await StoreHours.updateOne(
+        { store: req.storeName },
+        { $set: { days: cleaned.days, updatedBy: personRef(req.user) } },
+        { upsert: true, runValidators: true }
+      )
+
+      return res.json({ success: true, days: cleaned.days })
+    } catch (err) {
+      console.error('Store hours save error:', err)
+      return res.status(500).json({ success: false, error: 'The store hours could not be saved.' })
+    }
+  }
+)
 
 // ------------------------
 // SEND TO PAYCHEX (userscript)
