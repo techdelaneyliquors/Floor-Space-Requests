@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Delaney → Paychex schedule sender
 // @namespace    delaney-schedule
-// @version      1.0.4
-// @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler.
+// @version      1.1.0
+// @description  Adds approved Delaney schedules to Paychex Flex Time's Visual Scheduler, and removes ones it added.
 // @match        https://paychex.flextime.paychex.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -18,7 +18,9 @@
  * approved week from the Delaney app (with your sync key) and adds each
  * shift through the same request the Visual Scheduler uses when you add a
  * shift by hand. Shifts it has already added are logged in the Delaney app
- * and skipped next time. Nothing in Paychex is edited or deleted.
+ * (with the shift ID Paychex returns) and skipped next time. It can also
+ * remove shifts it added, through the scheduler's own delete request, when
+ * you ask it to; nothing else in Paychex is edited or deleted.
  *
  * These are Paychex's internal web requests, not a published API; if
  * Paychex changes them, sending fails with a clear error and nothing else.
@@ -56,7 +58,9 @@
     'no-ll1': 'No LL1 saved',
     'no-employee-number': 'No employee number on schedule',
     'added': 'Added',
-    'failed': 'Failed'
+    'failed': 'Failed',
+    'not-on-schedule': 'Sent, no longer on the schedule',
+    'removed': 'Removed from Paychex'
   };
 
   /* ---------- small helpers ---------- */
@@ -159,7 +163,62 @@
       throw new Error(String(json.Message || json.message || json.ErrorMessage || json.Error || json.error || 'Paychex rejected the shift.'));
     }
 
-    return text.slice(0, 500);
+    // Paychex answers {"ID":51374}: the new shift's ID, which DeleteShift needs
+    return {
+      response: text.slice(0, 2000),
+      id: Number.isInteger(json.ID) && json.ID > 0 ? json.ID : null
+    };
+  }
+
+  // Removes one shift the way the Visual Scheduler does: DeleteShift with
+  // the shift's ID as ID2 (the other fields are sent the same as an add)
+  async function deleteShiftFromPaychex(shift) {
+    const fields = {
+      ID1: '-1',
+      ID2: String(shift.paychexShiftId),
+      UserID: String(shift.paychexUserId ?? 0),
+      PayTypeID: '-1',
+      StartTime: shift.start,
+      EndTime: shift.end,
+      LL1: String(shift.ll1 ?? 0)
+    };
+    for (let level = 2; level <= 15; level++) fields['LL' + level] = '0';
+
+    const token = findPageToken();
+    if (!token) {
+      throw new Error('Paychex\'s scheduler token was not found on this page. Open Schedules in Paychex and try again.');
+    }
+    const response = await fetch(
+      `${location.origin}/Dashboard/VisualScheduler/DeleteShift?t=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams(fields).toString()
+      }
+    );
+
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Paychex returned HTTP ${response.status}.`);
+    }
+    // A sign-in page instead of an answer
+    if (/^\s*</.test(text)) {
+      throw new Error('Paychex did not answer as expected. Your Paychex session may have expired; reload the page and try again.');
+    }
+
+    let json = null;
+    try { json = JSON.parse(text); } catch (err) { /* not JSON: nothing to check */ }
+    const rejected = json && typeof json === 'object' && (
+      json.Success === false || json.success === false ||
+      json.IsSuccess === false || json.IsError === true ||
+      Boolean(json.Error || json.error || json.ErrorMessage));
+    if (rejected) {
+      throw new Error(String(json.Message || json.message || json.ErrorMessage || json.Error || json.error || 'Paychex did not remove the shift.'));
+    }
   }
 
   /* ---------- panel ---------- */
@@ -191,6 +250,10 @@
     #delaney-paychex-panel .dp-ready { background: #dbeafe; color: #1e40af; }
     #delaney-paychex-panel .dp-already-sent { background: #e5e7eb; color: #374151; }
     #delaney-paychex-panel .dp-added { background: #dcfce7; color: #166534; }
+    #delaney-paychex-panel .dp-not-on-schedule { background: #fef3c7; color: #92400e; }
+    #delaney-paychex-panel .dp-removed { background: #f1f5f9; color: #475569; text-decoration: line-through; }
+    #delaney-paychex-panel .dp-remove { background: #b91c1c; color: #fff; }
+    #delaney-paychex-panel .dp-remove-one { background: #fee2e2; color: #991b1b; padding: 2px 8px; font-size: 12px; }
     #delaney-paychex-panel .dp-failed, #delaney-paychex-panel .dp-no-paychex-ids,
     #delaney-paychex-panel .dp-no-ll1, #delaney-paychex-panel .dp-no-employee-number { background: #fee2e2; color: #991b1b; }
   `);
@@ -202,10 +265,11 @@
   const personSelect = el('select', { 'aria-label': 'Employees to send' });
   const previewButton = el('button', { class: 'dp-primary', type: 'button', onclick: () => preview() }, 'Preview');
   const sendButton = el('button', { class: 'dp-go', type: 'button', disabled: true, onclick: () => send() }, 'Add shifts to Paychex');
+  const removeButton = el('button', { class: 'dp-remove', type: 'button', disabled: true, onclick: () => remove(removableShifts()) }, 'Remove from Paychex');
   const summary = el('div', {});
   const tableBody = el('tbody', {});
   const table = el('table', { hidden: true },
-    el('thead', {}, el('tr', {}, ['Employee', 'Paychex ID', 'LL1', 'Day', 'Shift', 'Status'].map(text => el('th', {}, text)))),
+    el('thead', {}, el('tr', {}, ['Employee', 'Paychex ID', 'LL1', 'Day', 'Shift', 'Status', ''].map(text => el('th', {}, text)))),
     tableBody
   );
 
@@ -235,7 +299,7 @@
     el('h3', {}, 'Delaney → Paychex'),
     messageLine,
     el('div', { class: 'dp-row' }, el('label', {}, 'Week '), weekSelect, previewButton),
-    el('div', { class: 'dp-row' }, el('label', {}, 'Send '), personSelect, sendButton),
+    el('div', { class: 'dp-row' }, el('label', {}, 'For '), personSelect, sendButton, removeButton),
     summary,
     table,
     settings
@@ -291,21 +355,52 @@
       el('td', {}, new Date(shift.date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })),
       el('td', {}, shift.shiftText),
       el('td', {}, el('span', { class: `dp-chip dp-${shift.status}`, title: shift.error || '' },
-        STATUS_TEXT[shift.status] || shift.status, shift.error ? `: ${shift.error}` : ''))
+        STATUS_TEXT[shift.status] || shift.status, shift.error ? `: ${shift.error}` : '')),
+      el('td', {}, isRemovable(shift)
+        ? el('button', { class: 'dp-remove-one', type: 'button', disabled: state.sending,
+            title: 'Remove just this shift from Paychex',
+            onclick: () => remove([shift]) }, 'Remove')
+        : null)
     )));
     table.hidden = !state.shifts.length;
 
     const count = status => state.shifts.filter(shift => shift.status === status).length;
     const missing = count('no-paychex-ids') + count('no-ll1') + count('no-employee-number');
+    const notRemovable = state.shifts.filter(shift =>
+      ['already-sent', 'added', 'not-on-schedule'].includes(shift.status) && !shift.paychexShiftId).length;
     summary.replaceChildren(
       el('div', {}, `${count('ready')} to add · ${count('already-sent') + count('added')} already in Paychex from the app` +
+        (count('not-on-schedule') ? ` · ${count('not-on-schedule')} sent but no longer on the schedule` : '') +
+        (count('removed') ? ` · ${count('removed')} removed` : '') +
         (missing ? ` · ${missing} skipped (missing IDs — add them on the Paychex IDs page)` : '') +
-        (count('failed') ? ` · ${count('failed')} failed` : ''))
+        (count('failed') ? ` · ${count('failed')} failed` : '')),
+      notRemovable
+        ? el('div', { class: 'dp-muted' },
+            `${notRemovable} sent before shift IDs were saved can't be removed here; remove those in Paychex by hand.`)
+        : null
     );
 
     const ready = selectedShifts().length;
     sendButton.disabled = state.sending || !ready;
     sendButton.textContent = ready ? `Add ${ready} shift${ready === 1 ? '' : 's'} to Paychex` : 'Nothing to add';
+
+    const removable = removableShifts().length;
+    removeButton.disabled = state.sending || !removable;
+    removeButton.textContent = removable
+      ? `Remove ${removable} sent shift${removable === 1 ? '' : 's'} from Paychex`
+      : 'Nothing to remove';
+  }
+
+  // Sent by the app, with the ID Paychex returned (so it can be deleted)
+  function isRemovable(shift) {
+    return Boolean(shift.paychexShiftId) &&
+      ['already-sent', 'added', 'not-on-schedule'].includes(shift.status);
+  }
+
+  function removableShifts() {
+    const person = personSelect.value;
+    return state.shifts.filter(shift =>
+      isRemovable(shift) && (!person || shift.employeeNumber === person));
   }
 
   function selectedShifts() {
@@ -325,7 +420,7 @@
 
       // "Send": everyone, or one person (handy for a first test)
       const people = new Map();
-      state.shifts.filter(shift => shift.status === 'ready')
+      state.shifts.filter(shift => shift.status === 'ready' || isRemovable(shift))
         .forEach(shift => people.set(shift.employeeNumber, shift.employeeName));
       personSelect.replaceChildren(
         el('option', { value: '' }, 'Everyone'),
@@ -333,7 +428,7 @@
           .map(([number, name]) => el('option', { value: number }, `Only ${name}`))
       );
 
-      say(`${week.store}, ${week.range}. Check the list, then add the shifts.`);
+      say(`${week.store}, ${week.range}. Check the list, then add (or remove) shifts.`);
       renderShifts();
     } catch (err) {
       say(err.message, 'error');
@@ -351,10 +446,7 @@
     }
     if (!confirm(`Add ${toSend.length} shift${toSend.length === 1 ? '' : 's'} to Paychex for ${week.store}, ${week.range}?`)) return;
 
-    state.sending = true;
-    previewButton.disabled = true;
-    weekSelect.disabled = true;
-    personSelect.disabled = true;
+    lockPanel(true);
 
     let added = 0;
     let failedInARow = 0;
@@ -365,8 +457,9 @@
       say(`Adding ${index + 1} of ${toSend.length}: ${shift.employeeName}, ${shift.shiftText}…`);
 
       try {
-        const paychexResponse = await addShiftToPaychex(shift, week.weekStart);
+        const paychexResult = await addShiftToPaychex(shift, week.weekStart);
         shift.status = 'added';
+        shift.paychexShiftId = paychexResult.id;
         added++;
         failedInARow = 0;
 
@@ -380,7 +473,8 @@
           ll1: shift.ll1,
           start: shift.start,
           end: shift.end,
-          paychexResponse
+          paychexResponse: paychexResult.response,
+          paychexShiftId: paychexResult.id
         }).catch(err => {
           shift.error = `added to Paychex, but not logged in the app (${err.message})`;
         });
@@ -409,11 +503,7 @@
       failures
     }).catch(() => {});
 
-    state.sending = false;
-    previewButton.disabled = false;
-    weekSelect.disabled = false;
-    personSelect.disabled = false;
-    renderShifts();
+    lockPanel(false);
 
     // The final message comes after the results are saved
     if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) {
@@ -423,6 +513,79 @@
         ? `Done: ${added} added, ${failures.length} failed (see the list). Refresh the scheduler to see the new shifts.`
         : `Done: ${added} shift${added === 1 ? '' : 's'} added. Refresh the scheduler to see them.`,
         failures.length ? 'error' : 'ok');
+    }
+  }
+
+  function lockPanel(locked) {
+    state.sending = locked;
+    previewButton.disabled = locked;
+    weekSelect.disabled = locked;
+    personSelect.disabled = locked;
+    renderShifts();
+  }
+
+  // Deletes shifts the app added from Paychex, one at a time, then tells the
+  // Delaney app to forget each one so a corrected shift can be sent instead
+  async function remove(toRemove) {
+    const week = state.week;
+    toRemove = toRemove.filter(isRemovable);
+    if (!week || !toRemove.length || state.sending) return;
+    if (!findPageToken()) {
+      say('Paychex\'s scheduler token was not found on this page. Open Schedules in Paychex (the Visual Scheduler) and use the button there.', 'error');
+      return;
+    }
+
+    const what = toRemove.length === 1
+      ? `${toRemove[0].employeeName}'s shift on ${toRemove[0].date} (${toRemove[0].shiftText})`
+      : `${toRemove.length} shifts`;
+    if (!confirm(`Remove ${what} from Paychex for ${week.store}, ${week.range}?\n\nThis deletes them in Paychex. Only shifts this app added are removed.`)) return;
+
+    lockPanel(true);
+
+    let removed = 0;
+    let failedInARow = 0;
+    let lastError = '';
+
+    for (let index = 0; index < toRemove.length; index++) {
+      const shift = toRemove[index];
+      say(`Removing ${index + 1} of ${toRemove.length}: ${shift.employeeName}, ${shift.shiftText}…`);
+
+      try {
+        await deleteShiftFromPaychex(shift);
+        shift.status = 'removed';
+        shift.error = '';
+        removed++;
+        failedInARow = 0;
+
+        await app('POST', '/api/paychex-sync/removed', {
+          store: week.store,
+          weekStart: week.weekStart,
+          paychexShiftId: shift.paychexShiftId
+        }).catch(err => {
+          shift.error = `removed from Paychex, but the app still lists it as sent (${err.message})`;
+        });
+      } catch (err) {
+        shift.error = `not removed: ${err.message}`;
+        lastError = err.message;
+        failedInARow++;
+      }
+
+      renderShifts();
+
+      if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) break;
+      if (index < toRemove.length - 1) await sleep(SEND_DELAY_MS);
+    }
+
+    lockPanel(false);
+
+    const failed = toRemove.length - removed;
+    if (failedInARow >= STOP_AFTER_FAILURES_IN_A_ROW) {
+      say(`Stopped after ${failedInARow} failures in a row: ${lastError}`, 'error');
+    } else {
+      say(failed
+        ? `Done: ${removed} removed, ${failed} not removed (see the list). Refresh the scheduler to check.`
+        : `Done: ${removed} shift${removed === 1 ? '' : 's'} removed. Refresh the scheduler to check, then Preview again to add corrected shifts.`,
+        failed ? 'error' : 'ok');
     }
   }
 })();

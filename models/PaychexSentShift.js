@@ -32,10 +32,17 @@ const paychexSentShiftSchema = new mongoose.Schema({
   start: String,
   end: String,
 
-  // Whatever Paychex returned, trimmed, in case it's needed later
+  // What Paychex returned when the shift was added (e.g. {"ID":51374}), and
+  // the shift ID from it, which Paychex's DeleteShift takes as ID2. Records
+  // for weeks that ended more than a month ago are deleted.
   paychexResponse: {
     type: String,
-    maxlength: 500
+    maxlength: 2000
+  },
+
+  paychexShiftId: {
+    type: Number,
+    default: null
   },
 
   sentBy: {

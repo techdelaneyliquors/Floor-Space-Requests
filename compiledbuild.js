@@ -4633,6 +4633,28 @@ for (const store of STORE_LIST) {
           .select('approved.snapshot.groups approved.approvedAt')
           .lean()
 
+        // Names and times only; "me" marks the viewer's own row, found by
+        // their roster link (or, if not linked, by exact name)
+        const allGroups = doc
+          ? doc.approved.snapshot.groups.map(group => ({
+              label: group.label,
+              employees: group.employees.map(employee => ({
+                name: employee.name,
+                days: employee.days,
+                me: isViewersRow(req.user, store, employee)
+              }))
+            }))
+          : []
+
+        // Employees see only their own shifts; managers see everyone. The
+        // other rows are left out here so they never reach the browser.
+        const onlyMine = req.user.role === 'employee'
+        const groups = onlyMine
+          ? allGroups
+              .map(group => ({ ...group, employees: group.employees.filter(employee => employee.me) }))
+              .filter(group => group.employees.length)
+          : allGroups
+
         res.render('employee-schedule.ejs', {
           user: req.user,
           store,
@@ -4647,18 +4669,8 @@ for (const store of STORE_LIST) {
             range: weekRangeText(selected)
           },
           // Shifts only: adjustment reasons are for managers and admins
-          // Names and times only; "me" marks the viewer's own row, found by
-          // their roster link (or, if not linked, by exact name)
-          groups: doc
-            ? doc.approved.snapshot.groups.map(group => ({
-                label: group.label,
-                employees: group.employees.map(employee => ({
-                  name: employee.name,
-                  days: employee.days,
-                  me: isViewersRow(req.user, store, employee)
-                }))
-              }))
-            : [],
+          groups,
+          onlyMine,
           posted: Boolean(doc),
           dayKeys: SCHEDULE_DAY_KEYS,
           showHomeLink: homePathFor(req.user) !== STORE_PAGES[store].employeePath
@@ -6548,6 +6560,39 @@ function paychexDateTime(ymd, minutes) {
 
 const paychexShiftKey = (employeeNumber, start, end) => `${employeeNumber}|${start}|${end}`
 
+// '2026-10-05 08:30:00', '2026-10-05 17:00:00' -> '8:30 AM to 5:00 PM'
+function paychexShiftText(start, end) {
+  const clock = value => {
+    const match = /(\d{2}):(\d{2}):\d{2}$/.exec(String(value || ''))
+    if (!match) return ''
+    const hour = Number(match[1])
+    return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`
+  }
+  return `${clock(start)} to ${clock(end)}`
+}
+
+// Sent-shift records (and their Paychex shift IDs) are kept for a month:
+// deleted once their schedule week ended more than 31 days ago. Weeks that
+// old can't be picked for sending any more, so nothing gets sent twice.
+const PAYCHEX_SENT_KEEP_DAYS = 31
+
+async function purgeOldPaychexSends() {
+  // A week ends 6 days after its Monday
+  const oldestKeptMonday = addDaysYmd(storeToday(), -(PAYCHEX_SENT_KEEP_DAYS + 6))
+  await PaychexSentShift.deleteMany({ weekStart: { $lt: oldestKeptMonday } })
+}
+
+// {"ID":51374} -> 51374 (Paychex's reply to AddEditShift), or null
+function paychexShiftIdFrom(value, response) {
+  if (Number.isInteger(value) && value > 0) return value
+  try {
+    const id = JSON.parse(String(response || '')).ID
+    return Number.isInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
+}
+
 // Authorization: Bearer <sync key> of an approved admin, or a manager (who
 // can only read and send their own stores' schedules)
 async function requirePaychexSyncKey(req, res, next) {
@@ -6671,10 +6716,12 @@ app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
 
     const [links, sent] = await Promise.all([
       PaychexEmployeeLink.find({ store }).lean(),
-      PaychexSentShift.find({ store, weekStart }).select('shiftKey').lean()
+      PaychexSentShift.find({ store, weekStart })
+        .select('shiftKey paychexShiftId employeeNumber employeeName paychexUserId ll1 start end')
+        .lean()
     ])
     const linkByNumber = new Map(links.map(link => [link.employeeNumber, link]))
-    const sentKeys = new Set(sent.map(entry => entry.shiftKey))
+    const sentByKey = new Map(sent.map(entry => [entry.shiftKey, entry]))
 
     const shifts = approvedScheduleShifts(doc).map(({ group, employee, date, start, end, shift }) => {
       const employeeNumber = String(employee.employeeNumber || '').trim()
@@ -6687,7 +6734,10 @@ app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
       if (!employeeNumber) status = 'no-employee-number'
       else if (!link || !link.paychexUserId) status = 'no-paychex-ids'
       else if (typeof link.ll1 !== 'number') status = 'no-ll1'
-      else if (sentKeys.has(shiftKey)) status = 'already-sent'
+      else if (sentByKey.has(shiftKey)) status = 'already-sent'
+
+      const sentEntry = sentByKey.get(shiftKey)
+      sentByKey.delete(shiftKey)
 
       return {
         shiftKey,
@@ -6700,9 +6750,30 @@ app.get('/api/paychex-sync/shifts', requirePaychexSyncKey, async (req, res) => {
         end: endText,
         paychexUserId: link && link.paychexUserId ? link.paychexUserId : null,
         ll1: link && typeof link.ll1 === 'number' ? link.ll1 : null,
-        status
+        status,
+        // Set when it can be removed from Paychex (most recently sent week)
+        paychexShiftId: sentEntry && sentEntry.paychexShiftId ? sentEntry.paychexShiftId : null
       }
     })
+
+    // Shifts sent to Paychex that are no longer on the approved schedule
+    // (it changed after sending), so they can be removed there
+    for (const entry of sentByKey.values()) {
+      shifts.push({
+        shiftKey: entry.shiftKey,
+        employeeName: entry.employeeName || `#${entry.employeeNumber}`,
+        employeeNumber: entry.employeeNumber,
+        role: '',
+        date: String(entry.start).slice(0, 10),
+        shiftText: paychexShiftText(entry.start, entry.end),
+        start: entry.start,
+        end: entry.end,
+        paychexUserId: entry.paychexUserId,
+        ll1: entry.ll1,
+        status: 'not-on-schedule',
+        paychexShiftId: entry.paychexShiftId || null
+      })
+    }
 
     return res.json({
       success: true,
@@ -6742,6 +6813,7 @@ app.post('/api/paychex-sync/sent', requirePaychexSyncKey, async (req, res) => {
     }
 
     const shiftKey = paychexShiftKey(employeeNumber, start, end)
+    const paychexResponse = String(body.paychexResponse || '').slice(0, 2000)
     await PaychexSentShift.updateOne(
       { store, shiftKey },
       {
@@ -6755,17 +6827,50 @@ app.post('/api/paychex-sync/sent', requirePaychexSyncKey, async (req, res) => {
           ll1: Number.isInteger(body.ll1) ? body.ll1 : null,
           start,
           end,
-          paychexResponse: cleanText(body.paychexResponse, 500),
           sentBy: personRef(req.user)
+        },
+        // The latest add's reply and shift ID (needed to remove it later)
+        $set: {
+          paychexResponse,
+          paychexShiftId: paychexShiftIdFrom(body.paychexShiftId, paychexResponse)
         }
       },
       { upsert: true }
     )
 
+    await purgeOldPaychexSends()
+
     return res.json({ success: true })
   } catch (err) {
     console.error('Paychex sent-shift log error:', err)
     return res.status(500).json({ success: false, error: 'The sent shift could not be logged.' })
+  }
+})
+
+// The userscript removed a shift from Paychex (DeleteShift with its ID):
+// forget it was sent, so a corrected shift can be sent in its place
+app.post('/api/paychex-sync/removed', requirePaychexSyncKey, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const store = getCanonicalStoreName(body.store)
+    const weekStart = String(body.weekStart || '')
+    const paychexShiftId = Number(body.paychexShiftId)
+
+    if (!store || !canAccessStore(req.user, store)) {
+      return res.status(403).json({ success: false, error: 'You do not have access to that store.' })
+    }
+    if (!isMonday(weekStart) || !Number.isInteger(paychexShiftId) || paychexShiftId < 1) {
+      return res.status(400).json({ success: false, error: 'A week and a Paychex shift ID are required.' })
+    }
+
+    const result = await PaychexSentShift.deleteOne({ store, weekStart, paychexShiftId })
+
+    console.log('Paychex shift removed:', { store, weekStart, paychexShiftId, by: req.user.email })
+
+    return res.json({ success: true, forgotten: result.deletedCount })
+  } catch (err) {
+    console.error('Paychex removed-shift log error:', err)
+    return res.status(500).json({ success: false, error: 'The removal could not be recorded.' })
   }
 })
 
@@ -8396,6 +8501,11 @@ async function sendWeeklyBackupIfDue() {
 function startWeeklyBackupJob() {
   cron.schedule('17 * * * *', () => sendWeeklyBackupIfDue().catch(err =>
     console.error('[backup] check failed:', err)), { timezone: 'America/New_York' })
+
+  // Daily: delete sent-to-Paychex records older than a month, even in weeks
+  // when nothing is sent
+  cron.schedule('42 3 * * *', () => purgeOldPaychexSends().catch(err =>
+    console.error('[paychex] old sent-shift cleanup failed:', err)), { timezone: 'America/New_York' })
 }
 
 // The same backup as a download, for admins

@@ -197,7 +197,7 @@
 
   <div class="header">
     <div>
-      <h1><%= store %> Schedule</h1>
+      <h1><%= onlyMine ? `My ${store} Schedule` : `${store} Schedule` %></h1>
       <div class="meta">
         <strong><%= selectedWeek.label %></strong> · <%= selectedWeek.range %>
       </div>
@@ -236,6 +236,11 @@
   <% if (!posted) { %>
     <div class="card empty">
       The schedule for this week (<%= selectedWeek.range %>) hasn't been posted yet.
+    </div>
+  <% } else if (onlyMine && !groups.length) { %>
+    <div class="card empty">
+      You aren't on the schedule for this week (<%= selectedWeek.range %>).
+      If you think that's a mistake, ask your manager.
     </div>
   <% } %>
 

@@ -2492,11 +2492,11 @@ function saveTemporaryShift(
   );
 
   const startInput = document.querySelector(
-    `[data-shift-start="${key}"]`
+    `[data-shift-start="${CSS.escape(key)}"]`
   );
 
   const endInput = document.querySelector(
-    `[data-shift-end="${key}"]`
+    `[data-shift-end="${CSS.escape(key)}"]`
   );
 
   if (!startInput || !endInput) {
@@ -3227,12 +3227,12 @@ document.addEventListener('click', event => {
 
             <div class="shift-editor">
               <select
-                data-shift-start="${assignmentKey}"
+                data-shift-start="${escapeHtml(assignmentKey)}"
                 aria-label="Shift start time"
               >${shiftTimeOptions(inputValues.start)}</select>
 
               <select
-                data-shift-end="${assignmentKey}"
+                data-shift-end="${escapeHtml(assignmentKey)}"
                 aria-label="Shift end time"
               >${shiftTimeOptions(inputValues.end)}</select>
             </div>
@@ -3291,7 +3291,7 @@ document.addEventListener('click', event => {
                     ? 'unassigned-shift'
                     : ''
             }"
-            data-assignment="${assignmentKey}"
+            data-assignment="${escapeHtml(assignmentKey)}"
             data-type="${escapeHtml(type)}"
             data-shift-id="${escapeHtml(shiftId)}"
             data-day="${escapeHtml(day)}"
