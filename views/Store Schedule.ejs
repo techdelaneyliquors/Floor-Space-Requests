@@ -501,8 +501,7 @@ td.conflict-cell {
  */
 #backToStoreMapBtn, .print-week-button, .time-off-link, .posted-link,
 .module-tabs button[data-module],
-#loadTemplateBtn, #saveTemplateBtn, #newTemplateBtn, #deleteTemplateBtn,
-#loadProgressBtn {
+#loadTemplateBtn, #saveTemplateBtn, #newTemplateBtn, #deleteTemplateBtn {
   background: var(--tint);
   color: var(--tone);
   border: 1px solid var(--edge);
@@ -511,8 +510,7 @@ td.conflict-cell {
 
 #backToStoreMapBtn:hover, .print-week-button:hover, .time-off-link:hover, .posted-link:hover,
 .module-tabs button[data-module]:not(.active):hover,
-#loadTemplateBtn:hover, #saveTemplateBtn:hover, #newTemplateBtn:hover, #deleteTemplateBtn:hover,
-#loadProgressBtn:hover {
+#loadTemplateBtn:hover, #saveTemplateBtn:hover, #newTemplateBtn:hover, #deleteTemplateBtn:hover {
   background: var(--edge);
 }
 
@@ -524,10 +522,9 @@ td.conflict-cell {
 
 /* Tabs: tinted, solid when open */
 .module-tabs button[data-module="module-1"] { --tone:#1d4ed8; --tint:#dbeafe; --edge:#bfdbfe; }
-.module-tabs button[data-module="module-2"] { --tone:#0f766e; --tint:#ccfbf1; --edge:#99f6e4; }
-.module-tabs button[data-module="module-3"] { --tone:#6d28d9; --tint:#ede9fe; --edge:#ddd6fe; }
+.module-tabs button[data-module="module-3"] { --tone:#0f766e; --tint:#ccfbf1; --edge:#99f6e4; }
 .module-tabs button[data-module="module-4"] { --tone:#b45309; --tint:#fef3c7; --edge:#fde68a; }
-.module-tabs button[data-module="module-5"] { --tone:#be185d; --tint:#fce7f3; --edge:#fbcfe8; }
+.module-tabs button[data-module="module-5"] { --tone:#6d28d9; --tint:#ede9fe; --edge:#ddd6fe; }
 
 .module-tabs button[data-module].active {
   background: var(--tone);
@@ -536,11 +533,10 @@ td.conflict-cell {
 }
 
 /* Template toolbar */
-#loadTemplateBtn   { --tone:#0369a1; --tint:#f0f9ff; --edge:#bae6fd; }
+#loadTemplateBtn   { --tone:#1d4ed8; --tint:#dbeafe; --edge:#bfdbfe; }
 #saveTemplateBtn   { --tone:#047857; --tint:#ecfdf5; --edge:#a7f3d0; }
 #newTemplateBtn    { --tone:#a16207; --tint:#fefce8; --edge:#fde68a; }
 #deleteTemplateBtn { --tone:#b91c1c; --tint:#fef2f2; --edge:#fecaca; padding:10px 14px; font-size:13.333px; border-radius:8px; white-space:nowrap; }
-#loadProgressBtn   { --tone:#a21caf; --tint:#fdf4ff; --edge:#f5d0fe; }
 
 /* Toolbar labels stay on one line */
 .template-toolbar button { white-space: nowrap; }
@@ -552,6 +548,15 @@ td.conflict-cell {
   color: #fff;
 }
 #saveProgressBtn:hover { background: #166534; border-color: #166534; }
+
+/* Load Saved Progress: solid blue, the same as the open Build Schedule tab */
+#loadProgressBtn {
+  --tone: #1d4ed8;
+  background: #1d4ed8;
+  border: 1px solid #1d4ed8;
+  color: #fff;
+}
+#loadProgressBtn:hover { background: #1e40af; border-color: #1e40af; }
 
 #saveProgressBtn:disabled, #loadProgressBtn:disabled {
   opacity: .55;
@@ -1691,6 +1696,7 @@ td.budget-within, td.budget-over {
   class="secondary print-week-button"
   type="button"
   onclick="printWeeklySchedule()"
+  hidden
 >
   Print weekly schedule
 </button>
@@ -1717,10 +1723,10 @@ td.budget-within, td.budget-over {
 
   <nav class="module-tabs no-print" aria-label="Schedule modules">
     <button class="active" data-module="module-1">1. Build Schedule</button>
-    <button data-module="module-2">2. Hours Matrix</button>
-    <button data-module="module-3">3. Printable Schedule</button>
-    <button data-module="module-4">4. Attendance</button>
-    <button data-module="module-5">5. Previous Week</button>
+    <!-- The Hours Matrix tab (module-2) is turned off; its section stays in the page -->
+    <button data-module="module-3">2. Printable Schedule</button>
+    <button data-module="module-4">3. Attendance</button>
+    <button data-module="module-5">4. Previous Week</button>
     <!-- "Load rejected schedule" for weeks an admin rejected (filled in by renderPostedWeeks) -->
     <span id="rejectedTabButtons" class="rejected-tab-buttons"></span>
   </nav>
@@ -7717,6 +7723,9 @@ function normalizeShiftValues(value) {
   document.querySelectorAll('.module-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
     document.querySelectorAll('.module-tabs button').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.module').forEach(x=>x.classList.remove('active'));
     btn.classList.add('active'); document.getElementById(btn.dataset.module).classList.add('active');
+    // "Print weekly schedule" only on the Printable Schedule tab
+    const printButton = document.querySelector('.print-week-button');
+    if (printButton) printButton.hidden = btn.dataset.module !== 'module-3';
   }));
 
 
@@ -8913,11 +8922,18 @@ function renderRejectedTabButtons(weeks) {
     .join('');
 }
 
-function renderPostedWeeks(weeks) {
-  renderRejectedTabButtons(weeks);
+function renderPostedWeeks(allWeeks) {
+  renderRejectedTabButtons(allWeeks);
 
   const table = document.getElementById('postedWeeksTable');
   if (!table) return;
+
+  // The table lists the previous 4 weeks, this week and next week (6 at most)
+  const weeks = currentMondayForPosting
+    ? allWeeks.filter(week =>
+        week.weekStart >= addDaysToYmd(currentMondayForPosting, -28) &&
+        week.weekStart <= addDaysToYmd(currentMondayForPosting, 7))
+    : allWeeks;
 
   if (!weeks.length) {
     table.innerHTML = '';
