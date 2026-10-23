@@ -1,0 +1,16 @@
+<%#
+  One typed time field for a form (needs time-entry-support.ejs on the page).
+  Locals: name (form field), value ("HH:MM" or ''), label (aria-label),
+  required, disabled, valueClass (extra class on the hidden "HH:MM" input),
+  textClass ("time-start" or "time-end" for a start/end pair).
+%><%
+  const timeValue = typeof value !== 'undefined' && /^\d{2}:\d{2}$/.test(value || '') ? value : ''
+  const timeHour = timeValue ? Number(timeValue.slice(0, 2)) : 0
+  const timeText = timeValue ? `${timeHour % 12 || 12}:${timeValue.slice(3)} ${timeHour < 12 ? 'AM' : 'PM'}` : ''
+%><span class="time-entry"><input type="text" class="time-text<%= typeof textClass !== 'undefined' && textClass ? ' ' + textClass : '' %>" list="timeChoices" autocomplete="off"
+    inputmode="text" placeholder="e.g. 9:30 AM" value="<%= timeText %>"
+    aria-label="<%= typeof label !== 'undefined' ? label : 'Time' %>"
+    <%= typeof required !== 'undefined' && required ? 'required' : '' %>
+    <%= typeof disabled !== 'undefined' && disabled ? 'disabled' : '' %>><input type="hidden"
+    class="time-value<%= typeof valueClass !== 'undefined' && valueClass ? ' ' + valueClass : '' %>"
+    name="<%= typeof name !== 'undefined' ? name : '' %>" value="<%= timeValue %>"></span>

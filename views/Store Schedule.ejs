@@ -58,8 +58,8 @@
     .attendance-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
     .attendance-grid input { min-width:55px; }
     .print-sheet { padding:16px; background:#fff; }
-    .print-sheet h2 { text-align:center; margin:0 0 4px; }
-    .print-sheet .period { text-align:center; color:var(--muted); margin-bottom:16px; }
+    .print-sheet h2 { text-align:center; margin:0 0 2px; }
+    .print-sheet .period { text-align:center; color:var(--muted); margin-bottom:2px; }
     .no-print-note { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
     .actual-cell { white-space:pre-line; line-height:1.45; }
     @media(max-width:850px){ .availability-grid{grid-template-columns:1fr;} .topbar{align-items:flex-start;flex-direction:column;} }
@@ -175,7 +175,7 @@
   margin-bottom:6px;
 }
 
-.shift-editor select {
+.shift-editor .time-text {
   min-width:0;
   padding:5px;
   font-size:11px;
@@ -1904,7 +1904,7 @@ td.budget-within, td.budget-over {
     text-align:center;
     color:#64748b;
     font-size:14px;
-    margin-bottom:16px;
+    margin-bottom:6px;
   "
 ></div>
         <div class="table-wrap"><table id="printSchedule"></table></div>
@@ -2051,6 +2051,7 @@ td.budget-within, td.budget-over {
 
 </div>
 
+<%- include('partials/time-entry-support') %>
 <script>
   const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const DAY_KEYS = DAYS.map(d => d.toLowerCase());
@@ -2457,26 +2458,21 @@ function inputTimeToDisplay(inputValue) {
   );
 }
 
-// Shift start/end choices every 15 minutes ("HH:MM" values, "9:15 AM"
-// labels). Built once; each dropdown marks its own time as selected.
-const SHIFT_TIME_VALUES = Array.from({ length: 96 }, (_, index) =>
-  String(Math.floor(index / 4)).padStart(2, '0') + ':' +
-  String((index % 4) * 15).padStart(2, '0')
-);
-
-const SHIFT_TIME_OPTIONS_HTML =
-  '<option value="">--</option>' +
-  SHIFT_TIME_VALUES
-    .map(value => `<option value="${value}">${inputTimeToDisplay(value)}</option>`)
-    .join('');
-
-function shiftTimeOptions(selected) {
-  if (!selected) return SHIFT_TIME_OPTIONS_HTML;
-
-  return SHIFT_TIME_OPTIONS_HTML.replace(
-    `<option value="${selected}">`,
-    `<option value="${selected}" selected>`
-  );
+// Shift start/end boxes: typed or picked from the 15-minute list (see
+// partials/time-entry-support.ejs, which reads them back with parseTypedTime)
+function shiftTimeBox(value, attribute, key, label, pairClass) {
+  return `
+    <input
+      type="text"
+      class="time-text ${pairClass}"
+      list="timeChoices"
+      autocomplete="off"
+      placeholder="e.g. 9:30 AM"
+      value="${value ? inputTimeToDisplay(value) : ''}"
+      ${attribute}="${key}"
+      aria-label="${label}"
+    >
+  `;
 }
 
 function saveTemporaryShift(
@@ -2502,19 +2498,31 @@ function saveTemporaryShift(
     return;
   }
 
-  if (!startInput.value || !endInput.value) {
+  if (!startInput.value.trim() || !endInput.value.trim()) {
     alert(
       'Enter both a start time and an end time.'
     );
     return;
   }
 
+  // Typed times ("9", "930", "17:30") become "HH:MM"; an end time without
+  // AM/PM lands after the start
+  const startValue = parseTypedTime(startInput.value);
+  const endValue = startValue && parseTypedTime(endInput.value, startValue);
+
+  if (!startValue || !endValue) {
+    alert(
+      'Enter times from 5:00 AM to 11:45 PM, like 9:30 AM or 17:30.'
+    );
+    return;
+  }
+
   const startText = inputTimeToDisplay(
-    startInput.value
+    startValue
   );
 
   const endText = inputTimeToDisplay(
-    endInput.value
+    endValue
   );
 
   const newShift =
@@ -3224,16 +3232,9 @@ document.addEventListener('click', event => {
                 : ''
             }
 
-            <div class="shift-editor">
-              <select
-                data-shift-start="${assignmentKey}"
-                aria-label="Shift start time"
-              >${shiftTimeOptions(inputValues.start)}</select>
-
-              <select
-                data-shift-end="${assignmentKey}"
-                aria-label="Shift end time"
-              >${shiftTimeOptions(inputValues.end)}</select>
+            <div class="shift-editor time-pair">
+              ${shiftTimeBox(inputValues.start, 'data-shift-start', assignmentKey, 'Shift start time', 'time-start')}
+              ${shiftTimeBox(inputValues.end, 'data-shift-end', assignmentKey, 'Shift end time', 'time-end')}
             </div>
 
             <div class="shift-edit-actions">
