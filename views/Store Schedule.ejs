@@ -494,6 +494,80 @@ td.conflict-cell {
 }
 .module-tabs button.rejected-tab-button:hover { background: #fecaca; }
 
+/*
+ * Button colors. Each button has its own hue: a light tint with dark text
+ * (--tint, --tone, --edge), solid for the open tab and for Save Progress.
+ * Related actions share a family: greens save, red deletes, amber resets.
+ */
+#backToStoreMapBtn, .print-week-button, .time-off-link, .posted-link,
+.module-tabs button[data-module],
+#loadTemplateBtn, #saveTemplateBtn, #newTemplateBtn, #deleteTemplateBtn,
+#loadProgressBtn {
+  background: var(--tint);
+  color: var(--tone);
+  border: 1px solid var(--edge);
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+
+#backToStoreMapBtn:hover, .print-week-button:hover, .time-off-link:hover, .posted-link:hover,
+.module-tabs button[data-module]:not(.active):hover,
+#loadTemplateBtn:hover, #saveTemplateBtn:hover, #newTemplateBtn:hover, #deleteTemplateBtn:hover,
+#loadProgressBtn:hover {
+  background: var(--edge);
+}
+
+/* Header */
+#backToStoreMapBtn  { --tone:#334155; --tint:#f1f5f9; --edge:#cbd5e1; }
+.print-week-button  { --tone:#0e7490; --tint:#ecfeff; --edge:#a5f3fc; }
+.time-off-link      { --tone:#c2410c; --tint:#fff7ed; --edge:#fed7aa; }
+.posted-link        { --tone:#4338ca; --tint:#eef2ff; --edge:#c7d2fe; }
+
+/* Tabs: tinted, solid when open */
+.module-tabs button[data-module="module-1"] { --tone:#1d4ed8; --tint:#dbeafe; --edge:#bfdbfe; }
+.module-tabs button[data-module="module-2"] { --tone:#0f766e; --tint:#ccfbf1; --edge:#99f6e4; }
+.module-tabs button[data-module="module-3"] { --tone:#6d28d9; --tint:#ede9fe; --edge:#ddd6fe; }
+.module-tabs button[data-module="module-4"] { --tone:#b45309; --tint:#fef3c7; --edge:#fde68a; }
+.module-tabs button[data-module="module-5"] { --tone:#be185d; --tint:#fce7f3; --edge:#fbcfe8; }
+
+.module-tabs button[data-module].active {
+  background: var(--tone);
+  border-color: var(--tone);
+  color: #fff;
+}
+
+/* Template toolbar */
+#loadTemplateBtn   { --tone:#0369a1; --tint:#f0f9ff; --edge:#bae6fd; }
+#saveTemplateBtn   { --tone:#047857; --tint:#ecfdf5; --edge:#a7f3d0; }
+#newTemplateBtn    { --tone:#a16207; --tint:#fefce8; --edge:#fde68a; }
+#deleteTemplateBtn { --tone:#b91c1c; --tint:#fef2f2; --edge:#fecaca; padding:10px 14px; font-size:13.333px; border-radius:8px; white-space:nowrap; }
+#loadProgressBtn   { --tone:#a21caf; --tint:#fdf4ff; --edge:#f5d0fe; }
+
+/* Toolbar labels stay on one line */
+.template-toolbar button { white-space: nowrap; }
+
+/* The main action: solid green */
+#saveProgressBtn {
+  background: #15803d;
+  border: 1px solid #15803d;
+  color: #fff;
+}
+#saveProgressBtn:hover { background: #166534; border-color: #166534; }
+
+#saveProgressBtn:disabled, #loadProgressBtn:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+/* Keyboard focus in each button's own color */
+#backToStoreMapBtn:focus-visible, .print-week-button:focus-visible, .time-off-link:focus-visible,
+.posted-link:focus-visible, .module-tabs button[data-module]:focus-visible,
+#loadTemplateBtn:focus-visible, #saveTemplateBtn:focus-visible, #newTemplateBtn:focus-visible,
+#deleteTemplateBtn:focus-visible, #loadProgressBtn:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
+}
+#saveProgressBtn:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+
 .rejection-note .rejection-label {
   display: block;
   font-size: 12px;
@@ -1614,18 +1688,18 @@ td.budget-within, td.budget-over {
       </button>
       
       <button
-  class="secondary"
+  class="secondary print-week-button"
   type="button"
   onclick="printWeeklySchedule()"
 >
   Print weekly schedule
 </button>
 
-      <a class="secondary link-button" href="/time-off-requests">
+      <a class="secondary link-button time-off-link" href="/time-off-requests">
         Time off requests<%= pendingTimeOffCount ? ` (${pendingTimeOffCount})` : '' %>
       </a>
 
-      <a class="secondary link-button" href="/posted-schedules?store=<%= encodeURIComponent(storeName) %>">
+      <a class="secondary link-button posted-link" href="/posted-schedules?store=<%= encodeURIComponent(storeName) %>">
         Posted schedules
       </a>
 

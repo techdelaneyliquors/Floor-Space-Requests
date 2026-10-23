@@ -3,3 +3,6 @@ node_modules
 
 # Local tool state (e.g. Cloudflare wrangler test databases)
 .wrangler/
+
+# Manager guide (Word document, kept outside the repository)
+Manager Guide.docx

@@ -726,31 +726,9 @@ function canManageStore(user, store) {
   )
 }
 
-// True when the approver covers every store in the list.
-// Granting 'all' requires the approver to have 'all'.
-function coversStores(approver, stores) {
-  if (!stores || !stores.length) return false
-
-  if (stores.includes(ALL_STORES_VALUE)) {
-    return hasAllStores(approver)
-  }
-
-  const covered = userStores(approver)
-  return stores.every(store => covered.includes(store))
-}
-
+// Only admins approve access requests
 function canApprove(approver, role, stores) {
-  if (!isApproved(approver)) return false
-  if (approver.role === 'admin') return true
-
-  if (approver.role === 'manager') {
-    return (
-      (role === 'employee' || role === 'vendor') &&
-      coversStores(approver, stores)
-    )
-  }
-
-  return false
+  return isApproved(approver) && approver.role === 'admin'
 }
 
 function homePathFor(user) {
@@ -764,8 +742,11 @@ function homePathFor(user) {
 
   const stores = userStores(user)
 
+  // Admins and managers always start on the home page, which links to
+  // everything they use (store cards, time off, access requests...)
   if (
     user.role === 'admin' ||
+    user.role === 'manager' ||
     stores.length !== 1
   ) {
     return '/'
@@ -773,7 +754,6 @@ function homePathFor(user) {
 
   const pages = STORE_PAGES[stores[0]]
 
-  if (user.role === 'manager') return pages.schedulePath
   if (user.role === 'vendor') return pages.mapPath
   if (user.role === 'employee') return pages.employeePath
 
@@ -1035,28 +1015,14 @@ async function notifyApprovers(user) {
 }
 
 // Admins, plus managers covering any requested store (employee/vendor only)
+// Admins hear about every access request (only admins approve them)
 async function findApproverEmails(request, requestedStores) {
   const approvers = await User.find({
     accessStatus: 'approved',
-    role: { $in: ['admin', 'manager'] }
+    role: 'admin'
   }).lean()
 
-  return approvers
-    .filter(approver => {
-      if (approver.role === 'admin') return true
-
-      if (!['employee', 'vendor'].includes(request.role)) {
-        return false
-      }
-
-      // Managers who cover any of the requested stores
-      if (requestedStores.includes(ALL_STORES_VALUE)) {
-        return hasAllStores(approver)
-      }
-      const covered = userStores(approver)
-      return requestedStores.some(store => covered.includes(store))
-    })
-    .map(approver => approver.email)
+  return approvers.map(approver => approver.email)
 }
 
 async function notifyRequester(user, decision, reason) {
@@ -3373,7 +3339,7 @@ app.get('/', ...approvedPage, async (req, res) => {
     user: req.user,
     storeCards,
     roleLabel: ROLE_LABELS[req.user.role] || req.user.role,
-    canReviewAccess: ['admin', 'manager'].includes(req.user.role),
+    canReviewAccess: req.user.role === 'admin',
     canRequestSpace: ['admin', 'manager', 'vendor'].includes(req.user.role),
     pendingScheduleCount,
     canRequestTimeOff: ['employee', 'manager'].includes(req.user.role),
@@ -4403,7 +4369,8 @@ function isViewersRow(user, store, employee) {
 // CALENDAR DOWNLOAD (.ics)
 // ------------------------
 //
-// An employee's own shifts for next week, from the approved schedule, as a
+// An employee's own shifts for one week (the week shown on their schedule
+// page; next week if none is given), from the approved schedule, as a
 // standard calendar
 // file that Google Calendar, Outlook and Apple Calendar can import. Times
 // are store-local (America/New_York). Each shift has a stable UID, so
@@ -4564,18 +4531,22 @@ function buildIcs(events) {
   return lines.map(foldIcsLine).join('\r\n') + '\r\n'
 }
 
-// Next week's shifts only
+// One week's shifts: ?week=<Monday> (the week shown on the schedule page),
+// or next week without it
 app.get('/my-schedule.ics', ...approvedPage, requireRole('employee', 'manager'), async (req, res) => {
   try {
-    const nextMonday = addDaysYmd(mondayOf(storeToday()), 7)
-    const events = await collectMyShifts(req.user, [nextMonday])
+    const requested = String(req.query.week || '')
+    const weekStart = isMonday(requested)
+      ? requested
+      : addDaysYmd(mondayOf(storeToday()), 7)
+    const events = await collectMyShifts(req.user, [weekStart])
 
     if (!events.length) {
       return res.status(404).send(
         '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">' +
         '<title>No shifts</title></head><body style="font-family:sans-serif;padding:40px;">' +
         `<h1>No shifts to add</h1><p>${escapeHtml(
-          `You have no shifts in an approved schedule for next week (${weekRangeText(nextMonday)}). ` +
+          `You have no shifts in an approved schedule for the week of ${weekRangeText(weekStart)}. ` +
           'It may not have been posted yet.')}</p>` +
         `<p><a href="${escapeHtml(homePathFor(req.user))}">Back to my schedule</a></p></body></html>`
       )
@@ -4583,7 +4554,7 @@ app.get('/my-schedule.ics', ...approvedPage, requireRole('employee', 'manager'),
 
     res.set({
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': `attachment; filename="delaney-shifts-week-of-${nextMonday}.ics"`,
+      'Content-Disposition': `attachment; filename="delaney-shifts-week-of-${weekStart}.ics"`,
       'Cache-Control': 'no-store'
     })
     return res.send(buildIcs(events))
@@ -7703,25 +7674,14 @@ app.post('/request-access', requireAuth, async (req, res) => {
   }
 })
 
-// Whether an approver may see a pending request at all
+// Whether an approver may see a pending request at all (admins only)
 function canSeeRequest(approver, request) {
-  if (approver.role === 'admin') return true
-  if (!['employee', 'vendor'].includes(request.role)) return false
-
-  const requested = request.stores || []
-
-  if (requested.includes(ALL_STORES_VALUE)) {
-    return hasAllStores(approver)
-  }
-
-  const covered = userStores(approver)
-  return requested.some(store => covered.includes(store))
+  return approver.role === 'admin'
 }
 
 app.get(
   '/access-requests',
-  ...approvedPage,
-  requireRole('manager'),
+  ...adminPage,
   async (req, res) => {
     const pending = await User.find({ accessStatus: 'pending' })
       .select('name email accessRequest rosterLinks')
@@ -7744,8 +7704,7 @@ app.get(
       user: req.user,
       requests,
       rosters: rostersForForm(rosters, owners),
-      // Managers may only grant employee/vendor for their own stores
-      grantableRoles: isAdmin ? ACCESS_ROLES : ['employee', 'vendor'],
+      grantableRoles: isAdmin ? ACCESS_ROLES : [],
       grantableStores: userStores(req.user),
       canGrantAll: hasAllStores(req.user),
       roleLabels: ROLE_LABELS,
@@ -7778,8 +7737,7 @@ async function loadPendingRequest(req, res) {
 
 app.post(
   '/access-requests/:id/approve',
-  ...approvedPage,
-  requireRole('manager'),
+  ...adminPage,
   async (req, res) => {
     try {
       const target = await loadPendingRequest(req, res)
@@ -7849,8 +7807,7 @@ app.post(
 
 app.post(
   '/access-requests/:id/deny',
-  ...approvedPage,
-  requireRole('manager'),
+  ...adminPage,
   async (req, res) => {
     try {
       const target = await loadPendingRequest(req, res)

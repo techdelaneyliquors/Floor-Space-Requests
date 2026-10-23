@@ -38,7 +38,9 @@
 <a href="/access-requests" class="btn btn-admin">
   Access Requests
 </a>
+<% } %>
 
+<% if (user.role === 'admin' || user.role === 'manager') { %>
 <a href="/time-off-requests" class="btn btn-admin">
   Time Off Requests<%= pendingTimeOffCount ? ` (${pendingTimeOffCount})` : '' %>
 </a>

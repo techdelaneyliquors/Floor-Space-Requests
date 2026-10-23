@@ -89,6 +89,11 @@
       color: #1f2937;
     }
 
+    .btn-time-off {
+      background: #2563eb;
+      color: white;
+    }
+
     .btn-calendar {
       background: #0f766e;
       color: white;
@@ -221,11 +226,11 @@
       <% if (showHomeLink) { %>
         <a href="/" class="btn btn-home">Home</a>
       <% } %>
-      <a href="/my-schedule.ics" class="btn btn-calendar"
-         title="Downloads a calendar file (.ics) with your shifts for next week. Open it with Outlook or Apple Calendar, or import it in Google Calendar (Settings → Import &amp; export).">
-        📅 Add next week to my calendar
+      <a href="/my-schedule.ics?week=<%= encodeURIComponent(selectedWeek.weekStart) %>" class="btn btn-calendar"
+         title="Downloads a calendar file (.ics) with your shifts for the week shown (<%= selectedWeek.range %>). Open it with Outlook or Apple Calendar, or import it in Google Calendar (Settings → Import &amp; export).">
+        📅 Add this week to my calendar
       </a>
-      <a href="/time-off" class="btn btn-print">Time off &amp; availability</a>
+      <a href="/time-off" class="btn btn-time-off">Time off &amp; availability</a>
       <button type="button" class="btn btn-print" onclick="window.print()">Print</button>
       <form action="/logout" method="POST">
         <button type="submit" class="btn btn-logout">Logout</button>
