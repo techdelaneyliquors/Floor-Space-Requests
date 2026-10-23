@@ -1,0 +1,8 @@
+<%#
+  <option>s for a time dropdown, every 15 minutes: values "HH:MM" (24-hour,
+  what the server expects), labels "9:15 AM". Pass `selected` ("HH:MM") to
+  pick one; the first option is blank so `required` works.
+%><option value="">--</option><% for (let index = 0; index < 96; index++) {
+  const hour = Math.floor(index / 4)
+  const value = String(hour).padStart(2, '0') + ':' + String((index % 4) * 15).padStart(2, '0')
+%><option value="<%= value %>"<%= typeof selected !== 'undefined' && selected === value ? ' selected' : '' %>><%= (hour % 12 || 12) + value.slice(2) + (hour < 12 ? ' AM' : ' PM') %></option><% } %>

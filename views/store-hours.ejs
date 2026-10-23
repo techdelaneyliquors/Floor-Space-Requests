@@ -26,12 +26,12 @@
     .hours-table th { background: #f3f4f6; font-weight: 600; white-space: nowrap; }
     .hours-table td.day { font-weight: 600; }
     .hours-table td.closed-cell { text-align: center; }
-    .hours-table input[type="time"] {
+    .hours-table select {
       padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px;
       font-family: inherit; font-size: 14px;
     }
     .hours-table input[type="checkbox"] { width: 18px; height: 18px; }
-    .hours-table tr.is-closed input[type="time"] { opacity: .4; }
+    .hours-table tr.is-closed select { opacity: .4; }
 
     .table-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
     .message { min-height: 1.3em; font-size: 14px; }
@@ -65,9 +65,9 @@
       <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
     </form>
     <p class="muted" style="margin:10px 0 0;">
-      When <%= store %> opens and closes each day. On the printable schedule, the keyholder whose shift
-      starts at or before opening is marked as the <strong style="color:#15803d;">opener</strong> (green), and
-      the keyholder whose shift ends at or after closing is the <strong style="color:#b91c1c;">closer</strong>
+      When <%= store %> opens and closes each day. On the printable schedule, every keyholder whose shift
+      starts at or before opening is marked as an <strong style="color:#15803d;">opener</strong> (green), and
+      every keyholder who works until closing or later is a <strong style="color:#b91c1c;">closer</strong>
       (red). Mark keyholders on the <a href="/paychex-ids?store=<%= encodeURIComponent(store) %>">Paychex IDs</a> page.
       Leave a day blank if its hours aren't set.
     </p>
@@ -92,10 +92,10 @@
                 <input type="checkbox" class="closed-input" aria-label="Closed on <%= day %>"
                        <%= hours.closed ? 'checked' : '' %>>
               </td>
-              <td><input type="time" class="open-input" aria-label="Opens on <%= day %>"
-                         value="<%= hours.open %>" <%= hours.closed ? 'disabled' : '' %>></td>
-              <td><input type="time" class="close-input" aria-label="Closes on <%= day %>"
-                         value="<%= hours.close %>" <%= hours.closed ? 'disabled' : '' %>></td>
+              <td><select class="open-input" aria-label="Opens on <%= day %>"
+                          <%= hours.closed ? 'disabled' : '' %>><%- include('partials/time-options', { selected: hours.open }) %></select></td>
+              <td><select class="close-input" aria-label="Closes on <%= day %>"
+                          <%= hours.closed ? 'disabled' : '' %>><%- include('partials/time-options', { selected: hours.close }) %></select></td>
             </tr>
           <% }) %>
         </tbody>
@@ -130,7 +130,7 @@ document.getElementById('hoursTable').addEventListener('change', event => {
   if (!event.target.classList.contains('closed-input')) return;
   const row = event.target.closest('tr');
   row.classList.toggle('is-closed', event.target.checked);
-  row.querySelectorAll('input[type="time"]').forEach(input => {
+  row.querySelectorAll('.open-input, .close-input').forEach(input => {
     input.disabled = event.target.checked;
   });
 });

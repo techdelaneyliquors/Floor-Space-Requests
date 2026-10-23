@@ -117,7 +117,7 @@
     .avail-row .day { font-weight: 600; }
     .avail-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .avail-controls select { width: auto; min-width: 170px; margin: 0; }
-    .avail-controls input[type="time"] { width: auto; margin: 0; }
+    .avail-controls .times select { width: auto; min-width: 0; margin: 0; }
     .avail-controls .times[hidden] { display: none; }
 
     .current-avail { font-size: 14px; margin: 0 0 12px; padding-left: 18px; }
@@ -176,8 +176,8 @@
       </div>
 
       <div class="grid hours" id="timeOffHours" hidden>
-        <label class="field">From <input type="time" name="startTime"></label>
-        <label class="field">Until <input type="time" name="endTime"></label>
+        <label class="field">From <select name="startTime"><%- include('partials/time-options') %></select></label>
+        <label class="field">Until <select name="endTime"><%- include('partials/time-options') %></select></label>
       </div>
 
       <label class="field">
@@ -273,8 +273,8 @@
               <option value="none" <%= entry.mode === 'none' ? 'selected' : '' %>>Not available</option>
             </select>
             <span class="times" <%= entry.mode === 'hours' ? '' : 'hidden' %>>
-              <input type="time" name="start_<%= day %>" value="<%= entry.start || '' %>"> to
-              <input type="time" name="end_<%= day %>" value="<%= entry.end || '' %>">
+              <select name="start_<%= day %>" aria-label="Available from"><%- include('partials/time-options', { selected: entry.start || '' }) %></select> to
+              <select name="end_<%= day %>" aria-label="Available until"><%- include('partials/time-options', { selected: entry.end || '' }) %></select>
             </span>
           </div>
         </div>
@@ -300,7 +300,7 @@
   const syncHours = () => {
     const partial = timeOffForm.querySelector('input[name="allDay"]:checked').value === 'no'
     hours.hidden = !partial
-    hours.querySelectorAll('input').forEach(input => { input.required = partial })
+    hours.querySelectorAll('select').forEach(input => { input.required = partial })
   }
   timeOffForm.addEventListener('change', syncHours)
   syncHours()
@@ -317,7 +317,7 @@
     const sync = () => {
       const partial = select.value === 'hours'
       times.hidden = !partial
-      times.querySelectorAll('input').forEach(input => { input.required = partial })
+      times.querySelectorAll('select').forEach(input => { input.required = partial })
     }
     select.addEventListener('change', sync)
     sync()
