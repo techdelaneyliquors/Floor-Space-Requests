@@ -26,13 +26,12 @@
     .hours-table th { background: #f3f4f6; font-weight: 600; white-space: nowrap; }
     .hours-table td.day { font-weight: 600; }
     .hours-table td.closed-cell { text-align: center; }
-    .hours-table .time-text {
-      width: 120px;
+    .hours-table select {
       padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px;
       font-family: inherit; font-size: 14px;
     }
     .hours-table input[type="checkbox"] { width: 18px; height: 18px; }
-    .hours-table tr.is-closed .time-text { opacity: .4; }
+    .hours-table tr.is-closed select { opacity: .4; }
 
     .table-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
     .message { min-height: 1.3em; font-size: 14px; }
@@ -87,14 +86,16 @@
         </thead>
         <tbody>
           <% Object.entries(days).forEach(([day, hours]) => { %>
-            <tr data-day="<%= day %>" class="time-pair <%= hours.closed ? 'is-closed' : '' %>">
+            <tr data-day="<%= day %>" class="<%= hours.closed ? 'is-closed' : '' %>">
               <td class="day"><%= day[0].toUpperCase() + day.slice(1) %></td>
               <td class="closed-cell">
                 <input type="checkbox" class="closed-input" aria-label="Closed on <%= day %>"
                        <%= hours.closed ? 'checked' : '' %>>
               </td>
-              <td><%- include('partials/time-entry', { value: hours.open, label: `Opens on ${day}`, disabled: hours.closed, valueClass: 'open-input', textClass: 'time-start' }) %></td>
-              <td><%- include('partials/time-entry', { value: hours.close, label: `Closes on ${day}`, disabled: hours.closed, valueClass: 'close-input', textClass: 'time-end' }) %></td>
+              <td><select class="open-input" aria-label="Opens on <%= day %>"
+                          <%= hours.closed ? 'disabled' : '' %>><%- include('partials/time-options', { selected: hours.open }) %></select></td>
+              <td><select class="close-input" aria-label="Closes on <%= day %>"
+                          <%= hours.closed ? 'disabled' : '' %>><%- include('partials/time-options', { selected: hours.close }) %></select></td>
             </tr>
           <% }) %>
         </tbody>
@@ -115,7 +116,6 @@
 
 </div>
 
-<%- include('partials/time-entry-support') %>
 <script>
 const STORE = <%- safeJson(store) %>;
 
@@ -130,7 +130,7 @@ document.getElementById('hoursTable').addEventListener('change', event => {
   if (!event.target.classList.contains('closed-input')) return;
   const row = event.target.closest('tr');
   row.classList.toggle('is-closed', event.target.checked);
-  row.querySelectorAll('.time-text').forEach(input => {
+  row.querySelectorAll('.open-input, .close-input').forEach(input => {
     input.disabled = event.target.checked;
   });
 });
@@ -138,14 +138,6 @@ document.getElementById('hoursTable').addEventListener('change', event => {
 document.getElementById('saveHoursBtn').addEventListener('click', async () => {
   const button = document.getElementById('saveHoursBtn');
   const days = {};
-
-  // Stop at the first time that can't be read
-  const badTime = [...document.querySelectorAll('#hoursTable .time-text')]
-    .find(input => !input.disabled && !commitTimeEntry(input));
-  if (badTime) {
-    badTime.reportValidity();
-    return;
-  }
 
   document.querySelectorAll('#hoursTable tbody tr').forEach(row => {
     days[row.dataset.day] = {

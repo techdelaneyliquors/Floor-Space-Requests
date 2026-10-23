@@ -175,7 +175,7 @@
   margin-bottom:6px;
 }
 
-.shift-editor .time-text {
+.shift-editor select {
   min-width:0;
   padding:5px;
   font-size:11px;
@@ -2051,7 +2051,6 @@ td.budget-within, td.budget-over {
 
 </div>
 
-<%- include('partials/time-entry-support') %>
 <script>
   const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const DAY_KEYS = DAYS.map(d => d.toLowerCase());
@@ -2458,21 +2457,27 @@ function inputTimeToDisplay(inputValue) {
   );
 }
 
-// Shift start/end boxes: typed or picked from the 15-minute list (see
-// partials/time-entry-support.ejs, which reads them back with parseTypedTime)
-function shiftTimeBox(value, attribute, key, label, pairClass) {
-  return `
-    <input
-      type="text"
-      class="time-text ${pairClass}"
-      list="timeChoices"
-      autocomplete="off"
-      placeholder="e.g. 9:30 AM"
-      value="${value ? inputTimeToDisplay(value) : ''}"
-      ${attribute}="${key}"
-      aria-label="${label}"
-    >
-  `;
+// Shift start/end choices every 15 minutes from 5:00 AM ("HH:MM" values,
+// "9:15 AM" labels). Built once; each dropdown marks its own time as selected.
+const SHIFT_TIME_VALUES = Array.from({ length: 76 }, (_, index) => {
+  const minutes = 5 * 60 + index * 15;
+  return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' +
+    String(minutes % 60).padStart(2, '0');
+});
+
+const SHIFT_TIME_OPTIONS_HTML =
+  '<option value="">--</option>' +
+  SHIFT_TIME_VALUES
+    .map(value => `<option value="${value}">${inputTimeToDisplay(value)}</option>`)
+    .join('');
+
+function shiftTimeOptions(selected) {
+  if (!selected) return SHIFT_TIME_OPTIONS_HTML;
+
+  return SHIFT_TIME_OPTIONS_HTML.replace(
+    `<option value="${selected}">`,
+    `<option value="${selected}" selected>`
+  );
 }
 
 function saveTemporaryShift(
@@ -2498,31 +2503,19 @@ function saveTemporaryShift(
     return;
   }
 
-  if (!startInput.value.trim() || !endInput.value.trim()) {
+  if (!startInput.value || !endInput.value) {
     alert(
       'Enter both a start time and an end time.'
     );
     return;
   }
 
-  // Typed times ("9", "930", "17:30") become "HH:MM"; an end time without
-  // AM/PM lands after the start
-  const startValue = parseTypedTime(startInput.value);
-  const endValue = startValue && parseTypedTime(endInput.value, startValue);
-
-  if (!startValue || !endValue) {
-    alert(
-      'Enter times from 5:00 AM to 11:45 PM, like 9:30 AM or 17:30.'
-    );
-    return;
-  }
-
   const startText = inputTimeToDisplay(
-    startValue
+    startInput.value
   );
 
   const endText = inputTimeToDisplay(
-    endValue
+    endInput.value
   );
 
   const newShift =
@@ -3232,9 +3225,16 @@ document.addEventListener('click', event => {
                 : ''
             }
 
-            <div class="shift-editor time-pair">
-              ${shiftTimeBox(inputValues.start, 'data-shift-start', assignmentKey, 'Shift start time', 'time-start')}
-              ${shiftTimeBox(inputValues.end, 'data-shift-end', assignmentKey, 'Shift end time', 'time-end')}
+            <div class="shift-editor">
+              <select
+                data-shift-start="${assignmentKey}"
+                aria-label="Shift start time"
+              >${shiftTimeOptions(inputValues.start)}</select>
+
+              <select
+                data-shift-end="${assignmentKey}"
+                aria-label="Shift end time"
+              >${shiftTimeOptions(inputValues.end)}</select>
             </div>
 
             <div class="shift-edit-actions">

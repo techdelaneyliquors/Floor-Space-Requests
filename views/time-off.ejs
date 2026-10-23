@@ -75,7 +75,7 @@
 
     label.field { display: block; font-size: 13px; font-weight: 600; }
 
-    input[type="date"], input.time-text, select, textarea {
+    input[type="date"], select, textarea {
       width: 100%;
       box-sizing: border-box;
       margin-top: 4px;
@@ -117,7 +117,7 @@
     .avail-row .day { font-weight: 600; }
     .avail-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .avail-controls select { width: auto; min-width: 170px; margin: 0; }
-    .avail-controls .times .time-text { width: 120px; margin: 0; }
+    .avail-controls .times select { width: auto; min-width: 0; margin: 0; }
     .avail-controls .times[hidden] { display: none; }
 
     .current-avail { font-size: 14px; margin: 0 0 12px; padding-left: 18px; }
@@ -175,9 +175,9 @@
         <label><input type="radio" name="allDay" value="no"> Only certain hours</label>
       </div>
 
-      <div class="grid hours time-pair" id="timeOffHours" hidden>
-        <label class="field">From <%- include('partials/time-entry', { name: 'startTime', label: 'From', textClass: 'time-start' }) %></label>
-        <label class="field">Until <%- include('partials/time-entry', { name: 'endTime', label: 'Until', textClass: 'time-end' }) %></label>
+      <div class="grid hours" id="timeOffHours" hidden>
+        <label class="field">From <select name="startTime"><%- include('partials/time-options') %></select></label>
+        <label class="field">Until <select name="endTime"><%- include('partials/time-options') %></select></label>
       </div>
 
       <label class="field">
@@ -272,9 +272,9 @@
               <option value="hours" <%= entry.mode === 'hours' ? 'selected' : '' %>>Only between…</option>
               <option value="none" <%= entry.mode === 'none' ? 'selected' : '' %>>Not available</option>
             </select>
-            <span class="times time-pair" <%= entry.mode === 'hours' ? '' : 'hidden' %>>
-              <%- include('partials/time-entry', { name: `start_${day}`, value: entry.start || '', label: 'Available from', textClass: 'time-start' }) %> to
-              <%- include('partials/time-entry', { name: `end_${day}`, value: entry.end || '', label: 'Available until', textClass: 'time-end' }) %>
+            <span class="times" <%= entry.mode === 'hours' ? '' : 'hidden' %>>
+              <select name="start_<%= day %>" aria-label="Available from"><%- include('partials/time-options', { selected: entry.start || '' }) %></select> to
+              <select name="end_<%= day %>" aria-label="Available until"><%- include('partials/time-options', { selected: entry.end || '' }) %></select>
             </span>
           </div>
         </div>
@@ -293,7 +293,6 @@
 
 </div>
 
-<%- include('partials/time-entry-support') %>
 <script>
   // Time off: show the hours only for "Only certain hours"
   const timeOffForm = document.getElementById('timeOffForm')
@@ -301,7 +300,7 @@
   const syncHours = () => {
     const partial = timeOffForm.querySelector('input[name="allDay"]:checked').value === 'no'
     hours.hidden = !partial
-    hours.querySelectorAll('.time-text').forEach(input => { input.required = partial })
+    hours.querySelectorAll('select').forEach(input => { input.required = partial })
   }
   timeOffForm.addEventListener('change', syncHours)
   syncHours()
@@ -318,7 +317,7 @@
     const sync = () => {
       const partial = select.value === 'hours'
       times.hidden = !partial
-      times.querySelectorAll('.time-text').forEach(input => { input.required = partial })
+      times.querySelectorAll('select').forEach(input => { input.required = partial })
     }
     select.addEventListener('change', sync)
     sync()
