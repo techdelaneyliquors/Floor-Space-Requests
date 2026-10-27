@@ -2603,7 +2603,18 @@ function saveTemporaryShift(
 
   let reason = '';
 
-  if (!buildingNewTemplate) {
+  // An added shift (no preset time in this slot) already has its reason
+  // from when it was added, so changing its time doesn't ask again
+  const presetShift =
+    coverageFor(type)?.[shiftId]?.[day] || '';
+  const addedShiftReason =
+    !presetShift && temporaryShifts[key] !== undefined
+      ? temporaryShiftNotes[key] || ''
+      : '';
+
+  if (addedShiftReason) {
+    reason = addedShiftReason;
+  } else if (!buildingNewTemplate) {
     const existingNote =
       temporaryShiftNotes[key] || '';
 

@@ -3668,18 +3668,18 @@ async function notifyScheduleApprovers(store, weekStart, submitter) {
   })
 }
 
-// The store's managers hear when its schedule is approved (whoever approved
-// it, including an admin's own submission). Managers covering all stores
-// are included; admins are not.
-async function notifyStoreManagersApproved(store, weekStart, approver) {
-  const managers = await User.find({
-    role: 'manager',
-    stores: { $in: [store, ALL_STORES_VALUE] }
-  })
-    .select('email emailVerified accessStatus role stores')
-    .lean()
+// Who hears when a schedule is approved (whoever approved it, including an
+// admin's own submission). SCHEDULE_APPROVED_NOTIFY_TO (comma-separated)
+// overrides the default address.
+function scheduleApprovedRecipients() {
+  return String(process.env.SCHEDULE_APPROVED_NOTIFY_TO || 'tech@delaneyliquors.com')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+}
 
-  const recipients = managers.filter(isApproved).map(user => user.email)
+async function notifyScheduleApproved(store, weekStart, approver) {
+  const recipients = scheduleApprovedRecipients()
   if (!recipients.length) return
 
   const link = `${getAppBaseUrl()}/posted-schedules`
@@ -3776,7 +3776,7 @@ app.post(
       let emailWarning = ''
 
       if (autoApprove) {
-        notifyStoreManagersApproved(store, weekStart, req.user).catch(err =>
+        notifyScheduleApproved(store, weekStart, req.user).catch(err =>
           console.error('Schedule approved notification failed:', err)
         )
       } else {
@@ -4289,7 +4289,7 @@ app.post('/schedule-approvals/:id/approve', ...adminPage, async (req, res) => {
 
     console.log('Schedule approved:', { store: doc.store, weekStart: doc.weekStart, by: req.user.email })
 
-    notifyStoreManagersApproved(doc.store, doc.weekStart, req.user).catch(err =>
+    notifyScheduleApproved(doc.store, doc.weekStart, req.user).catch(err =>
       console.error('Schedule approved notification failed:', err)
     )
 
