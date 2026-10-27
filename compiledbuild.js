@@ -4037,27 +4037,95 @@ app.get(
 // changed shifts flagged, hours, overtime, and day/grand totals. When the
 // week already has an approved version, each cell also carries what
 // employees currently see if it differs.
-function buildScheduleReview(snapshot, liveSnapshot) {
+// A store's keyholders (employee numbers) and opening hours, for marking
+// who opens and closes on its posted schedules
+async function keyholderContext(store) {
+  const [links, hours] = await Promise.all([
+    PaychexEmployeeLink.find({ store, keyholder: true }).select('employeeNumber').lean(),
+    StoreHours.findOne({ store }).lean()
+  ])
+  return {
+    keyholders: new Set(links.map(link => link.employeeNumber)),
+    hours: storeHoursView(hours)
+  }
+}
+
+// The same rule as the printable schedule: every keyholder starting at or
+// before opening is an opener, every keyholder working until closing or
+// later is a closer. Without hours for a day, the earliest-starting and
+// latest-finishing keyholders. Returns Sets of "row|day|shift" keys.
+function findOpenersAndClosers(employees, context) {
+  const openers = new Set()
+  const closers = new Set()
+  if (!context || !context.keyholders.size) return { openers, closers }
+
+  const clockToMinutes = value => {
+    const match = /^(\d{2}):(\d{2})$/.exec(value || '')
+    return match ? Number(match[1]) * 60 + Number(match[2]) : null
+  }
+
+  SCHEDULE_DAY_KEYS.forEach((day, dayIndex) => {
+    const hours = context.hours[day] || {}
+    if (hours.closed) return
+
+    const open = clockToMinutes(hours.open)
+    const close = clockToMinutes(hours.close)
+    const shifts = []
+
+    employees.forEach((employee, rowIndex) => {
+      if (!context.keyholders.has(String(employee.employeeNumber || ''))) return
+
+      ;((employee.days && employee.days[day]) || []).forEach((text, shiftIndex) => {
+        const [startText, endText] = String(text).split(' to ')
+        const start = clockTextToMinutes(startText)
+        let end = clockTextToMinutes(endText)
+        if (start == null || end == null) return
+        if (end <= start) end += 1440 // ends after midnight
+        shifts.push({ key: `${rowIndex}|${dayIndex}|${shiftIndex}`, start, end })
+      })
+    })
+
+    if (!shifts.length) return
+    const earliest = Math.min(...shifts.map(shift => shift.start))
+    const latest = Math.max(...shifts.map(shift => shift.end))
+
+    shifts.forEach(shift => {
+      if (open == null ? shift.start === earliest : shift.start <= open) openers.add(shift.key)
+      if (close == null ? shift.end === latest : shift.end >= close) closers.add(shift.key)
+    })
+  })
+
+  return { openers, closers }
+}
+
+// keyholders: keyholderContext(store), to mark openers and closers (optional)
+function buildScheduleReview(snapshot, liveSnapshot, keyholders) {
   const flatten = snap => (snap && Array.isArray(snap.groups) ? snap.groups : [])
     .flatMap(group => group.employees || [])
 
   const employees = flatten(snapshot)
+  const { openers, closers } = findOpenersAndClosers(employees, keyholders)
   const live = liveSnapshot ? flatten(liveSnapshot) : null
   const liveByName = new Map((live || []).map(employee => [employee.name, employee]))
 
-  const rows = employees.map(employee => {
+  const rows = employees.map((employee, rowIndex) => {
     const before = live ? liveByName.get(employee.name) : null
 
     return {
       name: employee.name,
       isNew: Boolean(live) && !before,
-      cells: SCHEDULE_DAY_KEYS.map(day => {
+      cells: SCHEDULE_DAY_KEYS.map((day, dayIndex) => {
         const shifts = (employee.days && employee.days[day]) || []
         const changed = (employee.changed && employee.changed[day]) || []
         const liveShifts = before ? (before.days[day] || []) : []
 
         return {
-          shifts: shifts.map((text, i) => ({ text, changed: changed[i] === true })),
+          shifts: shifts.map((text, i) => ({
+            text,
+            changed: changed[i] === true,
+            opens: openers.has(`${rowIndex}|${dayIndex}|${i}`),
+            closes: closers.has(`${rowIndex}|${dayIndex}|${i}`)
+          })),
           liveShifts,
           differsFromLive: Boolean(live) && before &&
             shifts.join('|') !== liveShifts.join('|')
@@ -4093,6 +4161,8 @@ function buildScheduleReview(snapshot, liveSnapshot) {
 
   return {
     rows,
+    // Show the opener/closer key when the store has keyholders marked
+    keyholdersMarked: Boolean(keyholders && keyholders.keyholders.size),
     hasHours,
     hasPto: ptoTotal > 0,
     ptoTotal,
@@ -4121,6 +4191,12 @@ app.get('/schedule-approvals', ...adminPage, async (req, res) => {
     .sort({ 'pending.submittedAt': 1 })
     .lean()
 
+  // Keyholders and store hours, once per store, for the opener/closer marks
+  const keyholdersByStore = new Map(await Promise.all(
+    [...new Set(pending.map(doc => doc.store))]
+      .map(async store => [store, await keyholderContext(store)])
+  ))
+
   res.render('schedule-approvals.ejs', {
     user: req.user,
     items: pending.map(doc => ({
@@ -4135,7 +4211,8 @@ app.get('/schedule-approvals', ...adminPage, async (req, res) => {
       snapshot: doc.pending.snapshot || { groups: [], adjustments: [] },
       review: buildScheduleReview(
         doc.pending.snapshot,
-        doc.approved && doc.approved.approvedAt ? doc.approved.snapshot : null
+        doc.approved && doc.approved.approvedAt ? doc.approved.snapshot : null,
+        keyholdersByStore.get(doc.store)
       )
     })),
     dayKeys: SCHEDULE_DAY_KEYS,
@@ -4230,7 +4307,7 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
           })),
           item: {
             snapshot: approved.snapshot || { groups: [], adjustments: [] },
-            review: buildScheduleReview(approved.snapshot, null),
+            review: buildScheduleReview(approved.snapshot, null, await keyholderContext(store)),
             replacesApproved: false
           }
         }

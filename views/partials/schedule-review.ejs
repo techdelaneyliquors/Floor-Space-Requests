@@ -21,6 +21,10 @@
 
   <div class="legend">
     <span><span class="changed-shift">Red</span> = changed from the template this week (reasons below)</span>
+    <% if (review.keyholdersMarked) { %>
+      <span><span class="keyholder-swatch opener-shift"></span> Opens (keyholder)</span>
+      <span><span class="keyholder-swatch closer-shift"></span> Closes (keyholder)</span>
+    <% } %>
     <% if (item.replacesApproved) { %>
       <span><span class="live-note">Was: …</span> = what employees see now, where this version differs</span>
     <% } %>
@@ -53,7 +57,7 @@
             <% row.cells.forEach(cell => { %>
               <td class="day<%= cell.differsFromLive ? ' differs' : '' %>">
                 <% cell.shifts.forEach((shift, i) => { %>
-                  <span class="<%= shift.changed ? 'changed-shift' : '' %>"><%= shift.text %></span><% if (i < cell.shifts.length - 1) { %><br><% } %>
+                  <span class="<%= [shift.changed ? 'changed-shift' : '', shift.opens ? 'opener-shift' : '', shift.closes ? 'closer-shift' : ''].filter(Boolean).join(' ') %>"<% if (shift.opens || shift.closes) { %> title="<%= shift.opens && shift.closes ? 'Opens and closes' : shift.opens ? 'Opens' : 'Closes' %>"<% } %>><%= shift.text %></span><% if (i < cell.shifts.length - 1) { %><br><% } %>
                 <% }) %>
                 <% if (cell.differsFromLive) { %>
                   <span class="live-note">

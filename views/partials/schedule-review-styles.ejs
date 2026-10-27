@@ -203,6 +203,40 @@
       font-weight: 800;
     }
 
+    /* The keyholder who opens (green) and closes (red), as on the
+       printable schedule; kept when printing */
+    .opener-shift,
+    .closer-shift {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .opener-shift {
+      background: #bbf7d0;
+      box-shadow: inset 3px 0 0 #15803d;
+    }
+
+    .closer-shift {
+      background: #fecaca;
+      box-shadow: inset -3px 0 0 #b91c1c;
+    }
+
+    .opener-shift.closer-shift {
+      background: linear-gradient(90deg, #bbf7d0 50%, #fecaca 50%);
+      box-shadow: inset 3px 0 0 #15803d, inset -3px 0 0 #b91c1c;
+    }
+
+    .keyholder-swatch {
+      display: inline-block;
+      width: 22px;
+      height: 12px;
+      padding: 0;
+      vertical-align: middle;
+    }
+
     td.differs {
       background: #fffbeb;
     }
