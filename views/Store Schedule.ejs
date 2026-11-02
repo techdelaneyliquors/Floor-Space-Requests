@@ -943,6 +943,23 @@ td.budget-within, td.budget-over {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+/* Hours over the hours budget, as a fraction (hours on top, a line, the
+   budget below), so the cell never spills into the next one */
+td.budget-total .budget-fraction {
+  display: inline-block;
+  text-align: center;
+}
+td.budget-total .budget-hours,
+td.budget-total .budget-limit {
+  display: block;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+td.budget-total .budget-limit {
+  border-top: 1.5px solid currentColor;
+  margin-top: 2px;
+  padding-top: 2px;
+}
 .budget-summary { display: grid; gap: 6px; margin-bottom: 10px; }
 .budget-summary .over { color: #b91c1c; font-weight: 600; }
 .budget-summary .within { color: #15803d; font-weight: 600; }
@@ -8284,7 +8301,10 @@ function budgetTotalCell(total, weekStart, label) {
 
   return `
     <td class="metric budget-total ${over ? 'budget-over' : 'budget-within'}" title="${escapeHtml(title)}">
-      ${total.toFixed(2)} / ${budget.hours.toFixed(2)}
+      <span class="budget-fraction">
+        <span class="budget-hours">${total.toFixed(2)}</span>
+        <span class="budget-limit">${budget.hours.toFixed(2)}</span>
+      </span>
     </td>
   `;
 }
