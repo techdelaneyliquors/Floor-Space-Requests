@@ -841,6 +841,20 @@ td.conflict-cell {
   font-weight: 700;
 }
 
+/* A day off punched exactly 8:00 AM to 4:00 PM: a vacation day */
+.vacation-cell {
+  background: #e0f2fe !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.vacation-marker {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+}
+
 .attendance-exception-review {
   margin-top:20px;
   display:grid;
@@ -2049,7 +2063,8 @@ td.budget-within, td.budget-over {
       <small>
         Planned shifts are shown first. Actual shifts are
         shown in italic text underneath. Yellow: worked on a
-        day they weren't scheduled.
+        day they weren't scheduled. Blue: a vacation day (a day off
+        punched exactly 8:00 AM to 4:00 PM; not counted as overtime).
       </small>
     </div>
   </div>
@@ -5935,6 +5950,11 @@ const actualDayHours =
         return;
       }
 
+      // A vacation day (8:00 AM to 4:00 PM on a day off) needs no explanation
+      if (isVacationDay(plannedValues, actualValues)) {
+        return;
+      }
+
       /*
        * Worked on a day with no scheduled shift (the yellow cells). Listed
        * with overtime: it needs a manager explanation, never points.
@@ -6561,6 +6581,24 @@ function renderPreviousWeekDates() {
         const workedTotal =
           clockedTotal + paidSickTotal;
 
+        // Vacation days are in the clocked hours, but aren't overtime
+        const vacationTotal =
+          DAY_KEYS.reduce(
+            (sum, day) =>
+              sum + (
+                isVacationDay(
+                  normalizeShiftValues(scheduledShifts[day]),
+                  normalizeShiftValues(actualShifts[day])
+                )
+                  ? Number(actualHours[day] || 0)
+                  : 0
+              ),
+            0
+          );
+
+        const overtimeBasis =
+          clockedTotal - vacationTotal;
+
         const difference =
           workedTotal -
           scheduledTotal;
@@ -6580,7 +6618,7 @@ function renderPreviousWeekDates() {
         const overtimeApproval =
           calculateOvertimeApproval(
             employeeIdentifier,
-            clockedTotal
+            overtimeBasis
           );
 
         totalScheduled +=
@@ -6593,11 +6631,12 @@ function renderPreviousWeekDates() {
           overtimeApproval.overtimeHours;
 
         // Planned OT: scheduled hours over 40. Paid OT: clocked hours over
-        // 40 (hourly only; paid sick days aren't overtime). Salaried: none.
+        // 40 (hourly only; paid sick and vacation days aren't overtime).
+        // Salaried: none.
         const salaried = isSalaried(employeeIdentifier);
         const plannedOvertime = salaried ? 0 : Math.max(0, scheduledTotal - 40);
         totalPlannedOvertime += plannedOvertime;
-        totalPaidOvertime += paidOvertimeFor(employeeIdentifier, clockedTotal);
+        totalPaidOvertime += paidOvertimeFor(employeeIdentifier, overtimeBasis);
 
         totalApprovedOvertime +=
           overtimeApproval
@@ -6690,9 +6729,16 @@ function renderPreviousWeekDates() {
               plannedValues.length === 0 &&
               actualValues.length > 0;
 
+            // ...exactly 8:00 AM to 4:00 PM: a vacation day
+            const vacationDay =
+              isVacationDay(plannedValues, actualValues);
+
             if (noTimeWorked) {
               cellClass +=
                 ' no-time-worked-cell';
+            } else if (vacationDay) {
+              cellClass +=
+                ' vacation-cell';
             } else if (unscheduledWork) {
               cellClass +=
                 ' unscheduled-work-cell';
@@ -6771,6 +6817,7 @@ function renderPreviousWeekDates() {
                 }">
                   ${actualHtml}
                 </span>
+                ${vacationDay ? '<span class="vacation-marker">Vacation</span>' : ''}
                 ${sickMarker}
               </td>
             `;
@@ -6808,7 +6855,7 @@ function renderPreviousWeekDates() {
               ${salaried ? '—' : plannedOvertime.toFixed(2)}
             </td>
 
-            ${paidOvertimeCell(employeeIdentifier, clockedTotal, plannedOvertime, 'the planned OT')}
+            ${paidOvertimeCell(employeeIdentifier, overtimeBasis, plannedOvertime, 'the planned OT')}
           </tr>
         `;
       })
@@ -8567,6 +8614,15 @@ function sickDayFor(employeeNumber, date) {
 function paidSickHours(employeeNumber, date) {
   const sickDay = sickDayFor(employeeNumber, date);
   return sickDay && sickDay.type === 'paid-sick' ? Number(sickDay.hours || 0) : 0;
+}
+
+// A day off whose only punch is exactly 8:00 AM to 4:00 PM is a vacation
+// day: shown as Vacation, needs no explanation, and its hours count as
+// worked but not toward overtime (like a paid sick day)
+function isVacationDay(plannedValues, actualValues) {
+  return plannedValues.length === 0 &&
+    actualValues.length === 1 &&
+    /^0?8:00\s*AM\s+to\s+0?4:00\s*PM$/i.test(String(actualValues[0]).trim());
 }
 
 // Points already assigned (by an admin) for this absence, if any
