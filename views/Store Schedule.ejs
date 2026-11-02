@@ -104,6 +104,18 @@
     display:block !important;
   }
 
+  /* The only heading line: "Week of Monday, … – Sunday, …: Previous Week
+     Comparison" (no section title, week picker or color note) */
+  #module-5 .section-title h3,
+  #module-5 .section-title small,
+  #previousWeekHistory {
+    display:none !important;
+  }
+
+  #previousWeekDates.has-week::after {
+    content: ": Previous Week Comparison";
+  }
+
   .module-heading {
     display:none;
   }
@@ -6395,6 +6407,9 @@ function renderPreviousWeekDates() {
   const start = state.previousWeekStart
     ? new Date(state.previousWeekStart)
     : null;
+
+  // Printing adds ": Previous Week Comparison" after a real week
+  label.classList.toggle('has-week', Boolean(start && !Number.isNaN(start.getTime())));
 
   if (!start || Number.isNaN(start.getTime())) {
     label.textContent = 'No previous week has been uploaded yet.';
