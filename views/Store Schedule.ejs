@@ -314,6 +314,12 @@
   font-size: 13px;
 }
 
+/* Hidden until the store has two or more uploaded weeks to choose from
+   (display: flex above would otherwise override the hidden attribute) */
+.previous-week-history[hidden] {
+  display: none;
+}
+
 .previous-week-history label {
   display: inline;
   margin: 0;

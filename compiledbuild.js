@@ -79,6 +79,7 @@ const PtoHours = require('./models/PtoHours')
 const SickDay = require('./models/SickDay')
 const PreviousWeekReview = require('./models/PreviousWeekReview')
 const { buildBackup } = require('./lib/backup')
+const { buildPreviousWeekReport, renderPreviousWeekPdf } = require('./lib/previousWeekReport')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -302,6 +303,8 @@ mongoose.connect(process.env.MONGO_URI)
     }
     // Catch up a backup missed while the server was asleep
     sendWeeklyBackupIfDue().catch(err => console.error('[backup] check failed:', err))
+    // ...and the Monday previous week review email
+    sendPreviousWeekPdfsIfDue().catch(err => console.error('[previous-week-pdf] check failed:', err))
   })
 
 // One-time, idempotent: floor-space requests used to identify their owner
@@ -8536,11 +8539,167 @@ function startWeeklyBackupJob() {
   cron.schedule('17 * * * *', () => sendWeeklyBackupIfDue().catch(err =>
     console.error('[backup] check failed:', err)), { timezone: 'America/New_York' })
 
+  // Monday 9:15 AM: each store's previous week review as a PDF. The hourly
+  // check sends it later if the server was asleep at 9:15.
+  cron.schedule('15 9 * * 1', () => sendPreviousWeekPdfsIfDue().catch(err =>
+    console.error('[previous-week-pdf] send failed:', err)), { timezone: 'America/New_York' })
+  cron.schedule('21 * * * *', () => sendPreviousWeekPdfsIfDue().catch(err =>
+    console.error('[previous-week-pdf] check failed:', err)), { timezone: 'America/New_York' })
+
   // Daily: delete sent-to-Paychex records older than a month, even in weeks
   // when nothing is sent
   cron.schedule('42 3 * * *', () => purgeOldPaychexSends().catch(err =>
     console.error('[paychex] old sent-shift cleanup failed:', err)), { timezone: 'America/New_York' })
 }
+
+// ------------------------
+// MONDAY PREVIOUS WEEK REVIEW EMAIL
+// ------------------------
+//
+// Monday 9:15 AM (store time): one email to PREVIOUS_WEEK_PDF_TO (comma-
+// separated; default tech@delaneyliquors.com) with each store's Previous
+// Week review as a one-page PDF (lib/previousWeekReport.js). Render's free
+// tier sleeps, so it's also checked at startup and every hour: it goes out
+// the first time the server is awake on or after Monday 9:15, once a week.
+// Stores that haven't uploaded last week yet are listed instead of
+// attached. Set PREVIOUS_WEEK_PDF_TO to an empty value to turn it off.
+
+const PREVIOUS_WEEK_PDF_SEND_MINUTES = 9 * 60 + 15
+const PREVIOUS_WEEK_PDF_RETRY_MS = 60 * 60 * 1000
+
+const previousWeekPdfRecipients = () =>
+  String(process.env.PREVIOUS_WEEK_PDF_TO ?? 'tech@delaneyliquors.com')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+
+// Minutes since midnight, store time
+function storeMinutesNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: STORE_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date())
+  const value = type => Number(parts.find(part => part.type === type).value)
+  return value('hour') * 60 + value('minute')
+}
+
+// One store's review: { report, pdf } (pdf is null with no uploaded week)
+async function previousWeekReviewPdf(store) {
+  const settings = await ScheduleSettings.findOne({ store }).lean()
+  const previousMonday = settings && settings.previousWeekStart
+    ? mondayOf(new Date(settings.previousWeekStart).toISOString().slice(0, 10))
+    : ''
+
+  const [sickDays, salariedLinks, budget] = await Promise.all([
+    previousMonday ? sickDaysForWeek(store, previousMonday) : [],
+    PaychexEmployeeLink.find({ store, salaried: true }).select('employeeNumber').lean(),
+    HoursBudget.findOne({ store }).lean()
+  ])
+
+  const report = buildPreviousWeekReport({
+    settings: settings || {},
+    hasCashiers: Boolean(SCHEDULE_STORES[store] && SCHEDULE_STORES[store].hasCashiers),
+    sickDays,
+    salariedNumbers: new Set(salariedLinks.map(link => link.employeeNumber)),
+    hoursBudget: hoursBudgetView(budget)
+  })
+
+  return { report, pdf: report.weekStart ? await renderPreviousWeekPdf(store, report) : null }
+}
+
+async function sendPreviousWeekPdfsIfDue() {
+  const recipients = previousWeekPdfRecipients()
+  if (!recipients.length || mongoose.connection.readyState !== 1) return
+
+  const today = storeToday()
+  const thisMonday = mondayOf(today)
+  if (today === thisMonday && storeMinutesNow() < PREVIOUS_WEEK_PDF_SEND_MINUTES) return
+
+  // Claim this week's send atomically, so two checks can't both email
+  const now = new Date()
+  const log = mongoose.connection.db.collection('backuplogs')
+  await log.updateOne(
+    { _id: 'previous-week-pdf' },
+    { $setOnInsert: { lastSentFor: null, lastAttemptAt: null } },
+    { upsert: true }
+  )
+  const claimed = await log.findOneAndUpdate(
+    {
+      _id: 'previous-week-pdf',
+      lastSentFor: { $ne: thisMonday },
+      $or: [{ lastAttemptAt: null }, { lastAttemptAt: { $lte: new Date(now - PREVIOUS_WEEK_PDF_RETRY_MS) } }]
+    },
+    { $set: { lastAttemptAt: now } }
+  )
+  if (!claimed) return
+
+  const lastWeek = addDaysYmd(thisMonday, -7)
+  const attachments = []
+  const notIncluded = []
+
+  for (const store of STORE_LIST) {
+    try {
+      const { report, pdf } = await previousWeekReviewPdf(store)
+      if (!pdf) {
+        notIncluded.push(`${store}: no previous week has been uploaded`)
+      } else if (report.weekStart !== lastWeek) {
+        notIncluded.push(`${store}: last week isn't uploaded yet (latest is the week of ${weekRangeText(report.weekStart)})`)
+      } else {
+        attachments.push({
+          name: `${store} previous week review ${lastWeek}.pdf`,
+          content: pdf.toString('base64')
+        })
+      }
+    } catch (err) {
+      console.error(`[previous-week-pdf] ${store} failed:`, err)
+      notIncluded.push(`${store}: the review could not be created`)
+    }
+  }
+
+  const range = weekRangeText(lastWeek)
+  const text = [
+    attachments.length
+      ? `Attached are the previous week reviews for the week of ${range}: ${attachments.length} store${attachments.length === 1 ? '' : 's'}.`
+      : `No previous week reviews to attach for the week of ${range}.`,
+    ...(notIncluded.length ? ['', 'Not included:', ...notIncluded.map(line => `  ${line}`)] : []),
+    '',
+    `Each store's full review: ${getAppBaseUrl()}`
+  ].join('\n')
+
+  await sendEmail({
+    to: recipients,
+    subject: `Previous week reviews: week of ${range}`,
+    text,
+    html: text.split('\n').map(line => line ? `<p style="margin:0">${escapeHtml(line)}</p>` : '<br>').join(''),
+    attachments
+  })
+
+  await log.updateOne({ _id: 'previous-week-pdf' }, { $set: { lastSentFor: thisMonday, lastSentAt: new Date() } })
+  console.log('[previous-week-pdf] sent:', { week: lastWeek, attached: attachments.length, notIncluded: notIncluded.length })
+}
+
+// The same PDF for one store, for admins (to check it or send by hand)
+app.get('/admin/previous-week-review.pdf', ...adminPage, async (req, res) => {
+  try {
+    const store = getCanonicalStoreName(req.query.store)
+    if (!store) return res.status(400).send('Choose a store, e.g. ?store=Branford')
+
+    const { report, pdf } = await previousWeekReviewPdf(store)
+    if (!pdf) return res.status(404).send(`${store} has no previous week uploaded.`)
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${store} previous week review ${report.weekStart}.pdf"`,
+      'Cache-Control': 'no-store'
+    })
+    return res.send(pdf)
+  } catch (err) {
+    console.error('Previous week review PDF error:', err)
+    return res.status(500).send('The PDF could not be created.')
+  }
+})
 
 // The same backup as a download, for admins
 app.get('/admin/backup.zip', ...adminPage, async (req, res) => {
