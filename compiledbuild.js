@@ -272,6 +272,81 @@ async function sendEmail({
   };
 }
 
+// ------------------------
+// EMAILS TO EMPLOYEES (relayed through tech@)
+// ------------------------
+//
+// Some outside mail systems block or junk the app's emails. With relaying
+// on, emails meant for an employee (email confirmation, access decisions,
+// password resets) go to USER_EMAIL_RELAY_TO (default
+// tech@delaneyliquors.com) instead, with "[Delaney relay]" in the subject and
+// labeled lines at the top saying who they're for:
+//
+//   RELAY-KEY:     USER_EMAIL_RELAY_KEY, so the flow can tell these apart
+//                  from anything else sent to that mailbox
+//   RELAY-TO / RELAY-NAME / RELAY-TYPE / RELAY-SUBJECT / RELAY-LINK
+//   ----- MESSAGE ----- ... ----- END MESSAGE -----   the text to send on
+//
+// A Power Automate flow on that mailbox checks the key and sends the message
+// on from our own domain. Each label appears once, before the message, so
+// the flow should read the FIRST match. Set USER_EMAIL_RELAY_TO to an empty
+// value to send directly. Without USER_EMAIL_RELAY_KEY nothing is relayed
+// (emails go directly), so the flow never acts on an unkeyed email.
+
+const USER_EMAIL_RELAY_SUBJECT_TAG = '[Delaney relay]'
+let warnedNoRelayKey = false
+
+function userEmailRelay() {
+  const to = String(process.env.USER_EMAIL_RELAY_TO ?? 'tech@delaneyliquors.com').trim()
+  const key = String(process.env.USER_EMAIL_RELAY_KEY || '').trim()
+  if (!to) return null
+  if (!key) {
+    if (!warnedNoRelayKey) {
+      console.warn('USER_EMAIL_RELAY_KEY is not set: emails to employees are sent directly, not relayed.')
+      warnedNoRelayKey = true
+    }
+    return null
+  }
+  return { to, key }
+}
+
+// type: verify-email | verified | access-approved | access-denied | password-reset
+async function sendUserEmail({ to, name, type, subject, text, html, link }) {
+  const relay = userEmailRelay()
+  if (!relay) return sendEmail({ to, subject, text, html })
+
+  // One line each, and no label text, so a name or reason can't pose as a
+  // label of its own
+  const oneLine = value => String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/RELAY-/gi, 'RELAY ')
+    .trim()
+  // ...and the message can't contain the labels or the end marker
+  const message = String(text || '')
+    .trim()
+    .replace(/RELAY-/gi, 'RELAY ')
+    .replace(/-{5,}/g, '—')
+
+  const lines = [
+    `RELAY-KEY: ${relay.key}`,
+    `RELAY-TO: ${oneLine(to)}`,
+    `RELAY-NAME: ${oneLine(name)}`,
+    `RELAY-TYPE: ${type}`,
+    `RELAY-SUBJECT: ${oneLine(subject)}`,
+    `RELAY-LINK: ${oneLine(link)}`,
+    '----- MESSAGE -----',
+    message,
+    '----- END MESSAGE -----'
+  ]
+
+  return sendEmail({
+    to: relay.to,
+    subject: `${USER_EMAIL_RELAY_SUBJECT_TAG} ${oneLine(subject)}`,
+    text: lines.join('\n'),
+    html: lines.join('\n').split('\n').map(line => escapeHtml(line)).join('<br>')
+  })
+}
+
 
 // ------------------------
 // DB SETUP
@@ -1017,7 +1092,6 @@ async function notifyApprovers(user) {
   })
 }
 
-// Admins, plus managers covering any requested store (employee/vendor only)
 // Admins hear about every access request (only admins approve them)
 async function findApproverEmails(request, requestedStores) {
   const approvers = await User.find({
@@ -1026,6 +1100,32 @@ async function findApproverEmails(request, requestedStores) {
   }).lean()
 
   return approvers.map(approver => approver.email)
+}
+
+// "Your email is confirmed", with what happens next for their access
+async function sendVerifiedEmail(user) {
+  const loginLink = `${getAppBaseUrl()}/login`
+  const next = user.accessStatus === 'approved'
+    ? 'You can log in now.'
+    : user.accessStatus === 'pending'
+      ? 'Your access request is waiting for an admin. You will get another email when it is approved.'
+      : 'Log in to request access to your store.'
+
+  await sendUserEmail({
+    to: user.email,
+    name: user.name,
+    type: 'verified',
+    link: loginLink,
+    subject: 'Your email is confirmed',
+    text:
+      `Hi ${user.name},\n\n` +
+      `Your email address for the Delaney App is confirmed. ${next}\n\n` +
+      loginLink,
+    html:
+      `<p>Hi ${escapeHtml(user.name)},</p>` +
+      `<p>Your email address for the Delaney App is confirmed. ${escapeHtml(next)}</p>` +
+      `<p><a href="${escapeHtml(loginLink)}">Log in</a></p>`
+  })
 }
 
 async function notifyRequester(user, decision, reason) {
@@ -1039,8 +1139,11 @@ async function notifyRequester(user, decision, reason) {
     : 'Your access request was denied.' +
       (reason ? ` Reason: ${reason}` : '')
 
-  await sendEmail({
+  await sendUserEmail({
     to: user.email,
+    name: user.name,
+    type: approved ? 'access-approved' : 'access-denied',
+    link: `${baseUrl}/login`,
     subject: approved
       ? 'Your access request was approved'
       : 'Your access request was denied',
@@ -3151,8 +3254,11 @@ async function sendVerificationEmail(user) {
   const link = `${getAppBaseUrl()}/verify-email/${token}`
 
   try {
-    await sendEmail({
+    await sendUserEmail({
       to: previous.email,
+      name: previous.name,
+      type: 'verify-email',
+      link,
       subject: 'Confirm your email for the Delaney App',
       text:
         `Hi ${previous.name},\n\n` +
@@ -3267,6 +3373,9 @@ app.post('/verify-email/:token', async (req, res) => {
 
   if (user) {
     console.log('Email verified:', user.email)
+    sendVerifiedEmail(user).catch(err =>
+      console.error('Email-verified notice failed:', err)
+    )
   }
 
   res.render('verify-email.ejs', {
@@ -8902,7 +9011,18 @@ app.post(
           </p>
 
           <p style="margin:28px 0;">
-            ${resetLink}
+            <a
+              href="${escapeHtml(resetLink)}"
+              style="
+                display:inline-block;
+                padding:12px 20px;
+                border-radius:8px;
+                background:#17365d;
+                color:#ffffff;
+                font-weight:700;
+                text-decoration:none;
+              "
+            >
               Reset Password
             </a>
           </p>
@@ -8946,9 +9066,18 @@ app.post(
       `;
 
       try {
-        await sendEmail({
+        await sendUserEmail({
           to:
             user.email,
+
+          name:
+            user.name,
+
+          type:
+            'password-reset',
+
+          link:
+            resetLink,
 
           subject,
 
