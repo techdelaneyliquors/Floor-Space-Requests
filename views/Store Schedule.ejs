@@ -830,8 +830,14 @@ td.conflict-cell {
 
 
 
-.attendance-issue {
-  background: #f7a7a7 !important;
+/* More than 15 minutes off: arrived late (orange), left early (purple),
+   both on the same day (dark red) */
+.attendance-late {
+  background: #fdba74 !important;
+}
+
+.attendance-early {
+  background: #d8b4fe !important;
 }
 
 .attendance-severe {
@@ -1021,6 +1027,16 @@ td.budget-total .budget-limit {
   color:#991b1b;
 }
 
+.exception-section-heading.late-heading {
+  background:#fef3c7;
+  color:#92400e;
+}
+
+.exception-section-heading.early-heading {
+  background:#ede9fe;
+  color:#5b21b6;
+}
+
 .exception-section-heading.both-heading {
   background:#fecaca;
   color:#991b1b;
@@ -1098,8 +1114,13 @@ td.budget-total .budget-limit {
   font-weight:700;
 }
 
-.comparison-cell.attendance-issue.overtime-issue {
-  background:#f7a7a7 !important;
+.comparison-cell.attendance-late.overtime-issue {
+  background:#fdba74 !important;
+  box-shadow:inset 0 -4px 0 #16a34a;
+}
+
+.comparison-cell.attendance-early.overtime-issue {
+  background:#d8b4fe !important;
   box-shadow:inset 0 -4px 0 #16a34a;
 }
 
@@ -2097,9 +2118,11 @@ td.budget-total .budget-limit {
 
       <small>
         Planned shifts are shown first. Actual shifts are
-        shown in italic text underneath. Yellow: worked on a
-        day they weren't scheduled. Blue: a vacation day (a day off
-        punched exactly 8:00 AM to 4:00 PM; not counted as overtime).
+        shown in italic text underneath. Orange: arrived more than
+        15 minutes late. Purple: left more than 15 minutes early. Dark
+        red: both. Yellow: worked on a day they weren't scheduled.
+        Blue: a vacation day (a day off punched exactly 8:00 AM to
+        4:00 PM; not counted as overtime).
       </small>
     </div>
   </div>
@@ -6392,13 +6415,13 @@ function renderAttendanceExceptionReview(
   container.innerHTML = `
     ${renderExceptionSection(
       'Late Arrivals',
-      '',
+      'late-heading',
       exceptions.late
     )}
 
     ${renderExceptionSection(
       'Early Departures',
-      '',
+      'early-heading',
       exceptions.early
     )}
 
@@ -6787,12 +6810,13 @@ function renderPreviousWeekDates() {
               ) {
                 cellClass +=
                   ' attendance-severe';
-              } else if (
-                issue.late ||
-                issue.early
-              ) {
+              } else if (issue.late) {
+                // Arrived late (orange); left early is purple
                 cellClass +=
-                  ' attendance-issue';
+                  ' attendance-late';
+              } else if (issue.early) {
+                cellClass +=
+                  ' attendance-early';
               }
             }
 
