@@ -135,6 +135,9 @@
     <% } %>
 
     <form action="/login" method="POST">
+      <% if (typeof next !== 'undefined' && next) { %>
+        <input type="hidden" name="next" value="<%= next %>">
+      <% } %>
 
       <div class="form-group">
         <label for="email">Email</label>

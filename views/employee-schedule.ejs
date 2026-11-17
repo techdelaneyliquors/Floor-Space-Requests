@@ -160,13 +160,131 @@
       color: #555;
     }
 
+    /* My week: each day's shift and tasks from the daily task board */
+    .my-week {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .day-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 12px 14px;
+      break-inside: avoid;
+    }
+
+    .day-card.off {
+      background: #f9fafb;
+    }
+
+    .day-card h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .day-shift {
+      margin: 2px 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+
+    .day-card.off .day-shift {
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    .task-section {
+      margin: 8px 0 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+
+    .task-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .task-list li {
+      padding: 4px 0;
+      border-top: 1px solid #f3f4f6;
+      font-size: 14px;
+    }
+
+    .task-list li:first-child {
+      border-top: 0;
+    }
+
+    .task-time {
+      font-weight: 700;
+      color: #0f766e;
+      margin-right: 4px;
+    }
+
+    .task-role {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .task-note {
+      display: block;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .no-tasks {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    /* "Can you work these hours?" */
+    .confirm-card h2 { margin-bottom: 6px; }
+    .confirm-status {
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .confirm-status.yes { background: #dcfce7; color: #166534; }
+    .confirm-status.no { background: #fee2e2; color: #991b1b; }
+    .confirm-status.changed { background: #fef3c7; color: #92400e; }
+    .confirm-status.none { background: #f3f4f6; color: #374151; }
+    .confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn-yes { background: #16a34a; color: white; }
+    .btn-no { background: #dc2626; color: white; }
+    .confirm-no { margin-top: 10px; max-width: 560px; }
+    .confirm-no[hidden] { display: none; }
+    .confirm-no textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 70px;
+      margin: 6px 0 8px;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 14px;
+    }
+    .confirm-error { color: #991b1b; font-size: 14px; margin-top: 8px; }
+
     @page {
       size: landscape;
       margin: 0.35in;
     }
 
     @media print {
-      .actions, .week-picker { display: none; }
+      .actions, .week-picker, .confirm-card { display: none; }
       body { background: white; padding: 0; }
       .page { max-width: none; }
       h1 { font-size: 16pt; }
@@ -249,6 +367,86 @@
     </div>
   <% } %>
 
+  <%# "Can you work these hours?" for the viewer's own shifts this week %>
+  <% if (confirm) { %>
+    <% const reply = confirm.reply %>
+    <% const when = reply ? new Date(reply.answeredAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) : '' %>
+    <div class="card confirm-card" id="confirmCard"
+         data-store="<%= store %>" data-week="<%= selectedWeek.weekStart %>">
+      <h2>Can you work these hours?</h2>
+      <% if (!reply) { %>
+        <div class="confirm-status none">
+          <%= confirm.canReply ? "You haven't answered yet." : "You didn't answer for this week." %>
+        </div>
+      <% } else if (reply.changed) { %>
+        <div class="confirm-status changed">
+          You answered <strong><%= reply.answer %></strong> on <%= when %>, but your schedule has changed since then.
+          <%= confirm.canReply ? 'Please answer again for your current hours.' : '' %>
+        </div>
+      <% } else if (reply.answer === 'yes') { %>
+        <div class="confirm-status yes">You said <strong>yes, you can work these hours</strong> (<%= when %>).</div>
+      <% } else { %>
+        <div class="confirm-status no">You said <strong>no</strong> (<%= when %>): <%= reply.reason %></div>
+      <% } %>
+
+      <% if (confirm.canReply) { %>
+        <div class="confirm-actions">
+          <button type="button" class="btn btn-yes" data-answer="yes">Yes, I can work these hours</button>
+          <button type="button" class="btn btn-no" id="confirmShowNo">No, I can't</button>
+        </div>
+        <div class="confirm-no" id="confirmNo" hidden>
+          <label for="confirmReason"><strong>Why can't you work these hours?</strong></label>
+          <textarea id="confirmReason" maxlength="500"
+                    placeholder="For example: I have class Tuesday until 6 PM."><%= reply && reply.answer === 'no' ? reply.reason : '' %></textarea>
+          <button type="button" class="btn btn-no" data-answer="no">Send my answer</button>
+        </div>
+        <div class="confirm-error" id="confirmError" hidden></div>
+      <% } %>
+    </div>
+  <% } %>
+
+  <%# The viewer's shift and daily responsibilities, day by day (stores
+      that use the daily task board) %>
+  <% if (myDays) { %>
+    <% const hasTasks = myDays.some(day => day.items.length) %>
+    <div class="card">
+      <h2>My week</h2>
+      <% if (!hasTasks) { %>
+        <div class="no-tasks">No daily responsibilities have been posted for this week yet.</div>
+      <% } else { %>
+        <div class="my-week">
+          <% myDays.filter(day => day.shifts.length || day.items.length).forEach(day => { %>
+            <div class="day-card<%= day.shifts.length ? '' : ' off' %>">
+              <h3><%= day.label %></h3>
+              <div class="day-shift">
+                <%= day.shifts.length ? day.shifts.join(', ') : 'Off' %>
+              </div>
+              <% if (!day.items.length) { %>
+                <div class="no-tasks">No tasks assigned.</div>
+              <% } %>
+              <% let section = null %>
+              <% day.items.forEach((item, index) => { %>
+                <% if (item.section !== section) { %>
+                  <% if (section !== null) { %></ul><% } %>
+                  <% section = item.section %>
+                  <% if (section) { %><div class="task-section"><%= section %></div><% } %>
+                  <ul class="task-list">
+                <% } %>
+                <li>
+                  <% if (item.time) { %><span class="task-time"><%= item.time %></span><% } %>
+                  <%= item.task %>
+                  <% if (item.role) { %><span class="task-role"><%= item.role %></span><% } %>
+                  <% if (item.note) { %><span class="task-note"><%= item.note %></span><% } %>
+                </li>
+                <% if (index === day.items.length - 1) { %></ul><% } %>
+              <% }) %>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+  <% } %>
+
   <% groups.forEach(group => { %>
     <div class="card">
       <h2><%= group.label %></h2>
@@ -282,5 +480,52 @@
   <% }) %>
 
 </div>
+
+<script>
+(() => {
+  const card = document.getElementById('confirmCard');
+  if (!card) return;
+
+  const errorBox = document.getElementById('confirmError');
+  const showError = message => {
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+  };
+
+  document.getElementById('confirmShowNo')?.addEventListener('click', () => {
+    document.getElementById('confirmNo').hidden = false;
+    document.getElementById('confirmReason').focus();
+  });
+
+  card.querySelectorAll('[data-answer]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const answer = button.dataset.answer;
+      const reason = answer === 'no' ? document.getElementById('confirmReason').value.trim() : '';
+      if (answer === 'no' && !reason) {
+        showError("Tell us why you can't work these hours.");
+        return;
+      }
+
+      errorBox.hidden = true;
+      card.querySelectorAll('button').forEach(item => { item.disabled = true; });
+      try {
+        const response = await fetch('/api/schedule-reply', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ store: card.dataset.store, weekStart: card.dataset.week, answer, reason })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 401) throw new Error('You have been signed out. Log in again and answer once more.');
+        if (!response.ok || !result.success) throw new Error(result.error || 'Your answer could not be saved.');
+        location.reload();
+      } catch (err) {
+        showError(err.message);
+        card.querySelectorAll('button').forEach(item => { item.disabled = false; });
+      }
+    });
+  });
+})();
+</script>
 </body>
 </html>

@@ -69,6 +69,23 @@
     .paychex-reset select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
     .paychex-reset .btn { padding: 6px 12px; font-size: 13px; }
 
+    /* "Can you work these hours?" answers */
+    .confirm-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+    .reply-chip {
+      display: inline-block; border-radius: 999px; padding: 3px 10px;
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+    }
+    .reply-chip.yes { background: #dcfce7; color: #166534; }
+    .reply-chip.no { background: #fee2e2; color: #991b1b; }
+    .reply-chip.changed { background: #fef3c7; color: #92400e; }
+    .reply-chip.none { background: #f1f5f9; color: #475569; }
+    .confirm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .confirm-table th, .confirm-table td {
+      text-align: left; padding: 7px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top;
+    }
+    .confirm-table th { background: #f3f4f6; font-weight: 600; }
+    .confirm-table .muted { color: #6b7280; font-size: 13px; }
+
     @media print {
       body { background: white; padding: 0; }
       .top-bar, .pickers, .no-print { display: none !important; }
@@ -191,6 +208,58 @@
 
       <%- include('partials/schedule-review', { item: selected.item, dayKeys }) %>
     </div>
+
+    <% const confirmations = selected.confirmations %>
+    <% if (confirmations && confirmations.people.length) { %>
+      <% const counts = confirmations.counts %>
+      <% const chipText = { yes: 'Yes', no: 'No', changed: 'Answered before a change', none: 'No reply yet' } %>
+      <div class="card no-print" id="confirmations">
+        <h2 style="margin:0 0 4px;font-size:18px;">Can they work these hours?</h2>
+        <div class="meta">
+          Answers from each person's schedule page or the "Yes" link in their schedule email.
+          <%= confirmations.canReply ? 'People can answer or change their answer until the week ends.' : 'This week is over.' %>
+        </div>
+        <div class="confirm-summary">
+          <span class="reply-chip yes"><%= counts.yes %> yes</span>
+          <span class="reply-chip no"><%= counts.no %> no</span>
+          <span class="reply-chip none"><%= counts.none %> no reply yet</span>
+          <% if (counts.changed) { %>
+            <span class="reply-chip changed"><%= counts.changed %> answered before the schedule changed</span>
+          <% } %>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="confirm-table">
+            <thead>
+              <tr><th>Name</th><th>Answer</th><th>Reason</th><th>When</th></tr>
+            </thead>
+            <tbody>
+              <% confirmations.people.forEach(person => { %>
+                <% const reply = person.reply %>
+                <tr>
+                  <td>
+                    <%= person.name %>
+                    <div class="muted"><%= person.groups.join(', ') %></div>
+                  </td>
+                  <td>
+                    <span class="reply-chip <%= person.status %>"><%= chipText[person.status] %></span>
+                    <% if (person.status === 'changed') { %>
+                      <div class="muted">Said <%= reply.answer %> to the earlier version</div>
+                    <% } %>
+                  </td>
+                  <td><%= reply && reply.answer === 'no' ? reply.reason : '' %></td>
+                  <td class="muted">
+                    <% if (reply) { %>
+                      <%= new Date(reply.answeredAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>
+                      · <%= reply.via === 'email' ? 'email link' : 'schedule page' %>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
   <% } %>
 
   <%# Admins (every store) and managers (their own stores) %>

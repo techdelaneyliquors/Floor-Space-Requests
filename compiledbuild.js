@@ -80,6 +80,7 @@ const SickDay = require('./models/SickDay')
 const PreviousWeekReview = require('./models/PreviousWeekReview')
 const { buildBackup } = require('./lib/backup')
 const { buildPreviousWeekReport, renderPreviousWeekPdf } = require('./lib/previousWeekReport')
+const scheduleEmails = require('./lib/scheduleEmails')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -91,6 +92,8 @@ const ScheduleSettings = require(
 const ScheduleTemplate = require('./models/ScheduleTemplate')
 const ScheduleDraft = require('./models/ScheduleDraft')
 const StoreHours = require('./models/StoreHours')
+const DailyResponsibility = require('./models/DailyResponsibility')
+const ScheduleReply = require('./models/ScheduleReply')
 const AttendanceOvertimeReview = require(
   './models/AttendanceOvertimeReview'
 );
@@ -380,6 +383,8 @@ mongoose.connect(process.env.MONGO_URI)
     sendWeeklyBackupIfDue().catch(err => console.error('[backup] check failed:', err))
     // ...and the Monday previous week review email
     sendPreviousWeekPdfsIfDue().catch(err => console.error('[previous-week-pdf] check failed:', err))
+    // ...and the Wednesday schedule emails
+    sendScheduleEmailsIfDue().catch(err => console.error('[schedule-emails] check failed:', err))
   })
 
 // One-time, idempotent: floor-space requests used to identify their owner
@@ -599,26 +604,40 @@ async function userFromToken(token) {
   return user
 }
 
+// Pages a login may return to afterwards (the schedule link in schedule
+// emails): only the employee schedule pages, optionally with ?week=
+function safeNextPath(value) {
+  const text = String(value || '')
+  const match = /^(\/[A-Za-z-]+\/my-schedule)(\?week=\d{4}-\d{2}-\d{2})?$/.exec(text)
+  if (!match) return ''
+  return Object.values(STORE_PAGES).some(page => page.employeePath === match[1]) ? text : ''
+}
+
+const loginRedirect = req => {
+  const next = req.method === 'GET' ? safeNextPath(req.originalUrl) : ''
+  return next ? `/login?next=${encodeURIComponent(next)}` : '/login'
+}
+
 async function requireAuth(req, res, next) {
   try {
     const token = getTokenFromRequest(req)
 
     if (!token) {
-      return res.redirect('/login')
+      return res.redirect(loginRedirect(req))
     }
 
     const user = await userFromToken(token)
 
     if (!user) {
       res.clearCookie('token')
-      return res.redirect('/login')
+      return res.redirect(loginRedirect(req))
     }
 
     req.user = user
     next()
   } catch (err) {
     res.clearCookie('token')
-    return res.redirect('/login')
+    return res.redirect(loginRedirect(req))
   }
 }
 
@@ -651,7 +670,8 @@ async function requireGuest(req, res, next) {
     const user = await userFromToken(token)
 
     if (user) {
-      return res.redirect(homePathFor(user))
+      const nextPath = isApproved(user) ? safeNextPath(req.query.next) : ''
+      return res.redirect(nextPath || homePathFor(user))
     }
 
     next()
@@ -1167,6 +1187,7 @@ function getAppBaseUrl() {
 app.get('/login', requireGuest, (req, res) => {
   res.render('login.ejs', {
     error: null,
+    next: safeNextPath(req.query.next),
     notice: req.query.registered
       ? 'Account created. We sent a link to your email to confirm it. ' +
         'Log in to resend it if needed.'
@@ -1980,8 +2001,9 @@ app.post('/login', requireGuest, async (req, res) => {
     const { email, password } = req.body
 
     const { user, error } = await attemptLogin(email, password, req.ip)
+    const nextPath = safeNextPath(req.body.next)
     if (!user) {
-      return res.status(error.status).render('login.ejs', { error: error.message })
+      return res.status(error.status).render('login.ejs', { error: error.message, next: nextPath })
     }
 
     const token = signToken(user)
@@ -1994,7 +2016,9 @@ app.post('/login', requireGuest, async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     })
 
-    res.redirect(homePathFor(user))
+    // Back to the schedule page they were sent to (schedule emails), once
+    // their account is fully set up
+    res.redirect((isApproved(user) && nextPath) || homePathFor(user))
   } catch (err) {
     console.error(err)
     res.status(500).send('Login failed')
@@ -4377,6 +4401,28 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
 
   const approved = doc && doc.approved
 
+  // Who has answered "Can you work these hours?" for this week
+  let confirmations = null
+  if (approved) {
+    const replies = await ScheduleReply.find({ store, weekStart: selected }).lean()
+    const byKey = new Map(replies.map(reply => [reply.personKey, reply]))
+    const people = scheduleEmails.scheduledPeople(approved.snapshot).map(person => ({
+      name: person.name,
+      groups: person.groups,
+      reply: replyView(byKey.get(person.key), person)
+    }))
+    const statusOf = person => !person.reply ? 'none' : person.reply.changed ? 'changed' : person.reply.answer
+    const order = { no: 0, changed: 1, none: 2, yes: 3 }
+    people.forEach(person => { person.status = statusOf(person) })
+    people.sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name))
+    confirmations = {
+      people,
+      counts: people.reduce((counts, person) => ({ ...counts, [person.status]: counts[person.status] + 1 }),
+        { yes: 0, no: 0, none: 0, changed: 0 }),
+      canReply: canStillReply(selected)
+    }
+  }
+
   // Shifts the Paychex script has logged as sent for this week, per person
   const sentToPaychex = selected && isAdmin
     ? await PaychexSentShift.aggregate([
@@ -4409,6 +4455,7 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
           approvedBy: approved.approvedBy && approved.approvedBy.name,
           approvedAt: approved.approvedAt,
           hasPending: Boolean(doc.pending && doc.pending.submittedAt),
+          confirmations,
           paychexSync: doc.paychexSync && doc.paychexSync.sentAt
             ? { ...paychexSyncView(doc.paychexSync), failures: doc.paychexSync.failures || [] }
             : null,
@@ -4553,6 +4600,198 @@ function isViewersRow(user, store, employee) {
   return employee.name.trim().toLowerCase() ===
     String(user.name || '').trim().toLowerCase()
 }
+
+// ------------------------
+// SCHEDULE CONFIRMATIONS ("Can you work these hours?")
+// ------------------------
+//
+// Everyone with shifts on an approved schedule can answer yes, or no with
+// a reason: on their schedule page (logged in) or from the "Yes" link in
+// their schedule email (a signed link, no login; see lib/scheduleEmails.js).
+// Managers and admins see the answers on Posted Schedules. Answers can be
+// given or changed until the week ends. If the schedule is changed after
+// someone answered, their answer is shown as given for the earlier version.
+
+const replySecret = () => process.env.JWT_SECRET
+
+const canStillReply = weekStart => addDaysYmd(weekStart, 6) >= storeToday()
+
+const approvedScheduleDoc = (store, weekStart) =>
+  PostedSchedule.findOne({ store, weekStart, 'approved.approvedAt': { $exists: true } })
+    .select('store weekStart approved.snapshot.groups')
+    .lean()
+
+// A reply as the pages show it; changed: given before the shifts changed
+function replyView(reply, person) {
+  if (!reply) return null
+  return {
+    answer: reply.answer,
+    reason: reply.reason || '',
+    answeredAt: reply.answeredAt,
+    via: reply.via,
+    changed: Boolean(person && reply.shiftsSignature && reply.shiftsSignature !== person.signature)
+  }
+}
+
+function cleanReply(body) {
+  const answer = body && (body.answer === 'yes' || body.answer === 'no') ? body.answer : ''
+  const reason = cleanText(body && body.reason, 500)
+  if (!answer) return { error: 'Choose yes or no.' }
+  if (answer === 'no' && !reason) return { error: "Tell us why you can't work these hours." }
+  return { answer, reason: answer === 'no' ? reason : '' }
+}
+
+function saveScheduleReply({ store, weekStart, person, answer, reason, via, user }) {
+  return ScheduleReply.findOneAndUpdate(
+    { store, weekStart, personKey: person.key },
+    {
+      $set: {
+        employeeNumber: person.employeeNumber,
+        employeeName: person.name,
+        answer,
+        reason,
+        shiftsSignature: person.signature,
+        via,
+        answeredBy: user ? personRef(user) : { name: person.name },
+        answeredAt: new Date()
+      }
+    },
+    { upsert: true, returnDocument: 'after', runValidators: true }
+  ).lean()
+}
+
+// The viewer's own entry on an approved schedule (null if they have no shifts)
+function viewersScheduledPerson(user, store, doc) {
+  if (!doc) return null
+  return scheduleEmails.scheduledPeople(doc.approved.snapshot)
+    .find(person => isViewersRow(user, store, person)) || null
+}
+
+// From the schedule page
+app.post('/api/schedule-reply', ...approvedApi, async (req, res) => {
+  try {
+    const store = getCanonicalStoreName(req.body && req.body.store)
+    const weekStart = String((req.body && req.body.weekStart) || '')
+
+    if (!store || !canAccessStore(req.user, store) || !isMonday(weekStart)) {
+      return res.status(400).json({ success: false, error: 'Schedule not found.' })
+    }
+    if (!canStillReply(weekStart)) {
+      return res.status(400).json({ success: false, error: 'This week is over, so it can no longer be answered.' })
+    }
+
+    const cleaned = cleanReply(req.body)
+    if (cleaned.error) return res.status(400).json({ success: false, error: cleaned.error })
+
+    const person = viewersScheduledPerson(req.user, store, await approvedScheduleDoc(store, weekStart))
+    if (!person) {
+      return res.status(403).json({ success: false, error: "You don't have any shifts on this schedule." })
+    }
+
+    const reply = await saveScheduleReply({ store, weekStart, person, ...cleaned, via: 'page', user: req.user })
+    return res.json({ success: true, reply: replyView(reply, person) })
+  } catch (err) {
+    console.error('Schedule reply error:', err)
+    return res.status(500).json({ success: false, error: 'Your answer could not be saved. Please try again.' })
+  }
+})
+
+// From the "Yes" link in a schedule email: no login, the link itself says
+// who it's for. Opening it only shows the page; the answer is saved when
+// they press the button, because email security scanners open links in
+// emails on their own and would otherwise answer "yes" for everyone.
+async function scheduleReplyContext(token) {
+  const claim = scheduleEmails.verifyReplyToken(replySecret(), token)
+  if (!claim) {
+    return { error: 'This link has expired or is not valid. You can still answer on your schedule page in the app.' }
+  }
+
+  const doc = await approvedScheduleDoc(claim.store, claim.weekStart)
+  const person = doc
+    ? scheduleEmails.scheduledPeople(doc.approved.snapshot).find(entry => entry.key === claim.key)
+    : null
+  const scheduleLink = STORE_PAGES[claim.store]
+    ? `${STORE_PAGES[claim.store].employeePath}?week=${claim.weekStart}`
+    : '/'
+
+  if (!person) {
+    return {
+      claim,
+      scheduleLink,
+      error: `You no longer have shifts on the ${claim.store} schedule for the week of ${weekRangeText(claim.weekStart)}. ` +
+        'Check your schedule page in the app.'
+    }
+  }
+
+  const reply = await ScheduleReply.findOne({
+    store: claim.store,
+    weekStart: claim.weekStart,
+    personKey: claim.key
+  }).lean()
+
+  return { claim, person, scheduleLink, reply: replyView(reply, person) }
+}
+
+function renderScheduleReplyPage(res, context, { status = 200, preselect = '', saved = false, error = '', reason = '' } = {}) {
+  // The link is the key: don't pass it on to other sites or let it be cached
+  res.set({ 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' })
+  const { claim, person } = context
+  return res.status(context.error ? 404 : status).render('schedule-reply.ejs', {
+    pageError: context.error || '',
+    store: claim ? claim.store : '',
+    range: claim ? weekRangeText(claim.weekStart) : '',
+    name: person ? person.name : '',
+    days: person ? scheduleEmails.weekDays(claim.weekStart, person.days) : [],
+    reply: context.reply || null,
+    canReply: Boolean(claim && canStillReply(claim.weekStart)),
+    scheduleLink: context.scheduleLink || '/',
+    preselect,
+    saved,
+    error,
+    reason
+  })
+}
+
+app.get('/schedule-reply/:token', async (req, res) => {
+  try {
+    const context = await scheduleReplyContext(req.params.token)
+    return renderScheduleReplyPage(res, context, {
+      preselect: req.query.answer === 'no' ? 'no' : req.query.answer === 'yes' ? 'yes' : '',
+      saved: req.query.saved === '1'
+    })
+  } catch (err) {
+    console.error('Schedule reply page error:', err)
+    return res.status(500).send('This page could not be loaded. Please try again.')
+  }
+})
+
+app.post('/schedule-reply/:token', async (req, res) => {
+  try {
+    const context = await scheduleReplyContext(req.params.token)
+    if (context.error) return renderScheduleReplyPage(res, context)
+
+    if (!canStillReply(context.claim.weekStart)) {
+      return renderScheduleReplyPage(res, context, { status: 400, error: 'This week is over, so it can no longer be answered.' })
+    }
+
+    const cleaned = cleanReply(req.body)
+    if (cleaned.error) {
+      return renderScheduleReplyPage(res, context, {
+        status: 400,
+        error: cleaned.error,
+        preselect: req.body && req.body.answer === 'no' ? 'no' : '',
+        reason: cleanText(req.body && req.body.reason, 500)
+      })
+    }
+
+    const { store, weekStart } = context.claim
+    await saveScheduleReply({ store, weekStart, person: context.person, ...cleaned, via: 'email', user: null })
+    return res.redirect(303, `/schedule-reply/${encodeURIComponent(req.params.token)}?saved=1`)
+  } catch (err) {
+    console.error('Schedule reply save error:', err)
+    return res.status(500).send('Your answer could not be saved. Please go back and try again.')
+  }
+})
 
 // ------------------------
 // CALENDAR DOWNLOAD (.ics)
@@ -4753,6 +4992,155 @@ app.get('/my-schedule.ics', ...approvedPage, requireRole('employee', 'manager'),
   }
 })
 
+// ------------------------
+// DAILY RESPONSIBILITIES (from the store's daily task board)
+// ------------------------
+//
+// The task board works out who does what each day and uploads it here; each
+// employee then sees their own tasks next to their shift on their schedule
+// page. Only tasks with a person's name on them are sent. Stores listed in
+// DAILY_RESPONSIBILITY_STORES accept uploads.
+//
+// PUT /api/daily-responsibilities
+//   Authorization: Bearer <the store's Excel upload token> (or an admin login)
+//   { store, weekStart: "YYYY-MM-DD" (a Monday),
+//     days: { "YYYY-MM-DD": [ { employeeNumber, name, section, task, time, note, role } ] } }
+// Replaces everything uploaded for that store and week.
+
+const DAILY_RESPONSIBILITY_STORES = ['Branford']
+const MAX_RESPONSIBILITY_ITEMS = 5000
+
+app.put(
+  '/api/daily-responsibilities',
+  ...adminOrExcelUpload,
+  async (req, res) => {
+    try {
+      const store = req.storeName
+      const body = req.body || {}
+      const weekStart = String(body.weekStart || '')
+
+      if (!DAILY_RESPONSIBILITY_STORES.includes(store)) {
+        return res.status(400).json({ success: false, error: `Daily responsibilities aren't set up for ${store} yet.` })
+      }
+      if (!isMonday(weekStart)) {
+        return res.status(400).json({ success: false, error: 'weekStart must be the Monday the week starts on (YYYY-MM-DD).' })
+      }
+
+      const days = body.days && typeof body.days === 'object' && !Array.isArray(body.days) ? body.days : null
+      if (!days) {
+        return res.status(400).json({ success: false, error: 'Send the tasks in "days": { "YYYY-MM-DD": [ … ] }.' })
+      }
+
+      const weekDates = SCHEDULE_DAY_KEYS.map((_, index) => addDaysYmd(weekStart, index))
+      const byPerson = new Map() // "date|employeeNumber" -> record
+      const errors = []
+      let itemCount = 0
+
+      for (const [date, entries] of Object.entries(days)) {
+        if (!weekDates.includes(date)) {
+          errors.push({ date, error: `${date} isn't in the week of ${weekStart}.` })
+          continue
+        }
+        if (!Array.isArray(entries)) {
+          errors.push({ date, error: 'Each day must be a list of tasks.' })
+          continue
+        }
+
+        entries.forEach((entry, index) => {
+          const employeeNumber = cleanText(entry && entry.employeeNumber, 32)
+          const task = cleanText(entry && entry.task, 200)
+          if (!employeeNumber || !task) {
+            errors.push({ date, item: index + 1, error: 'Each task needs an employeeNumber and a task.' })
+            return
+          }
+          if (++itemCount > MAX_RESPONSIBILITY_ITEMS) return
+
+          const key = `${date}|${employeeNumber}`
+          if (!byPerson.has(key)) {
+            byPerson.set(key, {
+              store,
+              weekStart,
+              date,
+              employeeNumber,
+              employeeName: cleanText(entry.name, 100),
+              items: []
+            })
+          }
+          byPerson.get(key).items.push({
+            section: cleanText(entry.section, 60),
+            task,
+            time: cleanText(entry.time, 60),
+            note: cleanText(entry.note, 500),
+            role: cleanText(entry.role, 60)
+          })
+        })
+      }
+
+      if (itemCount > MAX_RESPONSIBILITY_ITEMS) {
+        return res.status(400).json({ success: false, error: `Send at most ${MAX_RESPONSIBILITY_ITEMS} tasks per week.` })
+      }
+
+      // The upload is the whole week: replace what was there
+      await DailyResponsibility.deleteMany({ store, weekStart })
+      if (byPerson.size) await DailyResponsibility.insertMany([...byPerson.values()])
+
+      // Employee numbers not on the store's roster won't show to anyone
+      const roster = await getStoreRoster(store)
+      const rosterNumbers = new Set(roster.map(person => person.employeeNumber))
+      const unmatched = [...new Set([...byPerson.values()]
+        .filter(record => !rosterNumbers.has(record.employeeNumber))
+        .map(record => `${record.employeeNumber}${record.employeeName ? ` (${record.employeeName})` : ''}`))]
+
+      console.log('Daily responsibilities uploaded:', {
+        store, weekStart, people: byPerson.size, tasks: itemCount,
+        by: req.excelClient ? req.excelClient.clientId : req.user.email
+      })
+
+      return res.json({
+        success: true,
+        store,
+        weekStart,
+        saved: { days: new Set([...byPerson.values()].map(record => record.date)).size, people: byPerson.size, tasks: itemCount },
+        errors,
+        notOnRoster: unmatched
+      })
+    } catch (err) {
+      console.error('Daily responsibilities upload error:', err)
+      return res.status(500).json({ success: false, error: 'The daily responsibilities could not be saved.' })
+    }
+  }
+)
+
+// The section order on the task board
+const RESPONSIBILITY_SECTION_ORDER = ['Opening', 'Throughout the day', 'Closing', 'Scheduled for today']
+
+// The viewer's own tasks for a week, by date ({} if none or not set up).
+// Matched by their roster link's employee number, or by name if not linked.
+async function myResponsibilities(user, store, weekStart) {
+  if (!DAILY_RESPONSIBILITY_STORES.includes(store)) return null
+
+  const link = (user.rosterLinks || []).find(item => item.store === store)
+  const filter = link && link.employeeNumber
+    ? { store, weekStart, employeeNumber: link.employeeNumber }
+    : { store, weekStart, employeeName: new RegExp(`^${String(user.name || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+
+  if (!filter.employeeNumber && !String(user.name || '').trim()) return {}
+
+  const records = await DailyResponsibility.find(filter).lean()
+  const sectionRank = section => {
+    const index = RESPONSIBILITY_SECTION_ORDER.indexOf(section)
+    return index === -1 ? RESPONSIBILITY_SECTION_ORDER.length : index
+  }
+
+  return Object.fromEntries(records.map(record => [
+    record.date,
+    // Keep the board's order within a section
+    record.items
+      .map((item, index) => ({ ...item, index }))
+      .sort((a, b) => sectionRank(a.section) - sectionRank(b.section) || a.index - b.index)
+  ]))
+}
+
 // Employees: approved schedules only, with a week picker
 for (const store of STORE_LIST) {
   app.get(
@@ -4815,7 +5203,32 @@ for (const store of STORE_LIST) {
               .filter(group => group.employees.length)
           : allGroups
 
+        // The viewer's week, day by day: their shift(s) and their tasks from
+        // the daily task board (stores that use it)
+        const responsibilities = await myResponsibilities(req.user, store, selected)
+        const myRows = allGroups.flatMap(group => group.employees.filter(employee => employee.me))
+        const myDays = responsibilities === null
+          ? null
+          : SCHEDULE_DAY_KEYS.map((day, index) => {
+              const date = addDaysYmd(selected, index)
+              return {
+                date,
+                label: formatYmd(date, { weekday: 'long', month: 'short', day: 'numeric' }),
+                shifts: myRows.flatMap(row => (row.days && row.days[day]) || []),
+                items: responsibilities[date] || []
+              }
+            })
+
+        // "Can you work these hours?" for the viewer's own shifts
+        const myPerson = viewersScheduledPerson(req.user, store, doc)
+        const myReply = myPerson
+          ? await ScheduleReply.findOne({ store, weekStart: selected, personKey: myPerson.key }).lean()
+          : null
+
         res.render('employee-schedule.ejs', {
+          confirm: myPerson
+            ? { canReply: canStillReply(selected), reply: replyView(myReply, myPerson) }
+            : null,
           user: req.user,
           store,
           weeks: weekStarts.map(weekStart => ({
@@ -4831,6 +5244,7 @@ for (const store of STORE_LIST) {
           // Shifts only: adjustment reasons are for managers and admins
           groups,
           onlyMine,
+          myDays,
           posted: Boolean(doc),
           dayKeys: SCHEDULE_DAY_KEYS,
           showHomeLink: homePathFor(req.user) !== STORE_PAGES[store].employeePath
@@ -8655,6 +9069,13 @@ function startWeeklyBackupJob() {
   cron.schedule('21 * * * *', () => sendPreviousWeekPdfsIfDue().catch(err =>
     console.error('[previous-week-pdf] check failed:', err)), { timezone: 'America/New_York' })
 
+  // Wednesday 11:00 AM: next week's schedule emails. The hourly check sends
+  // them later if the server was asleep, and sends stores approved later
+  cron.schedule('0 11 * * 3', () => sendScheduleEmailsIfDue().catch(err =>
+    console.error('[schedule-emails] send failed:', err)), { timezone: 'America/New_York' })
+  cron.schedule('27 * * * *', () => sendScheduleEmailsIfDue().catch(err =>
+    console.error('[schedule-emails] check failed:', err)), { timezone: 'America/New_York' })
+
   // Daily: delete sent-to-Paychex records older than a month, even in weeks
   // when nothing is sent
   cron.schedule('42 3 * * *', () => purgeOldPaychexSends().catch(err =>
@@ -8788,6 +9209,164 @@ async function sendPreviousWeekPdfsIfDue() {
   await log.updateOne({ _id: 'previous-week-pdf' }, { $set: { lastSentFor: thisMonday, lastSentAt: new Date() } })
   console.log('[previous-week-pdf] sent:', { week: lastWeek, attached: attachments.length, notIncluded: notIncluded.length })
 }
+
+// ------------------------
+// WEDNESDAY SCHEDULE EMAILS (one email to tech@, split by Power Automate)
+// ------------------------
+//
+// Wednesday 11:00 AM (store time): one email to SCHEDULE_EMAILS_TO (comma-
+// separated; default tech@delaneyliquors.com) with next week's approved
+// schedule for every person who has shifts and an account email, each as a
+// finished email (subject, text, HTML, "Yes" link and schedule link). The
+// body lists them line by line between "===== EMAIL n =====" markers, and
+// the attached schedule-emails.txt holds the same as JSON for Power
+// Automate's "Parse JSON". Both carry USER_EMAIL_RELAY_KEY so the flow can
+// tell these apart from anything else; nothing is sent without that key.
+//
+// Render's free tier sleeps, so it's also checked at startup and hourly:
+// the first check on or after Wednesday 11:00 sends every store whose next
+// week is approved, and lists the rest. A store approved later in the week
+// (through Sunday) goes out in its own email at the next hourly check. Each
+// store goes out once per week; a change approved after that isn't re-sent.
+// Set SCHEDULE_EMAILS_TO to an empty value to turn it off.
+
+const SCHEDULE_EMAILS_SEND_DAY = 2 // days after Monday: Wednesday
+const SCHEDULE_EMAILS_SEND_MINUTES = 11 * 60
+
+const scheduleEmailRecipients = () =>
+  String(process.env.SCHEDULE_EMAILS_TO ?? 'tech@delaneyliquors.com')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean)
+
+// Builds and sends the email for one week. stores: which stores to include
+// (approved ones only); listMissing: also list stores not included.
+async function sendScheduleEmails(weekStart, { stores = STORE_LIST, listMissing = true } = {}) {
+  const recipients = scheduleEmailRecipients()
+  const relayKey = String(process.env.USER_EMAIL_RELAY_KEY || '').trim()
+  if (!recipients.length) throw new Error('SCHEDULE_EMAILS_TO is empty, so schedule emails are turned off.')
+  if (!relayKey) throw new Error('USER_EMAIL_RELAY_KEY is not set, so the email could not be verified by Power Automate.')
+
+  const docs = await PostedSchedule.find({
+    store: { $in: stores },
+    weekStart,
+    'approved.approvedAt': { $exists: true }
+  })
+    .select('store weekStart approved.snapshot.groups pending.submittedAt')
+    .lean()
+  const byStore = new Map(docs.map(doc => [doc.store, doc]))
+
+  const notPosted = listMissing
+    ? STORE_LIST.filter(store => !byStore.has(store)).map(store => ({
+        store,
+        note: 'next week isn\'t approved yet; it will be sent when it is (through Sunday)'
+      }))
+    : []
+
+  const users = await User.find({ accessStatus: 'approved', email: { $exists: true, $ne: '' } })
+    .select('name email stores rosterLinks')
+    .lean()
+
+  const baseUrl = getAppBaseUrl()
+  const built = scheduleEmails.buildScheduleEmail({
+    weekStart,
+    stores: STORE_LIST.filter(store => byStore.has(store)).map(store => ({
+      store,
+      snapshot: byStore.get(store).approved.snapshot,
+      scheduleLink: `${baseUrl}${STORE_PAGES[store].employeePath}?week=${weekStart}`
+    })),
+    notPosted,
+    users,
+    baseUrl,
+    secret: replySecret(),
+    relayKey
+  })
+
+  await sendEmail({
+    to: recipients,
+    subject: built.subject,
+    text: built.text,
+    html: built.html,
+    attachments: [built.attachment]
+  })
+
+  console.log('[schedule-emails] sent:', {
+    week: weekStart,
+    stores: [...byStore.keys()],
+    emails: built.emails.length,
+    noEmail: built.noEmail.length
+  })
+  return { stores: [...byStore.keys()], emails: built.emails.length, noEmail: built.noEmail.length }
+}
+
+async function sendScheduleEmailsIfDue() {
+  if (!scheduleEmailRecipients().length || mongoose.connection.readyState !== 1) return
+  if (!String(process.env.USER_EMAIL_RELAY_KEY || '').trim()) return
+
+  const today = storeToday()
+  const thisMonday = mondayOf(today)
+  const dayIndex = SCHEDULE_DAY_KEYS.findIndex((_, index) => addDaysYmd(thisMonday, index) === today)
+  if (dayIndex < SCHEDULE_EMAILS_SEND_DAY) return
+  if (dayIndex === SCHEDULE_EMAILS_SEND_DAY && storeMinutesNow() < SCHEDULE_EMAILS_SEND_MINUTES) return
+
+  const weekStart = addDaysYmd(thisMonday, 7)
+  const log = mongoose.connection.db.collection('backuplogs')
+  const claimId = suffix => `schedule-emails:${weekStart}:${suffix}`
+
+  // Claim each store (and the week's first email) atomically, so two checks
+  // can't both send it: inserting an _id that already exists fails
+  const tryClaim = async suffix => {
+    try {
+      await log.insertOne({ _id: claimId(suffix), kind: 'schedule-emails', weekStart, claimedAt: new Date() })
+      return true
+    } catch (err) {
+      if (err && err.code === 11000) return false
+      throw err
+    }
+  }
+
+  const approvedStores = (await PostedSchedule.find({
+    weekStart,
+    'approved.approvedAt': { $exists: true }
+  }).select('store').lean()).map(doc => doc.store).filter(store => STORE_LIST.includes(store))
+
+  const claimed = []
+  for (const store of approvedStores) {
+    if (await tryClaim(store)) claimed.push(store)
+  }
+  const first = await tryClaim('first')
+  if (!claimed.length && !first) return
+
+  try {
+    // The first email lists every store; later ones only the newly approved
+    await sendScheduleEmails(weekStart, { stores: claimed, listMissing: first })
+  } catch (err) {
+    // Release the claims so the next hourly check tries again
+    await log.deleteMany({ _id: { $in: [...claimed, ...(first ? ['first'] : [])].map(claimId) } })
+    throw err
+  }
+
+  // Old claims aren't needed once their week is over
+  await log.deleteMany({ kind: 'schedule-emails', weekStart: { $lt: addDaysYmd(thisMonday, -14) } })
+}
+
+// Admins: send the email now (a test or a resend), without affecting the
+// Wednesday send. ?week=YYYY-MM-DD (a Monday; default next week)
+app.get('/admin/send-schedule-emails', ...adminPage, async (req, res) => {
+  try {
+    const requested = String(req.query.week || '')
+    const weekStart = isMonday(requested) ? requested : addDaysYmd(mondayOf(storeToday()), 7)
+    const result = await sendScheduleEmails(weekStart)
+    return res.send(
+      `Sent the schedule email for the week of ${escapeHtml(weekRangeText(weekStart))} to ` +
+      `${escapeHtml(scheduleEmailRecipients().join(', '))}: ${result.emails} employee email(s) from ` +
+      `${escapeHtml(result.stores.join(', ') || 'no stores')}, ${result.noEmail} without an email on file.`
+    )
+  } catch (err) {
+    console.error('Schedule emails send error:', err)
+    return res.status(500).send(escapeHtml(err.message || 'The schedule email could not be sent.'))
+  }
+})
 
 // The same PDF for one store, for admins (to check it or send by hand)
 app.get('/admin/previous-week-review.pdf', ...adminPage, async (req, res) => {
