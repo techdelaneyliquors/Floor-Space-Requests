@@ -5010,10 +5010,8 @@ app.get('/my-schedule.ics', ...approvedPage, requireRole('employee', 'manager'),
 const DAILY_RESPONSIBILITY_STORES = ['Branford']
 const MAX_RESPONSIBILITY_ITEMS = 5000
 
-app.put(
-  '/api/daily-responsibilities',
-  ...adminOrExcelUpload,
-  async (req, res) => {
+// Registered further down, after adminOrExcelUpload is defined
+async function uploadDailyResponsibilities(req, res) {
     try {
       const store = req.storeName
       const body = req.body || {}
@@ -5108,8 +5106,7 @@ app.put(
       console.error('Daily responsibilities upload error:', err)
       return res.status(500).json({ success: false, error: 'The daily responsibilities could not be saved.' })
     }
-  }
-)
+}
 
 // The section order on the task board
 const RESPONSIBILITY_SECTION_ORDER = ['Opening', 'Throughout the day', 'Closing', 'Scheduled for today']
@@ -5434,6 +5431,9 @@ const adminOrExcelUpload = [
   optionalExcelClient(storeFromQueryOrBody),
   ...[...adminApi, requireStoreFromRequest(storeFromQueryOrBody)].map(unlessExcel)
 ]
+
+// Daily task board upload (see DAILY RESPONSIBILITIES above)
+app.put('/api/daily-responsibilities', ...adminOrExcelUpload, uploadDailyResponsibilities)
 
 function buildExcelEmployeeRoster(settings) {
   const buildEmployeeIdentifiers =
