@@ -4697,9 +4697,10 @@ app.post('/api/schedule-reply', ...approvedApi, async (req, res) => {
 })
 
 // From the "Yes" link in a schedule email: no login, the link itself says
-// who it's for. Opening it only shows the page; the answer is saved when
-// they press the button, because email security scanners open links in
-// emails on their own and would otherwise answer "yes" for everyone.
+// who it's for. Opening the link (?answer=yes) saves "yes" straight away:
+// the page posts the answer from the browser as it loads. The save is a
+// POST from the page, not the GET itself, so email security scanners that
+// only fetch links don't answer for anyone.
 async function scheduleReplyContext(token) {
   const claim = scheduleEmails.verifyReplyToken(replySecret(), token)
   if (!claim) {
@@ -4732,7 +4733,7 @@ async function scheduleReplyContext(token) {
   return { claim, person, scheduleLink, reply: replyView(reply, person) }
 }
 
-function renderScheduleReplyPage(res, context, { status = 200, preselect = '', saved = false, error = '', reason = '' } = {}) {
+function renderScheduleReplyPage(res, context, { status = 200, preselect = '', saved = false, error = '', reason = '', autoYes = false } = {}) {
   // The link is the key: don't pass it on to other sites or let it be cached
   res.set({ 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' })
   const { claim, person } = context
@@ -4748,16 +4749,22 @@ function renderScheduleReplyPage(res, context, { status = 200, preselect = '', s
     preselect,
     saved,
     error,
-    reason
+    reason,
+    autoYes
   })
 }
 
 app.get('/schedule-reply/:token', async (req, res) => {
   try {
     const context = await scheduleReplyContext(req.params.token)
+    const wantsYes = req.query.answer === 'yes'
+    const alreadyYes = Boolean(context.reply && context.reply.answer === 'yes' && !context.reply.changed)
     return renderScheduleReplyPage(res, context, {
-      preselect: req.query.answer === 'no' ? 'no' : req.query.answer === 'yes' ? 'yes' : '',
-      saved: req.query.saved === '1'
+      preselect: req.query.answer === 'no' ? 'no' : wantsYes ? 'yes' : '',
+      // Opening the email's Yes link again shows the thank-you, not a re-save
+      saved: req.query.saved === '1' || (wantsYes && alreadyYes),
+      autoYes: wantsYes && !alreadyYes && !context.error &&
+        Boolean(context.claim && canStillReply(context.claim.weekStart))
     })
   } catch (err) {
     console.error('Schedule reply page error:', err)
@@ -4786,6 +4793,7 @@ app.post('/schedule-reply/:token', async (req, res) => {
 
     const { store, weekStart } = context.claim
     await saveScheduleReply({ store, weekStart, person: context.person, ...cleaned, via: 'email', user: null })
+    // Without ?answer=, so reloading the thank-you page doesn't save again
     return res.redirect(303, `/schedule-reply/${encodeURIComponent(req.params.token)}?saved=1`)
   } catch (err) {
     console.error('Schedule reply save error:', err)

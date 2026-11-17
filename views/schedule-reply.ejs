@@ -75,7 +75,19 @@
       <div class="status error"><%= error %></div>
     <% } %>
 
-    <% if (reply) { %>
+    <% if (autoYes) { %>
+      <%# Saves "yes" as the page opens (from the email's Yes link) %>
+      <form method="POST" id="autoYesForm">
+        <input type="hidden" name="answer" value="yes">
+        <div class="status yes" id="autoYesStatus">Saving your answer…</div>
+        <noscript>
+          <button type="submit" class="btn-yes">Yes, I can work these hours</button>
+        </noscript>
+      </form>
+      <script>
+        document.getElementById('autoYesForm').submit();
+      </script>
+    <% } else if (reply) { %>
       <% const when = new Date(reply.answeredAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %>
       <% if (reply.changed) { %>
         <div class="status changed">
@@ -93,7 +105,8 @@
       <% } %>
     <% } %>
 
-    <% if (!canReply) { %>
+    <% if (autoYes) { %>
+    <% } else if (!canReply) { %>
       <p class="small">This week is over, so it can no longer be answered.</p>
     <% } else { %>
       <h2><%= reply && !reply.changed ? 'Change your answer?' : 'Can you work these hours?' %></h2>
