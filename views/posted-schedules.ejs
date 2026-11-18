@@ -97,10 +97,6 @@
     .clean-table td.clean-name { text-align: left; white-space: nowrap; font-weight: 600; }
     .clean-table td.clean-off { color: #9ca3af; }
     .clean-table .clean-hours { font-weight: 600; white-space: nowrap; }
-    .clean-table tr.clean-group td {
-      background: #f3f4f6; text-align: left; font-weight: 700; font-size: 8pt;
-      text-transform: uppercase; letter-spacing: .04em;
-    }
     .clean-table tr.clean-total td { font-weight: 700; background: #e5e7eb; }
     .btn-clean-print { background: #0f766e; color: white; }
 
@@ -108,7 +104,7 @@
       /* Only the clean layout when printing with "Print clean schedule" */
       body.print-clean .container > *:not(.clean-print) { display: none !important; }
       body.print-clean .clean-print { display: block; }
-      body.print-clean .clean-table th, body.print-clean .clean-table tr.clean-group td,
+      body.print-clean .clean-table th,
       body.print-clean .clean-table tr.clean-total td {
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
       }
@@ -260,7 +256,6 @@
         </thead>
         <tbody>
           <% clean.groups.forEach(group => { %>
-            <tr class="clean-group"><td colspan="<%= dayKeys.length + 2 %>"><%= group.label %></td></tr>
             <% group.employees.forEach(employee => { %>
               <tr>
                 <td class="clean-name"><%= employee.name %></td>
