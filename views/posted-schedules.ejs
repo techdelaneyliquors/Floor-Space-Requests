@@ -86,7 +86,35 @@
     .confirm-table th { background: #f3f4f6; font-weight: 600; }
     .confirm-table .muted { color: #6b7280; font-size: 13px; }
 
+    /* Clean print: shifts and hours only (printed by "Print clean schedule") */
+    .clean-print { display: none; }
+    .clean-print h1 { font-size: 15pt; margin: 0 0 6px; }
+    .clean-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+    .clean-table th, .clean-table td {
+      border: 1px solid #9ca3af; padding: 3px 5px; text-align: center; vertical-align: middle;
+    }
+    .clean-table th { background: #e5e7eb; }
+    .clean-table td.clean-name { text-align: left; white-space: nowrap; font-weight: 600; }
+    .clean-table td.clean-off { color: #9ca3af; }
+    .clean-table .clean-hours { font-weight: 600; white-space: nowrap; }
+    .clean-table tr.clean-group td {
+      background: #f3f4f6; text-align: left; font-weight: 700; font-size: 8pt;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .clean-table tr.clean-total td { font-weight: 700; background: #e5e7eb; }
+    .btn-clean-print { background: #0f766e; color: white; }
+
     @media print {
+      /* Only the clean layout when printing with "Print clean schedule" */
+      body.print-clean .container > *:not(.clean-print) { display: none !important; }
+      body.print-clean .clean-print { display: block; }
+      body.print-clean .clean-table th, body.print-clean .clean-table tr.clean-group td,
+      body.print-clean .clean-table tr.clean-total td {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .clean-table tr { break-inside: avoid; }
+      .clean-table thead { display: table-header-group; }
+
       body { background: white; padding: 0; }
       .top-bar, .pickers, .no-print { display: none !important; }
       .card { box-shadow: none; padding: 0; }
@@ -203,10 +231,59 @@
           <% } %>
         </div>
 
-        <button type="button" class="btn btn-back no-print" onclick="window.print()">Print</button>
+        <div class="no-print" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
+          <button type="button" class="btn btn-back" onclick="window.print()">Print</button>
+          <button type="button" class="btn btn-clean-print" id="cleanPrintBtn"
+                  title="Just everyone's shifts with hours per person and per day: no warnings, changes or overtime">
+            Print clean schedule
+          </button>
+        </div>
       </div>
 
       <%- include('partials/schedule-review', { item: selected.item, dayKeys }) %>
+    </div>
+
+    <%# Printed only by "Print clean schedule" %>
+    <% const clean = selected.clean %>
+    <% const fmtHours = value => String(Math.round(value * 100) / 100) %>
+    <div class="clean-print" aria-hidden="true">
+      <h1><%= store %> Schedule: <%= selected.range %></h1>
+      <table class="clean-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <% dayKeys.forEach(day => { %>
+              <th><%= day.charAt(0).toUpperCase() + day.slice(1) %></th>
+            <% }) %>
+            <th>Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% clean.groups.forEach(group => { %>
+            <tr class="clean-group"><td colspan="<%= dayKeys.length + 2 %>"><%= group.label %></td></tr>
+            <% group.employees.forEach(employee => { %>
+              <tr>
+                <td class="clean-name"><%= employee.name %></td>
+                <% employee.days.forEach(shifts => { %>
+                  <% if (shifts.length) { %>
+                    <td><%- shifts.map(shift => String(shift).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])).join('<br>') %></td>
+                  <% } else { %>
+                    <td class="clean-off">Off</td>
+                  <% } %>
+                <% }) %>
+                <td class="clean-hours"><%= fmtHours(employee.total) %></td>
+              </tr>
+            <% }) %>
+          <% }) %>
+          <tr class="clean-total">
+            <td>Total hours</td>
+            <% clean.dayTotals.forEach(total => { %>
+              <td><%= fmtHours(total) %></td>
+            <% }) %>
+            <td><%= fmtHours(clean.grandTotal) %></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <% const confirmations = selected.confirmations %>
@@ -300,6 +377,13 @@
 </div>
 
 <script>
+// Clean print: only the plain schedule, then back to normal printing
+document.getElementById('cleanPrintBtn')?.addEventListener('click', () => {
+  document.body.classList.add('print-clean');
+  window.print();
+});
+window.addEventListener('afterprint', () => document.body.classList.remove('print-clean'));
+
 async function syncKeyRequest(method) {
   const response = await fetch('/api/paychex-sync/key', {
     method,

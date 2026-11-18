@@ -4319,6 +4319,51 @@ function buildScheduleReview(snapshot, liveSnapshot, keyholders) {
   }
 }
 
+// A plain printable version of an approved schedule: each group's people
+// with their shifts, scheduled hours per person and per day. No warnings,
+// change marks, PTO or overtime.
+function buildCleanSchedule(snapshot) {
+  // Scheduled hours for one day: the hours the Schedule page worked out
+  // (after breaks), or, for older submissions without them, the shift lengths
+  const dayHours = (employee, day) => {
+    const saved = employee.hours && employee.hours[day]
+    if (typeof saved === 'number') return saved
+    return ((employee.days && employee.days[day]) || []).reduce((sum, shift) => {
+      const [startText, endText] = String(shift).split(' to ')
+      const start = clockTextToMinutes(startText)
+      let end = clockTextToMinutes(endText)
+      if (start == null || end == null) return sum
+      if (end <= start) end += 1440
+      return sum + (end - start) / 60
+    }, 0)
+  }
+
+  const groups = ((snapshot && snapshot.groups) || [])
+    .map(group => ({
+      label: group.label,
+      employees: (group.employees || []).map(employee => {
+        const hours = SCHEDULE_DAY_KEYS.map(day => dayHours(employee, day))
+        return {
+          name: employee.name,
+          days: SCHEDULE_DAY_KEYS.map(day => (employee.days && employee.days[day]) || []),
+          total: hours.reduce((sum, value) => sum + value, 0),
+          hours
+        }
+      })
+    }))
+    .filter(group => group.employees.length)
+
+  const dayTotals = SCHEDULE_DAY_KEYS.map((_, index) =>
+    groups.reduce((sum, group) =>
+      sum + group.employees.reduce((inner, employee) => inner + employee.hours[index], 0), 0))
+
+  return {
+    groups,
+    dayTotals,
+    grandTotal: dayTotals.reduce((sum, value) => sum + value, 0)
+  }
+}
+
 // Admin review queue
 app.get('/schedule-approvals', ...adminPage, async (req, res) => {
   const currentMonday = mondayOf(storeToday())
@@ -4456,6 +4501,7 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
           approvedAt: approved.approvedAt,
           hasPending: Boolean(doc.pending && doc.pending.submittedAt),
           confirmations,
+          clean: buildCleanSchedule(approved.snapshot),
           paychexSync: doc.paychexSync && doc.paychexSync.sentAt
             ? { ...paychexSyncView(doc.paychexSync), failures: doc.paychexSync.failures || [] }
             : null,
