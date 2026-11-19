@@ -78,6 +78,7 @@ const PaychexSentShift = require('./models/PaychexSentShift')
 const PtoHours = require('./models/PtoHours')
 const SickDay = require('./models/SickDay')
 const PreviousWeekReview = require('./models/PreviousWeekReview')
+const WeeklyHours = require('./models/WeeklyHours')
 const { buildBackup } = require('./lib/backup')
 const { buildPreviousWeekReport, renderPreviousWeekPdf } = require('./lib/previousWeekReport')
 const scheduleEmails = require('./lib/scheduleEmails')
@@ -376,6 +377,7 @@ mongoose.connect(process.env.MONGO_URI)
       await migrateUserRoles()
       await linkItemRequestsToUsers()
       await backfillWeekHistory()
+      await backfillWeeklyHours()
     } catch (err) {
       console.error('Startup data update failed:', err)
     }
@@ -3478,6 +3480,8 @@ app.get('/', ...approvedPage, async (req, res) => {
     canReviewAccess: req.user.role === 'admin',
     canRequestSpace: ['admin', 'manager', 'vendor'].includes(req.user.role),
     pendingScheduleCount,
+    // Scheduling Review, one per store the person manages
+    reviewStores: STORE_LIST.filter(store => canManageStore(req.user, store)),
     canRequestTimeOff: ['employee', 'manager'].includes(req.user.role),
     pendingTimeOffCount: await pendingTimeOffCount(req.user)
   })
@@ -3915,6 +3919,8 @@ app.post(
         notifyScheduleApproved(store, weekStart, req.user).catch(err =>
           console.error('Schedule approved notification failed:', err)
         )
+        // A past week's hours for people without an ID come from this
+        refreshWeekHours(store, weekStart)
       } else {
         try {
           const result = await notifyScheduleApprovers(store, weekStart, req.user)
@@ -4322,27 +4328,28 @@ function buildScheduleReview(snapshot, liveSnapshot, keyholders) {
 // A plain printable version of an approved schedule: each group's people
 // with their shifts, scheduled hours per person and per day. No warnings,
 // change marks, PTO or overtime.
-function buildCleanSchedule(snapshot) {
-  // Scheduled hours for one day: the hours the Schedule page worked out
-  // (after breaks), or, for older submissions without them, the shift lengths
-  const dayHours = (employee, day) => {
-    const saved = employee.hours && employee.hours[day]
-    if (typeof saved === 'number') return saved
-    return ((employee.days && employee.days[day]) || []).reduce((sum, shift) => {
-      const [startText, endText] = String(shift).split(' to ')
-      const start = clockTextToMinutes(startText)
-      let end = clockTextToMinutes(endText)
-      if (start == null || end == null) return sum
-      if (end <= start) end += 1440
-      return sum + (end - start) / 60
-    }, 0)
-  }
+// Scheduled hours for one day of an approved-schedule employee: the hours the
+// Schedule page worked out (after breaks), or, for older submissions without
+// them, the shift lengths
+function snapshotDayHours(employee, day) {
+  const saved = employee.hours && employee.hours[day]
+  if (typeof saved === 'number') return saved
+  return ((employee.days && employee.days[day]) || []).reduce((sum, shift) => {
+    const [startText, endText] = String(shift).split(' to ')
+    const start = clockTextToMinutes(startText)
+    let end = clockTextToMinutes(endText)
+    if (start == null || end == null) return sum
+    if (end <= start) end += 1440
+    return sum + (end - start) / 60
+  }, 0)
+}
 
+function buildCleanSchedule(snapshot) {
   const groups = ((snapshot && snapshot.groups) || [])
     .map(group => ({
       label: group.label,
       employees: (group.employees || []).map(employee => {
-        const hours = SCHEDULE_DAY_KEYS.map(day => dayHours(employee, day))
+        const hours = SCHEDULE_DAY_KEYS.map(day => snapshotDayHours(employee, day))
         return {
           name: employee.name,
           days: SCHEDULE_DAY_KEYS.map(day => (employee.days && employee.days[day]) || []),
@@ -4522,6 +4529,146 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
   })
 })
 
+// Scheduling Review: running hours totals by month, season and year, per
+// store and per person, from the recorded weeks (WeeklyHours). Admins see
+// every store; managers see the stores they manage.
+const REVIEW_PERIOD_TYPES = { month: 'Month', season: 'Season', year: 'Year' }
+
+function reviewPeriodLabel(type, value) {
+  if (type === 'month') {
+    return new Date(`${value}-15T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' })
+  }
+  if (type === 'season') {
+    const [year, id] = value.split('-')
+    const season = SEASONS.find(entry => entry.id === id)
+    return id === 'winter'
+      ? `${season.label} ${year}–${String(Number(year) + 1).slice(-2)}`
+      : `${season.label} ${year}`
+  }
+  return value
+}
+
+// Sorts seasons in calendar order (winter last in its year)
+const reviewPeriodSortKey = (type, value) => {
+  if (type !== 'season') return value
+  const [year, id] = value.split('-')
+  return `${year}-${['spring', 'summer', 'fall', 'winter'].indexOf(id)}`
+}
+
+// Totals for a set of recorded weeks, overall and per person
+function sumRecordedWeeks(weeks) {
+  const people = new Map()
+  const totals = { scheduled: 0, worked: 0, noIdHours: 0, budgetHours: 0 }
+  let budgetWeeks = 0
+
+  // Oldest first, so each person shows their latest name
+  for (const week of [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart))) {
+    totals.scheduled += week.totals.scheduled
+    totals.worked += week.totals.worked
+    totals.noIdHours += week.totals.noIdHours
+    if (typeof week.budgetHours === 'number') {
+      totals.budgetHours += week.budgetHours
+      budgetWeeks++
+    }
+    for (const employee of week.employees || []) {
+      const entry = people.get(employee.key) || { scheduled: 0, worked: 0, weeks: 0 }
+      entry.name = employee.name
+      entry.employeeNumber = employee.employeeNumber
+      entry.canPunch = employee.canPunch
+      entry.scheduled += employee.scheduled
+      entry.worked += employee.worked
+      entry.weeks++
+      people.set(employee.key, entry)
+    }
+  }
+
+  return {
+    weekCount: weeks.length,
+    totals: {
+      scheduled: round2(totals.scheduled),
+      worked: round2(totals.worked),
+      difference: round2(totals.worked - totals.scheduled),
+      noIdHours: round2(totals.noIdHours),
+      // Only when every week has a budget
+      budgetHours: weeks.length && budgetWeeks === weeks.length ? round2(totals.budgetHours) : null
+    },
+    people: [...people.values()]
+      .map(entry => ({
+        ...entry,
+        scheduled: round2(entry.scheduled),
+        worked: round2(entry.worked),
+        difference: round2(entry.worked - entry.scheduled)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+}
+
+app.get('/scheduling-review', ...approvedPage, requireRole('manager'), async (req, res) => {
+  const stores = STORE_LIST.filter(name => canManageStore(req.user, name))
+  if (!stores.length) {
+    return res.status(403).send('You do not manage any stores yet.')
+  }
+
+  const requestedStore = getCanonicalStoreName(req.query.store)
+  const store = stores.includes(requestedStore) ? requestedStore : stores[0]
+
+  const weeks = await WeeklyHours.find({ store }).sort({ weekStart: 1 }).lean()
+
+  // Scheduled hours uploaded but no punches yet: listed, but left out of the
+  // totals until the actual hours are uploaded (the week is recorded again)
+  const missingActuals = week => !(week.employees || []).some(employee => employee.canPunch && employee.worked > 0)
+  const counted = list => list.filter(week => !missingActuals(week))
+
+  const periodType = Object.hasOwn(REVIEW_PERIOD_TYPES, req.query.period) ? req.query.period : 'month'
+  const periods = [...new Set(weeks.map(week => week[periodType]))]
+    .sort((a, b) => reviewPeriodSortKey(periodType, b).localeCompare(reviewPeriodSortKey(periodType, a)))
+  const requested = String(req.query.value || '')
+  const value = periods.includes(requested) ? requested : periods[0] || ''
+
+  // The month, season and year of the latest recorded week, so far
+  const latest = weeks[weeks.length - 1]
+  const running = latest
+    ? Object.keys(REVIEW_PERIOD_TYPES).map(type => ({
+        type,
+        typeLabel: REVIEW_PERIOD_TYPES[type],
+        value: latest[type],
+        label: reviewPeriodLabel(type, latest[type]),
+        ...sumRecordedWeeks(counted(weeks.filter(week => week[type] === latest[type])))
+      }))
+    : []
+
+  const periodWeeks = weeks.filter(week => week[periodType] === value)
+
+  res.render('scheduling-review.ejs', {
+    user: req.user,
+    stores,
+    store,
+    periodTypes: REVIEW_PERIOD_TYPES,
+    periodType,
+    periods: periods.map(period => ({ value: period, label: reviewPeriodLabel(periodType, period) })),
+    running,
+    firstWeekRange: weekRangeText(WEEKLY_HOURS_FIRST_WEEK),
+    // Only stores with people who can't punch get the no-ID columns
+    tracksNoId: weeks.some(week => week.totals.noIdHours > 0),
+    selected: value
+      ? {
+          value,
+          label: reviewPeriodLabel(periodType, value),
+          ...sumRecordedWeeks(counted(periodWeeks)),
+          weeks: [...periodWeeks].reverse().map(week => ({
+            weekStart: week.weekStart,
+            range: weekRangeText(week.weekStart),
+            ...week.totals,
+            difference: round2(week.totals.worked - week.totals.scheduled),
+            budgetHours: week.budgetHours,
+            hasApprovedSchedule: week.hasApprovedSchedule,
+            missingActuals: missingActuals(week)
+          }))
+        }
+      : null
+  })
+})
+
 // Approve or reject exactly the version the admin reviewed: the form sends
 // the pending version's submittedAt, so a resubmission made in the meantime
 // isn't approved unseen.
@@ -4574,6 +4721,8 @@ app.post('/schedule-approvals/:id/approve', ...adminPage, async (req, res) => {
     notifyScheduleApproved(doc.store, doc.weekStart, req.user).catch(err =>
       console.error('Schedule approved notification failed:', err)
     )
+    // A past week's hours for people without an ID come from this
+    refreshWeekHours(doc.store, doc.weekStart)
 
     return redirectWithMessage(res, '/schedule-approvals', {
       message: `Approved the ${doc.store} schedule for ${weekRangeText(doc.weekStart)}. Employees can see it now.`
@@ -6237,6 +6386,7 @@ app.put(
 
       if (!type) {
         await SickDay.deleteOne({ store, employeeNumber, date })
+        await refreshWeekHours(store, weekStart)
         return res.json({ success: true, sickDay: null })
       }
 
@@ -6266,6 +6416,9 @@ app.put(
         },
         { upsert: true, returnDocument: 'after' }
       ).lean()
+
+      // Paid sick hours count as worked on the Scheduling Review
+      await refreshWeekHours(store, weekStart)
 
       return res.json({ success: true, sickDay: sickDayView(entry) })
     } catch (err) {
@@ -6325,6 +6478,11 @@ async function saveWeekHistory(store, uploadedBy) {
     },
     { upsert: true }
   )
+
+  // The Scheduling Review keeps this week's totals for good. A failure
+  // there shouldn't fail the upload.
+  await recordWeekHours(store, weekStart)
+    .catch(err => console.error(`[weekly-hours] ${store} ${weekStart} could not be recorded:`, err))
 }
 
 const uploaderOf = (req, store) =>
@@ -6340,6 +6498,160 @@ async function backfillWeekHistory() {
     if (isMonday(weekStart) && !(await PreviousWeekReview.exists({ store, weekStart }))) {
       await saveWeekHistory(store, null)
       console.log(`Saved ${store}'s previous week (${weekStart}) to the history`)
+    }
+  }
+}
+
+// ------------------------
+// SCHEDULING REVIEW: WEEKLY HOURS TOTALS
+// ------------------------
+//
+// Each reviewed week's hours, per person and per store, kept for good in
+// WeeklyHours (the 4-week PreviousWeekReview history is pruned). People with
+// an employee ID: scheduled and worked as on the Previous Week review
+// (worked includes paid sick hours). People without one can't punch in, so
+// their hours on the week's approved schedule count as scheduled and worked.
+// A week is recorded when its previous-week data is uploaded, and again when
+// its sick days or approved schedule change while its upload is still kept.
+
+const round2 = value => Math.round(Number(value || 0) * 100) / 100
+
+const SEASONS = [
+  { id: 'winter', label: 'Winter', months: [12, 1, 2] },
+  { id: 'spring', label: 'Spring', months: [3, 4, 5] },
+  { id: 'summer', label: 'Summer', months: [6, 7, 8] },
+  { id: 'fall', label: 'Fall', months: [9, 10, 11] }
+]
+
+// Month, season and year a week counts toward: those of its Thursday
+function weekPeriods(weekStart) {
+  const thursday = addDaysYmd(weekStart, 3)
+  const year = Number(thursday.slice(0, 4))
+  const month = Number(thursday.slice(5, 7))
+  const season = SEASONS.find(entry => entry.months.includes(month))
+  // January and February belong to the winter that began the December before
+  const seasonYear = season.id === 'winter' && month <= 2 ? year - 1 : year
+  return { month: thursday.slice(0, 7), season: `${seasonYear}-${season.id}`, year: String(year) }
+}
+
+// No employee ID (or a placeholder like TEMP1): Paychex can't have punches
+const hasPaychexId = number => /^\d+$/.test(String(number || '').trim())
+
+// The first week recorded (Monday); earlier weeks are never recorded
+const WEEKLY_HOURS_FIRST_WEEK = '2026-11-16'
+
+async function recordWeekHours(store, weekStart) {
+  if (!isMonday(weekStart) || weekStart < WEEKLY_HOURS_FIRST_WEEK) return null
+
+  const history = await PreviousWeekReview.findOne({ store, weekStart }).lean()
+  if (!history) return null
+
+  const [settings, existing, posted, sickDays, salariedLinks, budget] = await Promise.all([
+    ScheduleSettings.findOne({ store }).select('managers associates cashiers buildEmployeeIdentifiers').lean(),
+    WeeklyHours.findOne({ store, weekStart }).lean(),
+    PostedSchedule.findOne({ store, weekStart, 'approved.approvedAt': { $exists: true } })
+      .select('approved.snapshot.groups').lean(),
+    sickDaysForWeek(store, weekStart),
+    PaychexEmployeeLink.find({ store, salaried: true }).select('employeeNumber').lean(),
+    HoursBudget.findOne({ store }).lean()
+  ])
+
+  // Everyone on the Build tab now, plus anyone recorded for this week
+  // before (so recording again after someone leaves keeps their hours)
+  const hasCashiers = Boolean(SCHEDULE_STORES[store] && SCHEDULE_STORES[store].hasCashiers)
+  const earlier = ((existing && existing.employees) || []).filter(employee => employee.canPunch)
+  const current = settings || {}
+  const report = buildPreviousWeekReport({
+    settings: {
+      previousWeekStart: history.previousWeekStart,
+      previousWeekEnd: history.previousWeekEnd,
+      managers: [
+        ...(current.managers || []),
+        ...(current.associates || []),
+        ...(hasCashiers ? (current.cashiers || []) : []),
+        ...earlier.map(employee => employee.name)
+      ],
+      associates: [],
+      cashiers: [],
+      buildEmployeeIdentifiers: {
+        ...Object.fromEntries(earlier.map(employee => [employee.name, employee.employeeNumber])),
+        ...(current.buildEmployeeIdentifiers || {})
+      },
+      ...Object.fromEntries(PREVIOUS_WEEK_FIELDS.map(field => [field, history[field] || {}]))
+    },
+    hasCashiers: false,
+    sickDays,
+    salariedNumbers: new Set(salariedLinks.map(link => link.employeeNumber)),
+    hoursBudget: hoursBudgetView(budget)
+  })
+  if (report.weekStart !== weekStart) return null
+
+  const employees = report.rows.map(row => ({
+    key: row.employeeNumber,
+    name: row.fullName,
+    employeeNumber: row.employeeNumber,
+    canPunch: true,
+    scheduled: round2(row.scheduledTotal),
+    worked: round2(row.workedTotal)
+  }))
+
+  // People without an ID: their approved-schedule hours, merged across groups
+  const reviewedNames = new Set(employees.map(employee => employee.name.trim().toLowerCase()))
+  const noId = new Map()
+  for (const group of (posted && posted.approved && posted.approved.snapshot && posted.approved.snapshot.groups) || []) {
+    for (const person of group.employees || []) {
+      const number = String(person.employeeNumber || '').trim()
+      const name = String(person.name || '').trim()
+      if (!name || hasPaychexId(number) || reviewedNames.has(name.toLowerCase())) continue
+      const key = number || `name:${name.toLowerCase()}`
+      const hours = SCHEDULE_DAY_KEYS.reduce((sum, day) => sum + snapshotDayHours(person, day), 0)
+      const entry = noId.get(key) || { key, name, employeeNumber: number, canPunch: false, scheduled: 0, worked: 0 }
+      entry.scheduled += hours
+      entry.worked += hours
+      noId.set(key, entry)
+    }
+  }
+  for (const entry of noId.values()) {
+    if (entry.scheduled <= 0) continue
+    employees.push({ ...entry, scheduled: round2(entry.scheduled), worked: round2(entry.worked) })
+  }
+
+  const sum = (list, field) => round2(list.reduce((total, employee) => total + employee[field], 0))
+  const noIdHours = sum(employees.filter(employee => !employee.canPunch), 'worked')
+
+  await WeeklyHours.updateOne(
+    { store, weekStart },
+    {
+      $set: {
+        ...weekPeriods(weekStart),
+        employees,
+        totals: { scheduled: sum(employees, 'scheduled'), worked: sum(employees, 'worked'), noIdHours },
+        budgetHours: typeof report.totals.budgetHours === 'number' ? report.totals.budgetHours : null,
+        hasApprovedSchedule: Boolean(posted)
+      },
+      $setOnInsert: { store, weekStart }
+    },
+    { upsert: true }
+  )
+  return true
+}
+
+// After a change that affects a recorded week (sick days, an approval)
+function refreshWeekHours(store, weekStart) {
+  return recordWeekHours(store, weekStart)
+    .catch(err => console.error(`[weekly-hours] ${store} ${weekStart} could not be refreshed:`, err))
+}
+
+// Startup: any kept week (from the first week on) that hasn't been recorded,
+// in case recording failed during an upload
+async function backfillWeeklyHours() {
+  const kept = await PreviousWeekReview.find({ weekStart: { $gte: WEEKLY_HOURS_FIRST_WEEK } })
+    .select('store weekStart').lean()
+  for (const { store, weekStart } of kept) {
+    if (!(await WeeklyHours.exists({ store, weekStart }))) {
+      if (await recordWeekHours(store, weekStart)) {
+        console.log(`[weekly-hours] Recorded ${store} ${weekStart}`)
+      }
     }
   }
 }

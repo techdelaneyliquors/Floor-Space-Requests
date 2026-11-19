@@ -82,6 +82,15 @@
 
 </div>
 
+<% if (reviewStores.length) { %>
+<div class="review-links">
+  <span class="review-title">Scheduling Review</span>
+  <% reviewStores.forEach(store => { %>
+  <a href="/scheduling-review?store=<%= encodeURIComponent(store) %>" class="btn btn-review"><%= store %></a>
+  <% }) %>
+</div>
+<% } %>
+
 
 
 <head>
@@ -218,6 +227,33 @@
   margin-top: 20px;
 }
 
+
+.review-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.review-title {
+  font-weight: 600;
+  color: #334155;
+}
+
+.btn-review {
+  margin-left: 0;
+  background-color: #0f766e;
+  color: white;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-review:hover {
+  background-color: #115e59;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
 
 .bottom-actions form {
   display: flex;      /* ✅ makes form behave like other items */

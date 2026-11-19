@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scheduling Review</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+
+  <style>
+    .container { max-width: 1100px; }
+
+    .pickers { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .pickers label { font-size: 14px; font-weight: 600; }
+    .pickers select {
+      padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: 14px; font-family: inherit; margin-left: 6px;
+    }
+    .top-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .running { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .running .card { margin: 0; }
+    .running h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+    .running .period { font-size: 18px; font-weight: 600; margin: 2px 0 10px; }
+    .stat-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-row strong { font-variant-numeric: tabular-nums; }
+
+    .pos { color: #15803d; }
+    .neg { color: #b91c1c; }
+    .over { color: #b91c1c; }
+    .within { color: #15803d; }
+
+    .hours-table td, .hours-table th { font-size: 14px; }
+    .hours-table td { font-variant-numeric: tabular-nums; }
+    .hours-table td.name { white-space: normal; }
+    .no-id {
+      display: inline-block; margin-left: 6px; border-radius: 999px; padding: 1px 8px;
+      font-size: 12px; font-weight: 600; background: #fef3c7; color: #92400e; white-space: nowrap;
+    }
+    .note { color: #64748b; font-size: 13px; }
+    .how { color: #475569; font-size: 13px; line-height: 1.5; }
+    .how p { margin: 4px 0; }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print { display: none !important; }
+      .card { box-shadow: none; padding: 0; margin-bottom: 14px; }
+      .running .card { border: 1px solid #e5e7eb; padding: 8px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <% const fmt = value => Number(value || 0).toFixed(2) %>
+  <% const signed = value => (value > 0 ? '+' : '') + fmt(value) %>
+  <% const sign = value => value > 0 ? 'pos' : value < 0 ? 'neg' : '' %>
+
+  <div class="top-bar">
+    <h1><%= store %> Scheduling Review</h1>
+    <div class="top-actions no-print">
+      <button type="button" class="btn btn-back" onclick="window.print()">Print</button>
+      <a href="/posted-schedules?store=<%= encodeURIComponent(store) %>" class="btn btn-back">Posted Schedules</a>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <form class="pickers" method="GET">
+      <label>
+        Store
+        <select name="store" onchange="this.form.value.value = ''; this.form.submit()">
+          <% stores.forEach(name => { %>
+            <option value="<%= name %>" <%= name === store ? 'selected' : '' %>><%= name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Totals by
+        <select name="period" onchange="this.form.value.value = ''; this.form.submit()">
+          <% Object.entries(periodTypes).forEach(([type, label]) => { %>
+            <option value="<%= type %>" <%= type === periodType ? 'selected' : '' %>><%= label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <% if (periods.length) { %>
+        <label>
+          <%= periodTypes[periodType] %>
+          <select name="value" onchange="this.form.submit()">
+            <% periods.forEach(period => { %>
+              <option value="<%= period.value %>" <%= selected && period.value === selected.value ? 'selected' : '' %>><%= period.label %></option>
+            <% }) %>
+          </select>
+        </label>
+      <% } else { %>
+        <input type="hidden" name="value" value="">
+      <% } %>
+      <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
+    </form>
+  </div>
+
+  <% if (!selected) { %>
+    <div class="card empty">
+      No weeks are recorded for <%= store %> yet. Recording starts with the week of <%= firstWeekRange %>:
+      a week is recorded when its previous week (scheduled and actual hours) is uploaded on the Schedule page.
+    </div>
+  <% } else { %>
+
+    <%# Running totals: the month, season and year of the latest recorded week %>
+    <div class="running">
+      <% running.forEach(period => { %>
+        <div class="card">
+          <h2>This <%= period.typeLabel.toLowerCase() %> so far</h2>
+          <div class="period"><%= period.label %></div>
+          <div class="stat-row"><span>Weeks recorded</span><strong><%= period.weekCount %></strong></div>
+          <div class="stat-row"><span>Scheduled</span><strong><%= fmt(period.totals.scheduled) %></strong></div>
+          <div class="stat-row"><span>Worked</span><strong><%= fmt(period.totals.worked) %></strong></div>
+          <div class="stat-row"><span>Difference</span><strong class="<%= sign(period.totals.difference) %>"><%= signed(period.totals.difference) %></strong></div>
+          <% if (tracksNoId) { %>
+            <div class="stat-row"><span>Of worked: people without an ID</span><strong><%= fmt(period.totals.noIdHours) %></strong></div>
+          <% } %>
+          <% if (period.totals.budgetHours !== null) { %>
+            <% const over = period.totals.worked - period.totals.budgetHours > 0.005 %>
+            <div class="stat-row"><span>Budget</span><strong class="<%= over ? 'over' : 'within' %>"><%= fmt(period.totals.budgetHours) %></strong></div>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2><%= selected.label %>: hours by person</h2>
+          <div class="meta">
+            <%= selected.weekCount %> week<%= selected.weekCount === 1 ? '' : 's' %> recorded
+            <% if (tracksNoId) { %>· people marked <span class="no-id">No ID</span> can't punch in, so their scheduled hours count as worked<% } %>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="hours-table">
+          <thead>
+            <tr>
+              <th style="text-align:left;">Name</th>
+              <th>Weeks</th>
+              <th>Scheduled</th>
+              <th>Worked</th>
+              <th>Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% selected.people.forEach(person => { %>
+              <tr>
+                <td class="name">
+                  <%= person.name %><% if (!person.canPunch) { %><span class="no-id">No ID</span><% } %>
+                </td>
+                <td><%= person.weeks %></td>
+                <td><%= fmt(person.scheduled) %></td>
+                <td><%= fmt(person.worked) %></td>
+                <td class="<%= sign(person.difference) %>"><%= signed(person.difference) %></td>
+              </tr>
+            <% }) %>
+            <tr class="total-row">
+              <td><%= store %> total</td>
+              <td><%= selected.weekCount %></td>
+              <td><%= fmt(selected.totals.scheduled) %></td>
+              <td><%= fmt(selected.totals.worked) %></td>
+              <td class="<%= sign(selected.totals.difference) %>"><%= signed(selected.totals.difference) %></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:18px;"><%= selected.label %>: week by week</h2>
+      <div class="table-wrap">
+        <table class="hours-table">
+          <thead>
+            <tr>
+              <th style="text-align:left;">Week</th>
+              <th>Scheduled</th>
+              <th>Worked</th>
+              <th>Difference</th>
+              <% if (tracksNoId) { %><th>No-ID hours</th><% } %>
+              <th>Budget</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% selected.weeks.forEach(week => { %>
+              <tr>
+                <td class="name">
+                  <%= week.range %>
+                  <% if (week.missingActuals) { %><div class="note neg">Actual hours not uploaded yet: not in the totals</div><% } %>
+                </td>
+                <td><%= fmt(week.scheduled) %></td>
+                <td><%= fmt(week.worked) %></td>
+                <td class="<%= sign(week.difference) %>"><%= signed(week.difference) %></td>
+                <% if (tracksNoId) { %>
+                  <td>
+                    <%= fmt(week.noIdHours) %>
+                    <% if (!week.hasApprovedSchedule) { %><div class="note">No approved schedule</div><% } %>
+                  </td>
+                <% } %>
+                <% if (typeof week.budgetHours === 'number') { %>
+                  <td class="<%= week.worked - week.budgetHours > 0.005 ? 'over' : 'within' %>"><%= fmt(week.budgetHours) %></td>
+                <% } else { %>
+                  <td class="note">None set</td>
+                <% } %>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="card how">
+    <strong>How these are counted</strong>
+    <p>Recording started with the week of <%= firstWeekRange %>.</p>
+    <p>Each week is recorded from the Previous Week review when it's uploaded: scheduled hours and
+      worked hours (punched hours plus paid sick hours) for everyone on the review.</p>
+    <p>People without an employee ID can't punch in, so their hours on that week's approved schedule
+      count as both scheduled and worked.</p>
+    <p>A week counts toward the month, season and year its Thursday falls in. Seasons: winter
+      (December–February), spring (March–May), summer (June–August), fall (September–November).
+      Budget turns red when worked hours are over it.</p>
+  </div>
+</div>
+</body>
+</html>
