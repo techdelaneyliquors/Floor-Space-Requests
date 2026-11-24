@@ -830,14 +830,14 @@ td.conflict-cell {
 
 
 
-/* More than 15 minutes off: arrived late (orange), left early (purple),
-   both on the same day (dark red) */
+/* More than 15 minutes off: arrived late (orange), left early (light red),
+   both on the same day (dark red). Scheduled but no time worked: purple */
 .attendance-late {
   background: #fdba74 !important;
 }
 
 .attendance-early {
-  background: #d8b4fe !important;
+  background: #fca5a5 !important;
 }
 
 .attendance-severe {
@@ -845,11 +845,11 @@ td.conflict-cell {
 }
 
 .no-time-worked-cell {
-  background: #fca5a5 !important;
+  background: #d8b4fe !important;
 }
 
 .no-time-worked-cell .actual-shift {
-  color: #991b1b !important;
+  color: #6b21a8 !important;
   font-weight: 700;
 }
 
@@ -1023,8 +1023,8 @@ td.budget-total .budget-limit {
 }
 
 .exception-section-heading.absence-heading {
-  background:#fee2e2;
-  color:#991b1b;
+  background:#ede9fe;
+  color:#5b21b6;
 }
 
 .exception-section-heading.late-heading {
@@ -1033,8 +1033,8 @@ td.budget-total .budget-limit {
 }
 
 .exception-section-heading.early-heading {
-  background:#ede9fe;
-  color:#5b21b6;
+  background:#fee2e2;
+  color:#991b1b;
 }
 
 .exception-section-heading.both-heading {
@@ -1120,7 +1120,7 @@ td.budget-total .budget-limit {
 }
 
 .comparison-cell.attendance-early.overtime-issue {
-  background:#d8b4fe !important;
+  background:#fca5a5 !important;
   box-shadow:inset 0 -4px 0 #16a34a;
 }
 
@@ -1130,7 +1130,7 @@ td.budget-total .budget-limit {
 }
 
 .comparison-cell.no-time-worked-cell.overtime-issue {
-  background:#fca5a5 !important;
+  background:#d8b4fe !important;
   box-shadow:inset 0 -4px 0 #16a34a;
 }
 
@@ -2119,8 +2119,9 @@ td.budget-total .budget-limit {
       <small>
         Planned shifts are shown first. Actual shifts are
         shown in italic text underneath. Orange: arrived more than
-        15 minutes late. Purple: left more than 15 minutes early. Dark
-        red: both. Yellow: worked on a day they weren't scheduled.
+        15 minutes late. Light red: left more than 15 minutes early. Dark
+        red: both. Purple: scheduled but no time worked. Yellow: worked
+        on a day they weren't scheduled.
         Blue: a vacation day (a day off punched exactly 8:00 AM to
         4:00 PM; not counted as overtime).
       </small>
@@ -6811,7 +6812,7 @@ function renderPreviousWeekDates() {
                 cellClass +=
                   ' attendance-severe';
               } else if (issue.late) {
-                // Arrived late (orange); left early is purple
+                // Arrived late (orange); left early is light red
                 cellClass +=
                   ' attendance-late';
               } else if (issue.early) {
