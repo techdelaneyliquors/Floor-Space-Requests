@@ -1,0 +1,291 @@
+<%# Shared map viewer for the floor-space pages. FloorMap.init(frame, options):
+    - crops the drawing to the store (the files have wide empty margins)
+    - zoom (buttons, Ctrl/pinch on a trackpad, two-finger pinch) and drag to move
+    - a tap/click on a space calls options.onSelect(id), and a drag never counts as a tap
+    - hover tooltip from options.tooltip(id) (mouse only)
+    Returns { spaces, select(id), fit(), showSpace(id), colorSpace(id, color) }. %>
+<script>
+window.FloorMap = (function () {
+  const SPACE_SELECTOR = 'path[id^="FloorSpace"]';
+
+  // "FloorSpace16" -> 16
+  const spaceNumber = id => Number(String(id).replace(/\D/g, '')) || 0;
+  const spaceLabel = id => `Space ${spaceNumber(id) || id}`;
+
+  function init(frame, options = {}) {
+    const svg = frame.querySelector('svg');
+    if (!svg) return null;
+
+    // The page sizes the drawing; the file's own size would fight it
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    svg.removeAttribute('style');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    // Floor-space ids are unique per map; keep the first of any duplicate
+    const spaces = [];
+    const seen = new Set();
+    svg.querySelectorAll(SPACE_SELECTOR).forEach(el => {
+      if (!seen.has(el.id)) { seen.add(el.id); spaces.push(el); }
+    });
+    spaces.sort((a, b) => spaceNumber(a.id) - spaceNumber(b.id));
+
+    // ---- crop to what's drawn (ignore full-page backgrounds) ----
+    const original = svg.viewBox.baseVal;
+    const home = { x: original.x, y: original.y, w: original.width, h: original.height };
+    try {
+      const svgRect = svg.getBoundingClientRect();
+      const toSvg = (x, y) => {
+        const point = svg.createSVGPoint();
+        point.x = x; point.y = y;
+        return point.matrixTransform(svg.getScreenCTM().inverse());
+      };
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      svg.querySelectorAll('path, rect, polygon, polyline, line, circle, ellipse, image, text').forEach(el => {
+        if (el.closest('defs, clipPath, mask')) return;
+        const r = el.getBoundingClientRect();
+        if (!r.width && !r.height) return;
+        if (r.width * r.height > svgRect.width * svgRect.height * 0.6) return;
+        minX = Math.min(minX, r.left); minY = Math.min(minY, r.top);
+        maxX = Math.max(maxX, r.right); maxY = Math.max(maxY, r.bottom);
+      });
+      if (minX < maxX && minY < maxY) {
+        const a = toSvg(minX, minY);
+        const b = toSvg(maxX, maxY);
+        const pad = Math.max(b.x - a.x, b.y - a.y) * 0.03;
+        home.x = a.x - pad; home.y = a.y - pad;
+        home.w = (b.x - a.x) + pad * 2; home.h = (b.y - a.y) + pad * 2;
+      }
+    } catch (err) {
+      // Keep the drawing's own view
+    }
+
+    const view = { ...home };
+    const apply = () => svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+    apply();
+
+    const scale = () => svg.getScreenCTM().a; // screen px per drawing unit
+    const toDrawing = (clientX, clientY) => {
+      const point = svg.createSVGPoint();
+      point.x = clientX; point.y = clientY;
+      return point.matrixTransform(svg.getScreenCTM().inverse());
+    };
+
+    // Keep part of the store on screen
+    function clamp() {
+      const cx = Math.min(Math.max(view.x + view.w / 2, home.x), home.x + home.w);
+      const cy = Math.min(Math.max(view.y + view.h / 2, home.y), home.y + home.h);
+      view.x = cx - view.w / 2;
+      view.y = cy - view.h / 2;
+    }
+
+    // factor > 1 zooms in, keeping the drawing point under (clientX, clientY) still
+    function zoomAt(factor, clientX, clientY) {
+      const nextW = Math.min(Math.max(view.w / factor, home.w / 10), home.w);
+      factor = view.w / nextW;
+      if (Math.abs(factor - 1) < 0.001) return;
+      const p = toDrawing(clientX, clientY);
+      view.x = p.x - (p.x - view.x) / factor;
+      view.y = p.y - (p.y - view.y) / factor;
+      view.w /= factor;
+      view.h /= factor;
+      clamp();
+      apply();
+    }
+
+    function zoomCenter(factor) {
+      const r = svg.getBoundingClientRect();
+      zoomAt(factor, r.left + r.width / 2, r.top + r.height / 2);
+    }
+
+    function fit() {
+      Object.assign(view, home);
+      apply();
+    }
+
+    // ---- controls ----
+    const controls = document.createElement('div');
+    controls.className = 'zoom-controls no-print';
+    controls.innerHTML =
+      '<button type="button" data-zoom="in" aria-label="Zoom in">+</button>' +
+      '<button type="button" data-zoom="out" aria-label="Zoom out">−</button>' +
+      '<button type="button" data-zoom="fit" class="fit" aria-label="Fit the whole store">Fit</button>';
+    controls.addEventListener('click', event => {
+      const action = event.target.closest('button') && event.target.closest('button').dataset.zoom;
+      if (action === 'in') zoomCenter(1.5);
+      if (action === 'out') zoomCenter(1 / 1.5);
+      if (action === 'fit') fit();
+    });
+    controls.addEventListener('pointerdown', event => event.stopPropagation());
+    frame.appendChild(controls);
+
+    const hint = document.createElement('div');
+    hint.className = 'map-hint no-print';
+    hint.textContent = 'Ctrl + scroll or pinch to zoom · drag to move';
+    frame.appendChild(hint);
+
+    // Ctrl + wheel (and trackpad pinch, which sends Ctrl + wheel)
+    frame.addEventListener('wheel', event => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      zoomAt(Math.exp(-event.deltaY * 0.0025), event.clientX, event.clientY);
+    }, { passive: false });
+
+    // ---- drag, pinch and tap ----
+    const pointers = new Map();
+    let gesture = null;
+
+    frame.addEventListener('pointerdown', event => {
+      if (event.button !== undefined && event.button !== 0) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size === 1) {
+        const space = event.target.closest && event.target.closest(SPACE_SELECTOR);
+        gesture = { startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, space };
+      } else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        gesture = { pinchDistance: Math.hypot(a.x - b.x, a.y - b.y), moved: true };
+      }
+    });
+
+    window.addEventListener('pointermove', event => {
+      if (!pointers.has(event.pointerId) || !gesture) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (pointers.size >= 2 && gesture.pinchDistance) {
+        const [a, b] = [...pointers.values()];
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (distance > 0) zoomAt(distance / gesture.pinchDistance, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        gesture.pinchDistance = distance;
+        return;
+      }
+
+      if (!gesture.moved && Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {
+        gesture.moved = true;
+        frame.classList.add('dragging');
+        hideTooltip();
+      }
+      if (gesture.moved && gesture.lastX !== undefined) {
+        const s = scale();
+        view.x -= (event.clientX - gesture.lastX) / s;
+        view.y -= (event.clientY - gesture.lastY) / s;
+        clamp();
+        apply();
+      }
+      gesture.lastX = event.clientX;
+      gesture.lastY = event.clientY;
+    });
+
+    const endPointer = event => {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.delete(event.pointerId);
+      if (gesture && !gesture.moved && gesture.space && event.type === 'pointerup' && options.onSelect) {
+        options.onSelect(gesture.space.id);
+      }
+      if (!pointers.size) {
+        gesture = null;
+        frame.classList.remove('dragging');
+      } else if (gesture) {
+        // One finger left after a pinch: carry on as a drag, never a tap
+        const [rest] = [...pointers.values()];
+        gesture = { startX: rest.x, startY: rest.y, lastX: rest.x, lastY: rest.y, moved: true };
+      }
+    };
+    window.addEventListener('pointerup', endPointer);
+    window.addEventListener('pointercancel', endPointer);
+
+    // ---- hover tooltip (mouse only) ----
+    const tooltip = document.createElement('div');
+    tooltip.className = 'map-tooltip';
+    tooltip.hidden = true;
+    document.body.appendChild(tooltip);
+    function hideTooltip() { tooltip.hidden = true; }
+
+    frame.addEventListener('pointermove', event => {
+      if (event.pointerType !== 'mouse' || (gesture && gesture.moved)) return;
+      const space = event.target.closest && event.target.closest(SPACE_SELECTOR);
+      if (!space) return hideTooltip();
+      tooltip.textContent = options.tooltip ? options.tooltip(space.id) : spaceLabel(space.id);
+      tooltip.hidden = false;
+      const x = Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8);
+      const y = Math.min(event.clientY + 14, window.innerHeight - tooltip.offsetHeight - 8);
+      tooltip.style.left = `${x}px`;
+      tooltip.style.top = `${y}px`;
+    });
+    frame.addEventListener('pointerleave', hideTooltip);
+
+    // ---- selection ----
+    let selected = null;
+    function select(id) {
+      if (selected) selected.classList.remove('space-selected');
+      selected = id ? svg.getElementById(id) : null;
+      if (selected) selected.classList.add('space-selected');
+    }
+
+    // Zooms to a space if it's small on screen, and centers it
+    function showSpace(id) {
+      const el = svg.getElementById(id);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const frameRect = svg.getBoundingClientRect();
+      if (r.width < 28) zoomAt(Math.min(28 / Math.max(r.width, 1), 4), r.left + r.width / 2, r.top + r.height / 2);
+      const after = el.getBoundingClientRect();
+      const s = scale();
+      view.x += ((after.left + after.width / 2) - (frameRect.left + frameRect.width / 2)) / s;
+      view.y += ((after.top + after.height / 2) - (frameRect.top + frameRect.height / 2)) / s;
+      clamp();
+      apply();
+    }
+
+    function colorSpace(id, color) {
+      const el = svg.getElementById(id);
+      if (el) el.style.fill = color;
+    }
+
+    return { svg, spaces, select, fit, showSpace, colorSpace };
+  }
+
+  return { init, spaceNumber, spaceLabel };
+})();
+
+// Shared helpers for the floor-space pages
+window.floorApi = async function (url, options = {}) {
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    ...options,
+    headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) }
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || (result && result.success === false)) {
+    const message = (result && result.error) ||
+      (response.status === 401 ? 'Your login has expired. Please log in again.' : 'Something went wrong. Please try again.');
+    throw new Error(message);
+  }
+  return result;
+};
+
+window.floorToast = function (message, isError) {
+  let box = document.querySelector('.toasts');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'toasts';
+    box.setAttribute('aria-live', 'polite');
+    document.body.appendChild(box);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast${isError ? ' error' : ''}`;
+  toast.textContent = message;
+  box.appendChild(toast);
+  setTimeout(() => toast.remove(), isError ? 6000 : 3500);
+};
+
+// "2026-11" -> "November 2026"; shift("2026-11", 1) -> "2026-12"
+window.floorMonth = {
+  label: month => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }),
+  shift: (month, delta) => {
+    const date = new Date(`${month}-15T12:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + delta);
+    return date.toISOString().slice(0, 7);
+  },
+  current: () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).slice(0, 7)
+};
+</script>

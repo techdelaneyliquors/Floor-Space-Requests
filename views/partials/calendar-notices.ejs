@@ -1,0 +1,21 @@
+<%# Events this week from the store's Outlook calendar.
+    Expects: notices = { configured, calendars, events: [{ days, time, subject, location }], error } %>
+<% if (notices && notices.configured && (notices.calendars.length || notices.error)) { %>
+  <div class="calendar-notices">
+    <strong>📅 Calendar this week<%= notices.calendars.length ? ` (${notices.calendars.join(', ')})` : '' %>:</strong>
+    <% if (notices.events.length) { %>
+      <ul>
+        <% notices.events.forEach(event => { %>
+          <li>
+            <strong><%= event.days %></strong>, <%= event.time %>: <%= event.subject %><% if (event.location) { %> <span class="muted">· <%= event.location %></span><% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else if (!notices.error) { %>
+      <span class="muted">no events.</span>
+    <% } %>
+    <% if (notices.error) { %>
+      <div class="muted"><%= notices.error %></div>
+    <% } %>
+  </div>
+<% } %>

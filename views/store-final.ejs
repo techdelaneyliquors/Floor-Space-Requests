@@ -1,418 +1,277 @@
-<body style="background-color: lightgrey;">
-<h1>Final <%= storeName %> Store Map</h1>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Final <%= storeName %> Store Map</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <%- include('partials/floor-styles') %>
+  <style>
+    .reservations { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .reservations th, .reservations td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .reservations th { background: #f3f4f6; font-weight: 600; }
+    .reservations td.products { word-break: break-word; }
+    .reservations tr { cursor: pointer; }
+    .reservations tr:hover td { background: #f8fafc; }
+    .print-only { display: none; }
 
+    /* Phones: each reservation as a small card */
+    @media (max-width: 640px) {
+      .reservations thead { display: none; }
+      .reservations, .reservations tbody, .reservations tr, .reservations td { display: block; width: 100%; }
+      .reservations tr { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+      .reservations td { border: none; padding: 2px 0; }
+      .reservations td::before { content: attr(data-label) ": "; font-weight: 600; color: var(--muted); }
+    }
 
+    @media print {
+      .print-only { display: block; }
+      .reservations tr { cursor: default; }
+    }
+  </style>
+</head>
 
-<label for="monthPicker">Select Month:</label>
-<input type="month" id="monthPicker" value="<%= month %>">
+<body>
+<div class="container">
 
+  <div class="top-bar">
+    <div>
+      <h1>Final <%= storeName %> Store Map</h1>
+      <div class="who" id="monthHeading"></div>
+    </div>
+    <div class="top-actions no-print">
+      <button type="button" class="btn btn-plain" id="printBtn">🖨 Print reservations</button>
+      <a href="<%= mapPath %>" class="btn btn-purple">⬅ Interactive map</a>
+      <a href="/" class="btn btn-back">Home</a>
+      <form action="/logout" method="POST">
+        <button type="submit" class="btn btn-logout">Log out</button>
+      </form>
+    </div>
+  </div>
 
-<button class="btn btn-print" onclick="printReservations()">
-  🖨 Print Reservations
-</button>
+  <div class="banner" id="loadError" hidden></div>
 
+  <div class="card no-print">
+    <div class="toolbar">
+      <div class="month-nav">
+        <button type="button" class="btn btn-plain" id="prevMonth" aria-label="Previous month">‹</button>
+        <input type="month" id="monthPicker" value="<%= month %>" aria-label="Month">
+        <button type="button" class="btn btn-plain" id="nextMonth" aria-label="Next month">›</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot available"></i> Available <strong id="countAvailable"></strong></span>
+        <span><i class="dot requested"></i> Requested <strong id="countRequested"></strong></span>
+        <span><i class="dot reserved"></i> Reserved <strong id="countReserved"></strong></span>
+      </div>
+    </div>
+  </div>
 
-<style>
-  #svgContainer {
-  display: block;
-  margin: 20px auto;
-  justify-content: center;
-  align-items: center;
-}
+  <div class="floor-layout">
+    <div class="card map-card">
+      <div class="map-frame" id="mapFrame">
+        <%- include('maps/' + mapSvg) %>
+      </div>
+    </div>
 
-/* ✅ ensures SVG behaves like a block */
+    <aside class="card panel" id="panel" aria-live="polite">
+      <div class="panel-head">
+        <h2 id="panelTitle">Reservation details</h2>
+        <button type="button" class="panel-close" id="panelClose" aria-label="Close">×</button>
+      </div>
+      <div id="panelBody">
+        <p class="panel-empty">Tap a space to see who has it.</p>
+      </div>
+    </aside>
+  </div>
 
-#svgContainer svg {
-  display: block;
-  margin: 0 auto;
-  width: 100%;
-  max-width: <%= mapMaxWidth %>px;
-  height: auto;
-}
-.selected-box {
-  stroke: #00ccff !important;
-  stroke-width: 5 !important;
-  filter: drop-shadow(0 0 8px #00ccff);
-}
-.btn {
-  border: none;
-  padding: 6px 12px;
-  margin-left: 6px;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  text-decoration: none;
-}
-
-/* approve button */
-.btn-approve {
-  background-color: #0ad19b;
-  color: white;
-  border: 2px solid black;
-}
-
-.btn-approve:hover {
-  background-color: #09b889;
-  transform: translateY(-1px);
-}
-
-/* reject button */
-.btn-reject {
-  background-color: #dc3545;
-  color: white;
-  border: 2px solid black;
-}
-
-.btn-reject:hover {
-  background-color: #c82333;
-  transform: translateY(-1px);
-}
-
-.btn-logout {
-  background: linear-gradient(135deg,  #d94141, #d60b0b);
-  color: white;
-}
-
-.btn-logout:hover {
-  background: linear-gradient(135deg, #bf2e2e, #bd0b0b);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-
-
-.btn-home {
-  background-color: #2120ba; /* navy */
-  color: white;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-home:hover {
-  background-color: #1b1AA1;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-
-
-.btn-final {
-  background-color: #8c17bd; /* purple/indigo */
-  color: white;
-}
-
-.btn-final:hover {
-  background-color: #69118f;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-
-
-.btn-print {
-  background-color: #444;
-  color: white;
-  border: 2px solid black;
-}
-
-.btn-print:hover {
-  background-color: #2f2f2f;
-  tra
-}
-</style>
-<a href="<%= mapPath %>" class="btn btn-home">
-    ⬅ Back to Interactive Map
-</a>
-
-
-<form action="/logout" method="POST" style="display:inline;">
-  <button type="submit" class="btn btn-logout">
-    <span class="icon">➜</span> LOGOUT
-  </button>
-</form>
-
-
-<hr>
-
-<div id="reservationDetails" style="margin: 20px auto; max-width: 500px; border:1px solid #ccc; padding:15px; border-radius:10px; background:#f9f9f9;">
-  <h3>Reservation Details</h3>
-  <p id="detailsPlaceholder">Click a reserved space to view its reservation info.</p>
-
-  <div id="detailsContent" style="display:none;">
-    <p><strong>Spot:</strong> <span id="detailSpot"></span></p>
-    <p><strong>User:</strong> <span id="detailUser"></span></p>
-    <p><strong>Brand:</strong> <span id="detailBrand"></span></p>
-    <p><strong>Products:</strong> <span id="detailProducts"></span></p>
+  <div class="card" style="margin-top:16px;">
+    <h2 id="listTitle">Confirmed reservations</h2>
+    <div id="confirmedList"></div>
   </div>
 </div>
 
-<div id="svgContainer" style="background-color: lightgrey;">
-  <%- include('maps/' + mapSvg) %>
-</div>
-
-
-<h2>Confirmed Reservations</h2>
-<div id="confirmedList"></div>
-
-<h3 id="currentMonthLabel"><%= month %></h3>
-
+<%- include('partials/floor-map-script') %>
 
 <script>
-
-// This store's map (server-provided)
 const MAP_ID = <%- safeJson(mapId) %>;
-let selectedBox = null;
+const STORE_NAME = <%- safeJson(storeName) %>;
+const MAP_PATH = <%- safeJson(mapPath) %>;
+const COLORS = { available: '#22c55e', requested: '#facc15', reserved: '#ef4444' };
+const statusText = { available: 'Available', requested: 'Requested', reserved: 'Reserved' };
+const { spaceLabel, spaceNumber } = FloorMap;
 
-let currentRequests = <%- safeJson(requests) %>;
-
-// Vendor-entered text must be escaped before it goes into innerHTML
-// or document.write, or it could inject markup and scripts.
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-const monthInput = document.getElementById("monthPicker");
-const monthLabel = document.getElementById("currentMonthLabel");
-
-const STATUS_COLOR = {
-  available: "#00cc66",
-  requested: "#ffcc00",
-  reserved: "#ff3333"
+const state = {
+  month: <%- safeJson(month) %>,
+  rows: <%- safeJson(requests) %>,
+  selected: null
 };
 
-// initial render
-renderAll();
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === undefined || value === null || value === false) continue;
+    if (key === 'class') el.className = value;
+    else if (key.startsWith('on')) el.addEventListener(key.slice(2), value);
+    else el.setAttribute(key, value === true ? '' : value);
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined || child === false) continue;
+    el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}
 
-// month changes update data WITHOUT page reload
-monthInput.addEventListener("change", async () => {
-  const newMonth = monthInput.value;
-  if (!newMonth) return;
+const reservedFor = id => state.rows.find(row => row.item_id === id && row.status === 'reserved');
+const pendingFor = id => state.rows.filter(row => row.item_id === id && row.status === 'requested');
+const statusOf = id => reservedFor(id) ? 'reserved' : pendingFor(id).length ? 'requested' : 'available';
 
-  try {
-    const response = await fetch(`/api/final-data?month=${encodeURIComponent(newMonth)}&map=${encodeURIComponent(MAP_ID)}`);
-    const data = await response.json();
-
-    currentRequests = data;
-    monthLabel.textContent = newMonth;
-
-    clearDetails();
-    renderAll();
-  } catch (err) {
-    console.error("Month load failed:", err);
+const map = FloorMap.init(document.getElementById('mapFrame'), {
+  onSelect: id => openSpace(id),
+  tooltip: id => {
+    const reserved = reservedFor(id);
+    const pending = pendingFor(id).length;
+    return `${spaceLabel(id)} · ${reserved ? `Reserved · ${reserved.brand}` : pending ? `${pending} pending request${pending === 1 ? '' : 's'}` : 'Available'}`;
   }
 });
 
-function renderAll() {
-  renderMap();
+function render() {
+  const counts = { available: 0, requested: 0, reserved: 0 };
+  map.spaces.forEach(el => {
+    const status = statusOf(el.id);
+    counts[status]++;
+    map.colorSpace(el.id, COLORS[status]);
+  });
+  document.getElementById('countAvailable').textContent = counts.available;
+  document.getElementById('countRequested').textContent = counts.requested;
+  document.getElementById('countReserved').textContent = counts.reserved;
+  document.getElementById('monthHeading').textContent = floorMonth.label(state.month);
   renderList();
+  if (state.selected) renderPanel();
 }
-
-
-function renderMap() {
-  const boxes = document.querySelectorAll('path[id^="FloorSpace"]');
-
-  // reset all boxes
-  boxes.forEach(el => {
-    el.style.fill = "#00cc66";
-    el.style.cursor = "default";
-    el.onclick = null;
-    el.classList.remove("selected-box"); // ✅ remove highlight
-  });
-
-  // apply DB state
-  currentRequests.forEach(row => {
-    const el = document.getElementById(row.item_id);
-    if (!el) return;
-
-    el.style.fill = STATUS_COLOR[row.status] || "#00cc66";
-
-    // ✅ ONLY reserved clickable
-    if (row.status === "reserved") {
-
-      el.style.cursor = "pointer";
-
-      el.onclick = () => {
-
-        // ✅ remove previous highlight
-        if (selectedBox) {
-          selectedBox.classList.remove("selected-box");
-        }
-
-        // ✅ set new highlight
-        el.classList.add("selected-box");
-        selectedBox = el;
-
-        // ✅ show data
-        showDetails(row);
-      };
-    }
-  });
-}
-
 
 function renderList() {
-  const container = document.getElementById("confirmedList");
-  const reserved = currentRequests.filter(r => r.status === "reserved");
-
-  if (reserved.length === 0) {
-    container.innerHTML = "<p>No confirmed reservations yet.</p>";
+  const reserved = state.rows
+    .filter(row => row.status === 'reserved')
+    .sort((a, b) => spaceNumber(a.item_id) - spaceNumber(b.item_id));
+  document.getElementById('listTitle').textContent = `Confirmed reservations: ${floorMonth.label(state.month)} (${reserved.length})`;
+  const box = document.getElementById('confirmedList');
+  if (!reserved.length) {
+    box.replaceChildren(h('p', { class: 'meta', style: 'margin:0;' }, 'No confirmed reservations yet.'));
     return;
   }
-
-  
-  container.innerHTML = reserved.map(req => `
-    <div style="
-      border: 2px solid black;         /* ✅ black outline */
-      background-color: white;         /* ✅ white box */
-      padding: 10px;
-      margin: 10px auto;               /* ✅ center cards */
-      border-radius: 8px;
-    ">
-      <strong>Spot:</strong> ${escapeHtml(req.item_id)}<br>
-      <strong>User:</strong> ${escapeHtml(req.user)}<br>
-      <strong>Brand:</strong> ${escapeHtml(req.brand)}<br>
-      <strong>Products:</strong> ${escapeHtml(req.products)}
-    </div>
-  `).join("");
-
+  box.replaceChildren(h('table', { class: 'reservations' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Space'), h('th', {}, 'Requested by'), h('th', {}, 'Brand'), h('th', {}, 'Products'))),
+    h('tbody', {}, reserved.map(row => h('tr', { onclick: () => { map.showSpace(row.item_id); openSpace(row.item_id); } },
+      h('td', { 'data-label': 'Space' }, spaceLabel(row.item_id)),
+      h('td', { 'data-label': 'Requested by' }, row.user || ''),
+      h('td', { 'data-label': 'Brand' }, row.brand || ''),
+      h('td', { 'data-label': 'Products', class: 'products' }, row.products || '')
+    )))
+  ));
 }
 
-function showDetails(row) {
-  document.getElementById("detailsPlaceholder").style.display = "none";
-  document.getElementById("detailsContent").style.display = "block";
+// ---------- panel ----------
+const panel = document.getElementById('panel');
 
-  document.getElementById("detailSpot").textContent = row.item_id || "";
-  document.getElementById("detailUser").textContent = row.user || "";
-  document.getElementById("detailBrand").textContent = row.brand || "";
-  document.getElementById("detailProducts").textContent = row.products || "";
+function openSpace(id) {
+  state.selected = id;
+  map.select(id);
+  renderPanel();
+  panel.classList.add('open');
 }
 
-function clearDetails() {
-  document.getElementById("detailsPlaceholder").style.display = "block";
-  document.getElementById("detailsContent").style.display = "none";
+function closePanel() {
+  state.selected = null;
+  map.select(null);
+  panel.classList.remove('open');
+  document.getElementById('panelTitle').textContent = 'Reservation details';
+  document.getElementById('panelBody').replaceChildren(h('p', { class: 'panel-empty' }, 'Tap a space to see who has it.'));
+}
+document.getElementById('panelClose').addEventListener('click', closePanel);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.selected) closePanel(); });
 
-  document.getElementById("detailSpot").textContent = "";
-  document.getElementById("detailUser").textContent = "";
-  document.getElementById("detailBrand").textContent = "";
-  document.getElementById("detailProducts").textContent = "";
+function details(row) {
+  return h('div', { class: 'request' },
+    h('div', { class: 'who' }, row.user || ''),
+    h('div', { class: 'what' }, h('strong', {}, row.brand || ''), row.products ? ` · ${row.products}` : ''));
 }
 
+function renderPanel() {
+  const id = state.selected;
+  const status = statusOf(id);
+  document.getElementById('panelTitle').textContent = spaceLabel(id);
+  const reserved = reservedFor(id);
+  const pending = pendingFor(id);
+  document.getElementById('panelBody').replaceChildren(
+    h('div', {}, h('span', { class: `chip ${status}` }, statusText[status]), ` ${floorMonth.label(state.month)}`),
+    reserved ? h('div', { class: 'panel-section' }, h('h3', {}, 'Reserved by'), details(reserved)) : null,
+    pending.length ? h('div', { class: 'panel-section' },
+      h('h3', {}, `Pending requests (${pending.length})`),
+      pending.map(details),
+      h('a', { href: MAP_PATH, class: 'btn btn-plain btn-small' }, 'Review on the interactive map')) : null,
+    !reserved && !pending.length ? h('div', { class: 'panel-section' }, h('div', { class: 'note' }, 'Nobody has this space this month.')) : null
+  );
+}
 
+// ---------- month ----------
+async function setMonth(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  document.getElementById('monthPicker').value = month;
+  const banner = document.getElementById('loadError');
+  try {
+    state.rows = await floorApi(`/api/final-data?month=${encodeURIComponent(month)}&map=${encodeURIComponent(MAP_ID)}`);
+    state.month = month;
+    banner.hidden = true;
+    history.replaceState(null, '', `?month=${encodeURIComponent(month)}`);
+  } catch (err) {
+    banner.textContent = `Couldn't load ${floorMonth.label(month)}: ${err.message}`;
+    banner.hidden = false;
+  }
+  render();
+}
+document.getElementById('monthPicker').addEventListener('change', event => setMonth(event.target.value));
+document.getElementById('prevMonth').addEventListener('click', () => setMonth(floorMonth.shift(state.month, -1)));
+document.getElementById('nextMonth').addEventListener('click', () => setMonth(floorMonth.shift(state.month, 1)));
 
-function printReservations() {
-  const reserved = currentRequests.filter(r => r.status === "reserved");
-
-  if (reserved.length === 0) {
-    alert("No confirmed reservations to print.");
+// ---------- print: the reservations as a plain table ----------
+document.getElementById('printBtn').addEventListener('click', () => {
+  const reserved = state.rows.filter(row => row.status === 'reserved')
+    .sort((a, b) => spaceNumber(a.item_id) - spaceNumber(b.item_id));
+  if (!reserved.length) {
+    floorToast('No confirmed reservations to print.', true);
     return;
   }
+  const win = window.open('', '_blank', 'width=1000,height=800');
+  if (!win) {
+    floorToast('Allow pop-ups for this site to print.', true);
+    return;
+  }
+  const doc = win.document;
+  doc.title = 'Confirmed Reservations';
+  const style = doc.createElement('style');
+  style.textContent = '@page{margin:0.4in}body{font-family:Arial,sans-serif;margin:0}h1{font-size:18px;margin:0 0 6px}' +
+    '.meta{font-size:12px;margin-bottom:10px}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}' +
+    'th,td{border:1px solid #000;padding:4px 6px;text-align:left;vertical-align:top;word-wrap:break-word}' +
+    'th:nth-child(1){width:12%}th:nth-child(2){width:20%}th:nth-child(3){width:20%}';
+  doc.head.appendChild(style);
+  const make = (tag, text) => { const el = doc.createElement(tag); if (text !== undefined) el.textContent = text; return el; };
+  const table = make('table');
+  const headRow = make('tr');
+  ['Space', 'Requested by', 'Brand', 'Products'].forEach(text => headRow.appendChild(make('th', text)));
+  table.appendChild(make('thead')).appendChild(headRow);
+  const tbody = table.appendChild(make('tbody'));
+  reserved.forEach(row => {
+    const tr = tbody.appendChild(make('tr'));
+    [spaceLabel(row.item_id), row.user || '', row.brand || '', row.products || ''].forEach(text => tr.appendChild(make('td', text)));
+  });
+  doc.body.append(make('h1', `${STORE_NAME}: Confirmed Reservations`), make('div', floorMonth.label(state.month)), table);
+  doc.body.children[1].className = 'meta';
+  win.focus();
+  setTimeout(() => win.print(), 300);
+});
 
-  const month = monthLabel ? monthLabel.textContent : (monthInput ? monthInput.value : "");
-  const rows = reserved.map(req => `
-    <tr>
-      <td>${escapeHtml(req.item_id)}</td>
-      <td>${escapeHtml(req.user)}</td>
-      <td>${escapeHtml(req.brand)}</td>
-      <td>${escapeHtml(req.products)}</td>
-    </tr>
-  `).join("");
-
-  const printWindow = window.open("", "_blank", "width=1000,height=800");
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Confirmed Reservations</title>
-      <style>
-        @page {
-          size: auto;
-          margin: 0.4in;
-        }
-
-        body {
-          font-family: Arial, sans-serif;
-          color: black;
-          background: white;
-          margin: 0;
-          padding: 0;
-        }
-
-        h1 {
-          font-size: 18px;
-          margin: 0 0 6px 0;
-        }
-
-        .meta {
-          font-size: 12px;
-          margin-bottom: 10px;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          table-layout: fixed;
-          font-size: 12px;
-        }
-
-        th, td {
-          border: 1px solid black;
-          padding: 4px 6px;
-          text-align: left;
-          vertical-align: top;
-          word-wrap: break-word;
-        }
-
-        th {
-          background: white;
-          font-weight: bold;
-        }
-
-        .col-spot { width: 16%; }
-        .col-user { width: 20%; }
-        .col-brand { width: 20%; }
-        .col-products { width: 44%; }
-
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <h1>Confirmed Reservations</h1>
-      <div class="meta">Map: ${escapeHtml(MAP_ID)} ${month ? `| Month: ${escapeHtml(month)}` : ""}</div>
-
-      <table>
-        <thead>
-          <tr>
-            <th class="col-spot">Spot</th>
-            <th class="col-user">User</th>
-            <th class="col-brand">Brand</th>
-            <th class="col-products">Products</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  printWindow.focus();
-
-  setTimeout(() => {
-    printWindow.print();
-  }, 300);
-}
+render();
 </script>
-
-
-
-
 </body>
+</html>

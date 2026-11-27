@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Events</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%- include('partials/schedule-review-styles') %>
+
+  <style>
+    .container { max-width: 1300px; }
+    .top-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+    .month-nav { display: flex; align-items: center; gap: 8px; }
+    .month-nav h2 { margin: 0 6px; font-size: 22px; min-width: 190px; text-align: center; }
+    .nav-btn { background: #e5e7eb; color: #1f2937; }
+    .pickers label { font-size: 14px; font-weight: 600; }
+    .pickers select {
+      padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: 14px; font-family: inherit; margin-left: 6px;
+    }
+    .legend-cal { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: #475569; margin-top: 10px; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+    .notice { border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+    .notice.setup { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+    .notice.error { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; }
+    .notice code { font-size: 13px; }
+    .notice .detail { font-size: 12px; color: #6b7280; margin-top: 4px; word-break: break-word; }
+
+    /* Month grid */
+    .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+    .dow { background: #f3f4f6; font-weight: 600; font-size: 13px; text-align: center; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+    .day { min-height: 110px; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; padding: 4px; min-width: 0; }
+    .day:nth-child(7n) { border-right: none; }
+    .day.out { background: #fafafa; }
+    .day.out .num { color: #9ca3af; }
+    .num { font-size: 13px; font-weight: 600; margin: 2px 4px 4px; }
+    .day.today .num {
+      display: inline-block; background: #2120ba; color: white; border-radius: 999px;
+      min-width: 22px; text-align: center; padding: 1px 4px; margin-left: 2px;
+    }
+    .ev {
+      display: block; font-size: 12px; line-height: 1.3; border-radius: 5px; padding: 2px 5px; margin-bottom: 3px;
+      background: color-mix(in srgb, var(--c) 14%, white); border-left: 3px solid var(--c);
+      color: #1f2937; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    a.ev:hover { background: color-mix(in srgb, var(--c) 24%, white); }
+    .ev .t { color: #475569; font-variant-numeric: tabular-nums; }
+    .ev.private { font-style: italic; color: #6b7280; }
+
+    /* Agenda */
+    .agenda-day { margin-bottom: 14px; }
+    .agenda-day h3 { margin: 0 0 6px; font-size: 15px; }
+    .agenda-day.today h3::after { content: "Today"; margin-left: 8px; font-size: 12px; background: #2120ba; color: white; border-radius: 999px; padding: 1px 8px; vertical-align: 2px; }
+    .agenda-item { display: flex; gap: 12px; padding: 8px 10px; border-left: 4px solid var(--c); background: #f8fafc; border-radius: 6px; margin-bottom: 6px; }
+    .agenda-item .when { min-width: 130px; font-size: 14px; color: #475569; font-variant-numeric: tabular-nums; }
+    .agenda-item .what { font-size: 14px; min-width: 0; }
+    .agenda-item .what strong { display: block; }
+    .agenda-item .sub { color: #6b7280; font-size: 13px; }
+    .agenda-item a { color: #2120ba; font-size: 13px; }
+
+    @media (max-width: 760px) {
+      .month-card { display: none; }
+      .month-nav h2 { min-width: 0; font-size: 18px; }
+      .agenda-item { flex-direction: column; gap: 2px; }
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print { display: none !important; }
+      .card { box-shadow: none; padding: 0; }
+      .ev, .agenda-item { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: landscape; margin: 0.3in; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <div class="top-bar">
+    <h1>Events</h1>
+    <div class="top-actions no-print">
+      <button type="button" class="btn btn-back" onclick="window.print()">Print</button>
+      <a href="/" class="btn btn-back">⬅ Home</a>
+    </div>
+  </div>
+
+  <% if (missing.length) { %>
+    <div class="notice setup">
+      The Outlook connection isn't set up yet.
+      <% if (isAdmin) { %>
+        Missing setting<%= missing.length === 1 ? '' : 's' %>: <code><%= missing.join(', ') %></code>.
+      <% } else { %>
+        Please check back later.
+      <% } %>
+    </div>
+  <% } %>
+
+  <% errors.forEach(error => { %>
+    <div class="notice error">
+      <strong><%= error.label %>:</strong> <%= error.message %>
+      <% if (error.detail) { %><div class="detail"><%= error.detail %></div><% } %>
+    </div>
+  <% }) %>
+
+  <div class="card no-print">
+    <div class="toolbar">
+      <div class="month-nav">
+        <a class="btn nav-btn" href="?month=<%= previousMonth %>&calendar=<%= encodeURIComponent(calendarKey) %>" aria-label="Previous month">‹</a>
+        <h2><%= monthLabel %></h2>
+        <a class="btn nav-btn" href="?month=<%= nextMonth %>&calendar=<%= encodeURIComponent(calendarKey) %>" aria-label="Next month">›</a>
+        <% if (month !== thisMonth) { %>
+          <a class="btn nav-btn" href="?month=<%= thisMonth %>&calendar=<%= encodeURIComponent(calendarKey) %>">Today</a>
+        <% } %>
+      </div>
+
+      <form class="pickers" method="GET">
+        <input type="hidden" name="month" value="<%= month %>">
+        <% if (calendars.length > 1) { %>
+          <label>
+            Calendar
+            <select name="calendar" onchange="this.form.submit()">
+              <option value="all" <%= calendarKey === 'all' ? 'selected' : '' %>>All calendars</option>
+              <% calendars.forEach(calendar => { %>
+                <option value="<%= calendar.key %>" <%= calendar.key === calendarKey ? 'selected' : '' %>><%= calendar.label %></option>
+              <% }) %>
+            </select>
+          </label>
+          <noscript><button type="submit" class="btn btn-back">Show</button></noscript>
+        <% } %>
+        <% if (isAdmin) { %>
+          <a class="btn nav-btn" href="?month=<%= month %>&calendar=<%= encodeURIComponent(calendarKey) %>&refresh=1"
+             title="Events are kept for 5 minutes; this reloads them from Outlook now">Refresh from Outlook</a>
+        <% } %>
+      </form>
+    </div>
+
+    <% if (calendars.length > 1) { %>
+      <div class="legend-cal">
+        <% calendars.filter(calendar => calendarKey === 'all' || calendar.key === calendarKey).forEach(calendar => { %>
+          <span><span class="swatch" style="background:<%= calendar.color %>"></span><%= calendar.label %></span>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="card month-card">
+    <div class="month-grid">
+      <% ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(name => { %>
+        <div class="dow"><%= name %></div>
+      <% }) %>
+      <% weeks.forEach(week => { %>
+        <% week.forEach(day => { %>
+          <div class="day<%= day.inMonth ? '' : ' out' %><%= day.isToday ? ' today' : '' %>">
+            <div class="num"><%= day.day %></div>
+            <% day.events.forEach(event => { %>
+              <% const tip = [event.subject, event.time, event.location, calendars.length > 1 ? event.calendarLabel : ''].filter(Boolean).join(' · ') %>
+              <% if (event.webLink) { %>
+                <a class="ev" style="--c:<%= event.color %>" href="<%= event.webLink %>" target="_blank" rel="noopener noreferrer" title="<%= tip %>">
+                  <span class="t"><%= event.time %></span> <%= event.subject %>
+                </a>
+              <% } else { %>
+                <span class="ev<%= event.isPrivate ? ' private' : '' %>" style="--c:<%= event.color %>" title="<%= tip %>">
+                  <span class="t"><%= event.time %></span> <%= event.subject %>
+                </span>
+              <% } %>
+            <% }) %>
+          </div>
+        <% }) %>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 12px;font-size:18px;"><%= monthLabel %>: list</h2>
+    <% if (!agenda.length) { %>
+      <p class="meta" style="margin:0;"><%= missing.length || errors.length ? 'No events could be loaded.' : 'No events this month.' %></p>
+    <% } %>
+    <% agenda.forEach(day => { %>
+      <div class="agenda-day<%= day.isToday ? ' today' : '' %>">
+        <h3><%= day.label %></h3>
+        <% day.events.forEach(event => { %>
+          <div class="agenda-item" style="--c:<%= event.color %>">
+            <div class="when"><%= event.time %></div>
+            <div class="what">
+              <strong><%= event.subject %></strong>
+              <% const sub = [event.location, event.organizer && `Organizer: ${event.organizer}`, calendars.length > 1 ? event.calendarLabel : ''].filter(Boolean).join(' · ') %>
+              <% if (sub) { %><div class="sub"><%= sub %></div><% } %>
+              <% if (event.webLink) { %><a href="<%= event.webLink %>" target="_blank" rel="noopener noreferrer" class="no-print">Open in Outlook</a><% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% }) %>
+  </div>
+</div>
+</body>
+</html>

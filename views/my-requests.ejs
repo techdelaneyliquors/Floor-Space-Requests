@@ -1,208 +1,116 @@
-
-<h1>My Requests</h1>
-
-<div class="top-bar">
-<a href="/" class="btn btn-home">
-  ⬅ Back to Store Index
-</a>
-
-<a id="backToMapLink" href="/branfordstoremap" class="btn btn-map">
-    ⬅ Back to Interactive Map
-</a>
-</div>
-<hr>
-
-
-<label for="storePicker">Store:</label>
-<select id="storePicker">
-  <option value="">All Stores</option>
-  <option value="branford">Branford</option>
-  <option value="Hamden">Hamden</option>
-  <option value="stratford">Stratford</option>
-  <option value="New Haven">New Haven</option>
-  <option value="New Milford">New Milford</option>
-</select>
-
+<!DOCTYPE html>
+<html>
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Requests</title>
+  <link rel="icon" type="image/png" href="/Images/Enjoy%20Logo%20Heron.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <%- include('partials/floor-styles') %>
   <style>
-    body {
-      background-image: url('/Images/Enjoy Logo w Text.png');
-      background-size: 40%;
-      background-position: center;
-      background-repeat: no-repeat;
+    .container { max-width: 1100px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .filters label { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .filters select, .filters input[type="month"] {
+      padding: 7px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 14px; background: white;
     }
-
-    
-    /* request card base style */
-    .request-card {
-      background-color: white;
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 8px;
-    }
-
-    /* status colors */
-    .requested {
-      background-color: #fff8cc;
-    }
-
-    .reserved {
-      background-color: #89C9B2;
-    }
-
-    .rejected {
-      background-color: #CC7878;
-    }
-
-.top-bar {
-  display: flex;
-  justify-content: space-between; /* ✅ pushes items apart */
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-
-
-    .btn {
-  border: none;
-  padding: 6px 12px;
-  margin-left: 6px;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-    .btn-home {
-  background-color: #2120ba; /* navy */
-  color: white;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-home:hover {
-  background-color: #1b1AA1;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-.btn-map {
-  background-color: #ce1111;
-  color: white;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-map:hover {
-  background-color: #a00c0c;
-}
+    .requests-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .request-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; border-left: 5px solid var(--c, #cbd5e1); }
+    .request-card .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .request-card .head strong { font-size: 16px; }
+    .request-card .line { font-size: 14px; margin-top: 3px; word-break: break-word; }
+    .request-card .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
   </style>
 </head>
 
-
-<label for="monthPicker">Filter by Month:</label>
-<input type="month" id="monthPicker">
-
-
-<% if (requests.length === 0) { %>
-  <p>No requests yet.</p>
-<% } %>
-
-<p id="noResults" style="display:none;">No requests for this month.</p>
-
-<% requests.forEach(req => { %>
-  
-<div class="request-card <%= req.status %>" 
-  data-month="<%= req.month %>"
-  data-store="<%= req.map_id %>"
->
-
-    
-
-    <strong>Spot:</strong> <%= req.item_id %><br>
-    <strong>Brand:</strong> <%= req.brand %><br>
-    <strong>Products:</strong> <%= req.products %><br>
-    <strong>Status:</strong> <%= req.status %><br>
-    <strong>Month:</strong> <%= req.month %><br>
-    <strong>Requested:</strong> <%= new Date(req.created_at).toLocaleString() %>
-
+<body>
+<div class="container">
+  <div class="top-bar">
+    <div>
+      <h1>My Requests</h1>
+      <div class="who">Signed in as <%= user.name %></div>
+    </div>
+    <div class="top-actions">
+      <a id="backToMapLink" href="<%= storeOptions.length ? storeOptions[0].mapPath : '/' %>" class="btn btn-purple">⬅ Store map</a>
+      <a href="/" class="btn btn-back">Home</a>
+    </div>
   </div>
-<% }) %>
 
+  <div class="card">
+    <div class="filters">
+      <label>
+        Store
+        <select id="storePicker">
+          <option value="">All stores</option>
+          <% storeOptions.forEach(option => { %>
+            <option value="<%= option.mapId %>" <%= option.mapId === selectedStore ? 'selected' : '' %>><%= option.label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Month
+        <input type="month" id="monthPicker">
+      </label>
+      <button type="button" class="btn btn-plain btn-small" id="allMonths">All months</button>
+      <span class="meta" id="resultCount"></span>
+    </div>
+  </div>
 
+  <% const labels = Object.fromEntries(storeOptions.map(option => [option.mapId, option.label])) %>
+  <% const statusText = { requested: 'Waiting for approval', reserved: 'Approved', rejected: 'Declined' } %>
+  <% const colors = { requested: '#facc15', reserved: '#22c55e', rejected: '#94a3b8' } %>
+
+  <div class="card">
+    <% if (!requests.length) { %>
+      <p class="meta" style="margin:0;">You haven't requested any floor space yet. Open a store map and tap a space to request it.</p>
+    <% } %>
+    <p class="meta" id="noResults" style="margin:0;" hidden>No requests match these filters.</p>
+    <div class="requests-grid">
+      <% requests.forEach(req => { %>
+        <% const number = String(req.item_id || '').replace(/\D/g, '') %>
+        <div class="request-card" style="--c:<%= colors[req.status] || '#cbd5e1' %>" data-month="<%= req.month %>" data-store="<%= req.map_id %>">
+          <div class="head">
+            <strong>Space <%= number || req.item_id %></strong>
+            <span class="chip <%= req.status === 'reserved' ? 'approved' : req.status %>"><%= statusText[req.status] || req.status %></span>
+          </div>
+          <div class="line"><%= labels[req.map_id] || req.map_id %> · <%= new Date(`${req.month}-15T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }) %></div>
+          <div class="line"><strong><%= req.brand %></strong></div>
+          <div class="line"><%= req.products %></div>
+          <div class="sub">Requested <%= new Date(req.created_at).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) %></div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</div>
 
 <script>
-
-const monthPicker = document.getElementById("monthPicker");
-const storePicker = document.getElementById("storePicker");
-storePicker.value = "<%= selectedStore %>";
-const cards = document.querySelectorAll(".request-card");
-const noResults = document.getElementById("noResults");
+const STORE_ROUTES = <%- safeJson(Object.fromEntries(storeOptions.map(option => [option.mapId, option.mapPath]))) %>;
+const monthPicker = document.getElementById('monthPicker');
+const storePicker = document.getElementById('storePicker');
+const cards = [...document.querySelectorAll('.request-card')];
 
 function filterCards() {
-  let visibleCount = 0;
-
-  const selectedMonth = monthPicker.value;
-  const selectedStore = storePicker.value;
-
+  const month = monthPicker.value;
+  const store = storePicker.value;
+  let shown = 0;
   cards.forEach(card => {
-    const cardMonth = card.getAttribute("data-month");
-    const cardStore = card.getAttribute("data-store");
-
-    const monthMatch = !selectedMonth || cardMonth === selectedMonth;
-    const storeMatch = !selectedStore || cardStore === selectedStore;
-    
-    console.log("Picker:", selectedMonth);
-    console.log("Card:", cardMonth);
-
-
-    if (monthMatch && storeMatch) {
-      card.style.display = "block";
-      visibleCount++;
-    } else {
-      card.style.display = "none";
-    }
+    const visible = (!month || card.dataset.month === month) && (!store || card.dataset.store === store);
+    card.hidden = !visible;
+    if (visible) shown++;
   });
-
-  noResults.style.display = visibleCount === 0 ? "block" : "none";
+  document.getElementById('noResults').hidden = !cards.length || shown > 0;
+  document.getElementById('resultCount').textContent = cards.length ? `${shown} of ${cards.length}` : '';
+  const link = document.getElementById('backToMapLink');
+  if (STORE_ROUTES[store]) link.href = STORE_ROUTES[store];
 }
 
-// trigger on both controls
-monthPicker.addEventListener("change", filterCards);
+monthPicker.addEventListener('change', filterCards);
+storePicker.addEventListener('change', filterCards);
+document.getElementById('allMonths').addEventListener('click', () => { monthPicker.value = ''; filterCards(); });
 
-storePicker.addEventListener("change", () => {
-  updateMapLink();   // ✅ update button
-  filterCards();     // your existing function
-});
-
-// default month
-const today = new Date();
-monthPicker.value = today.toISOString().slice(0, 7);
-
-// initial render
+// This month in store time
+monthPicker.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).slice(0, 7);
 filterCards();
-
-
-const storeRoutes = {
-  "branford": '/branfordstoremap',
-  "Hamden": '/Hamdenstoremap',
-  "stratford": '/stratfordstoremap',
-  "New Haven" : '/New-Havenstoremap',
-  "New Milford" : '/New-Milfordstoremap',
-};
-
-const backToMapLink = document.getElementById("backToMapLink");
-
-function updateMapLink() {
-  const selectedStore = storePicker.value;
-  backToMapLink.href = storeRoutes[selectedStore] || "/";
-  
-
-  
-  if (!selectedStore) {
-    backToMapLink.href = "/branfordstoremap";
-    return;
-  }
-}
-updateMapLink()
-
 </script>
+</body>
+</html>

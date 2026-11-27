@@ -52,6 +52,12 @@
 </a>
 <% } %>
 
+<% if (canSeeEvents) { %>
+<a href="/events" class="btn btn-final">
+  Events
+</a>
+<% } %>
+
 <% if (user.role === 'manager') { %>
 <a href="/posted-schedules" class="btn btn-admin">
   Posted Schedules

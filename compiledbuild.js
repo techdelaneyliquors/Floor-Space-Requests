@@ -82,6 +82,7 @@ const WeeklyHours = require('./models/WeeklyHours')
 const { buildBackup } = require('./lib/backup')
 const { buildPreviousWeekReport, renderPreviousWeekPdf } = require('./lib/previousWeekReport')
 const scheduleEmails = require('./lib/scheduleEmails')
+const outlookCalendar = require('./lib/outlookCalendar')
 const SCHEDULE_STORES = require('./config/scheduleStores')
 const TimeOffRequest = require('./models/TimeOffRequest')
 const EmployeeAvailability = require('./models/EmployeeAvailability')
@@ -3482,6 +3483,7 @@ app.get('/', ...approvedPage, async (req, res) => {
     pendingScheduleCount,
     // Scheduling Review, one per store the person manages
     reviewStores: STORE_LIST.filter(store => canManageStore(req.user, store)),
+    canSeeEvents: canSeeEvents(req.user),
     canRequestTimeOff: ['employee', 'manager'].includes(req.user.role),
     pendingTimeOffCount: await pendingTimeOffCount(req.user)
   })
@@ -4385,9 +4387,17 @@ app.get('/schedule-approvals', ...adminPage, async (req, res) => {
       .map(async store => [store, await keyholderContext(store)])
   ))
 
+  // Each week's events from the store's Outlook calendar (never blocks the page)
+  const noticesFor = await Promise.all(pending.map(doc =>
+    calendarNoticesFor(doc.store, doc.weekStart).catch(err => {
+      console.error('Calendar notices error:', err)
+      return { configured: true, calendars: [], events: [], error: 'Calendar events could not be loaded.' }
+    })))
+
   res.render('schedule-approvals.ejs', {
     user: req.user,
-    items: pending.map(doc => ({
+    items: pending.map((doc, index) => ({
+      calendarNotices: noticesFor[index],
       id: String(doc._id),
       store: doc.store,
       weekStart: doc.weekStart,
@@ -4527,6 +4537,216 @@ app.get('/posted-schedules', ...approvedPage, requireRole('manager'), async (req
     // "Send to Paychex" setup for this admin or manager
     paychexSyncKeyCreatedAt: req.user.paychexSyncKeyHash ? req.user.paychexSyncKeyCreatedAt : null
   })
+})
+
+// ------------------------
+// EVENTS (OUTLOOK CALENDARS, READ LIVE)
+// ------------------------
+//
+// lib/outlookCalendar.js reads the calendars in OUTLOOK_CALENDARS through
+// Microsoft Graph each time (cached in memory for 5 minutes); nothing is
+// saved to the database. OUTLOOK_EVENTS_ROLES (comma-separated, default
+// "admin,manager") sets who can open the page.
+
+const eventsRoles = () => String(process.env.OUTLOOK_EVENTS_ROLES || 'admin,manager')
+  .split(',').map(role => role.trim().toLowerCase()).filter(Boolean)
+
+const canSeeEvents = user => Boolean(user) && (user.role === 'admin' || eventsRoles().includes(user.role))
+
+// The store a calendar is named for ("Branford Scheduling Events"), or ''
+function calendarStore(label) {
+  const name = String(label || '').trim().toLowerCase()
+  return [...STORE_LIST]
+    .sort((a, b) => b.length - a.length)
+    .find(store => name === store.toLowerCase() || name.startsWith(`${store.toLowerCase()} `)) || ''
+}
+
+// "13:30" -> "1:30 PM"
+function clockText(hhmm) {
+  const [hours, minutes] = String(hhmm || '').split(':').map(Number)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return ''
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`
+}
+
+app.get('/events', ...approvedPage, async (req, res) => {
+  if (!canSeeEvents(req.user)) return sendForbiddenPage(res)
+
+  const isAdmin = req.user.role === 'admin'
+  const today = storeToday()
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month || '')) ? String(req.query.month) : today.slice(0, 7)
+  const monthStart = `${month}-01`
+  const nextMonthStart = addDaysYmd(monthStart, 32).slice(0, 7) + '-01'
+  const monthEnd = addDaysYmd(nextMonthStart, -1)
+
+  // Monday-to-Sunday weeks covering the month
+  const gridStart = mondayOf(monthStart)
+  const gridEnd = addDaysYmd(mondayOf(monthEnd), 6)
+
+  // Admins can skip the memory cache (5 minutes for events, 10 for the
+  // list of calendars)
+  if (isAdmin && req.query.refresh === '1') outlookCalendar.clearCache()
+
+  const missing = outlookCalendar.missingSettings()
+  const listed = missing.length ? { calendars: [], errors: [] } : await outlookCalendar.listCalendars()
+
+  // "Branford Scheduling Events" belongs to Branford: people see the
+  // calendars of their own stores, plus any not named for a store
+  const calendars = listed.calendars.filter(calendar => {
+    const store = calendarStore(calendar.label)
+    return !store || canAccessStore(req.user, store)
+  })
+  const requested = String(req.query.calendar || 'all')
+  const chosen = calendars.filter(calendar => requested === 'all' || calendar.key === requested)
+  const shown = chosen.length ? chosen : calendars
+
+  const loaded = shown.length
+    ? await outlookCalendar.eventsFor(shown, gridStart, gridEnd)
+    : { events: [], errors: [] }
+  const events = loaded.events
+  // Finding the calendars failed (e.g. no consent yet): admins see why
+  const errors = [...(isAdmin ? listed.errors : listed.errors.length ? [{ label: 'Outlook', message: listed.errors[0].message }] : []), ...loaded.errors]
+
+  const timeLabel = (event, date) => {
+    if (event.isAllDay) return 'All day'
+    if (date !== event.startDate) return date === event.lastDate ? `Until ${clockText(event.endTime)}` : 'All day (cont.)'
+    return `${clockText(event.startTime)}${event.endDate === event.startDate ? ` – ${clockText(event.endTime)}` : ''}`
+  }
+  const eventView = (event, date) => ({
+    subject: event.subject,
+    isPrivate: event.isPrivate,
+    location: event.location,
+    organizer: event.organizer,
+    calendarLabel: event.calendarLabel,
+    color: event.color,
+    time: timeLabel(event, date),
+    webLink: event.webLink
+  })
+
+  const weeks = []
+  for (let weekStart = gridStart; weekStart <= gridEnd; weekStart = addDaysYmd(weekStart, 7)) {
+    weeks.push(Array.from({ length: 7 }, (_, index) => {
+      const date = addDaysYmd(weekStart, index)
+      return {
+        date,
+        day: Number(date.slice(8, 10)),
+        inMonth: date.slice(0, 7) === month,
+        isToday: date === today,
+        events: events
+          .filter(event => event.startDate <= date && event.lastDate >= date)
+          .map(event => eventView(event, date))
+      }
+    }))
+  }
+
+  // The month as a list, by day (also what phones show)
+  const agenda = weeks.flat()
+    .filter(day => day.inMonth && day.events.length)
+    .map(day => ({
+      date: day.date,
+      label: formatYmd(day.date, { weekday: 'long', month: 'long', day: 'numeric' }),
+      isToday: day.isToday,
+      events: day.events
+    }))
+
+  res.render('events.ejs', {
+    user: req.user,
+    isAdmin,
+    month,
+    monthLabel: formatYmd(monthStart, { month: 'long', year: 'numeric' }),
+    previousMonth: addDaysYmd(monthStart, -1).slice(0, 7),
+    nextMonth: nextMonthStart.slice(0, 7),
+    thisMonth: today.slice(0, 7),
+    calendars: calendars.map(({ key, label, color }) => ({ key, label, color })),
+    calendarKey: chosen.length && requested !== 'all' ? requested : 'all',
+    weeks,
+    agenda,
+    missing,
+    errors: errors.map(error => ({ label: error.label, message: error.message, detail: isAdmin ? error.detail : '' }))
+  })
+})
+
+// A store's calendar events for one week, as notices for the people building
+// and approving its schedule. Only calendars named for the store count
+// ("Branford Scheduling Events"). Returns
+// { configured, calendars: [labels], events: [{ days, time, subject, location }], error }
+async function calendarNoticesFor(store, weekStart) {
+  if (outlookCalendar.missingSettings().length) return { configured: false, calendars: [], events: [] }
+
+  const listed = await outlookCalendar.listCalendars()
+  const calendars = listed.calendars.filter(calendar => calendarStore(calendar.label) === store)
+  if (!calendars.length) {
+    return {
+      configured: true,
+      calendars: [],
+      events: [],
+      error: listed.errors.some(error => error.discovery) ? 'Calendar events could not be loaded.' : ''
+    }
+  }
+
+  const weekEnd = addDaysYmd(weekStart, 6)
+  const { events, errors } = await outlookCalendar.eventsFor(calendars, weekStart, weekEnd)
+  const dayText = ymd => formatYmd(ymd, { weekday: 'short', month: 'short', day: 'numeric' })
+
+  return {
+    configured: true,
+    calendars: calendars.map(calendar => calendar.label),
+    events: events.map(event => ({
+      days: event.lastDate > event.startDate
+        ? `${dayText(event.startDate)} – ${dayText(event.lastDate)}`
+        : dayText(event.startDate),
+      time: event.isAllDay
+        ? 'All day'
+        : `${clockText(event.startTime)} – ${clockText(event.endTime)}`,
+      subject: event.subject,
+      location: event.location
+    })),
+    error: errors.length ? 'Some calendar events could not be loaded.' : ''
+  }
+}
+
+// Calendar notices for the week being built (Schedule page)
+app.get(
+  '/api/calendar-notices',
+  ...managerApi,
+  requireStoreFromRequest(storeFromQueryOrBody),
+  async (req, res) => {
+    const weekStart = String(req.query.week || '')
+    if (!isMonday(weekStart)) {
+      return res.status(400).json({ success: false, error: 'Choose the Monday the week starts on.' })
+    }
+    try {
+      return res.json({ success: true, ...(await calendarNoticesFor(req.storeName, weekStart)) })
+    } catch (err) {
+      console.error('Calendar notices error:', err)
+      return res.json({ success: true, configured: true, calendars: [], events: [], error: 'Calendar events could not be loaded.' })
+    }
+  }
+)
+
+// Admin: is the Outlook connection working? (sign-in, then each calendar)
+app.get('/admin/outlook-check', ...adminPage, async (req, res) => {
+  const missing = outlookCalendar.missingSettings()
+  const result = { missingSettings: missing, signIn: null, calendars: [] }
+  try {
+    await outlookCalendar.accessToken()
+    result.signIn = 'ok'
+  } catch (err) {
+    result.signIn = { error: err.message, detail: err.detail || '' }
+    return res.json(result)
+  }
+
+  outlookCalendar.clearCache()
+  const today = storeToday()
+  const listed = await outlookCalendar.listCalendars()
+  result.findingCalendars = listed.errors.length ? listed.errors : 'ok'
+  for (const calendar of listed.calendars) {
+    const { events, errors } = await outlookCalendar.eventsFor([calendar], today, addDaysYmd(today, 30))
+    const about = { label: calendar.label, store: calendarStore(calendar.label) || '(every store)', mailbox: calendar.mailbox }
+    result.calendars.push(errors.length
+      ? { ...about, error: errors[0].message, detail: errors[0].detail }
+      : { ...about, ok: true, eventsNext30Days: events.length })
+  }
+  res.json(result)
 })
 
 // Scheduling Review: running hours totals by month, season and year, per
@@ -6137,6 +6357,10 @@ app.get("/my-requests", ...approvedPage, requireRole('vendor', 'manager'), async
   res.render("my-requests.ejs", {
     user: req.user,
     requests: rows,
+    // The stores this person can reserve in, for the filter and map link
+    storeOptions: STORE_LIST
+      .filter(name => canAccessStore(req.user, name))
+      .map(name => ({ mapId: STORE_PAGES[name].mapId, label: name, mapPath: STORE_PAGES[name].mapPath })),
     // Goes into the page's script: only allow a plain map id
     selectedStore: /^[A-Za-z -]{1,40}$/.test(String(req.query.store || ''))
       ? String(req.query.store)
@@ -9064,7 +9288,7 @@ app.get('/api/final-data', ...floorSpaceApi('manager'), async (req, res) => {
       month,
       map_id: map
     })
-      .select('item_id user brand products status')
+      .select('item_id user brand products status created_at')
       .sort({ item_id: 1 })
       .lean()
 

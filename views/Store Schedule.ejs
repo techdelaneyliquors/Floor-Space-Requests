@@ -453,6 +453,21 @@
   background: #eef2ff;
 }
 
+/* Events this week from the store's Outlook calendar (notices only) */
+.calendar-notices {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.calendar-notices[hidden] { display: none; }
+.calendar-notices ul { margin: 6px 0 0; padding-left: 20px; }
+.calendar-notices li { margin: 2px 0; }
+.calendar-notices .muted { color: #475569; }
+
 .time-off-panel {
   border: 1px solid #c7d2fe;
   background: #eef2ff;
@@ -1873,6 +1888,7 @@ td.budget-total .budget-limit {
 
 </div>
         <div id="timeOffPanel" class="time-off-panel"></div>
+        <div id="calendarNotices" class="calendar-notices no-print" aria-live="polite" hidden></div>
         <div id="buildWarnings" class="schedule-warnings"></div>
         <div id="buildRejectionNote" class="rejection-note no-print" hidden></div>
         <div class="section-title"><div><h3>Section 1 of 8: Manager Hours and Assignment</h3><small>Preset coverage windows for <%= storeName %>. Add or remove rows as needed.</small></div></div>
@@ -9813,11 +9829,55 @@ function describeTimeOffEntry(entry) {
     : `${inputTimeToDisplay(entry.startTime)} – ${inputTimeToDisplay(entry.endTime)}`;
 }
 
+// Events this week from the store's Outlook calendar ("<Store> Scheduling
+// Events"): a notice only, never a warning. Hidden when no calendar is set up.
+let calendarNoticesWeek = '';
+
+async function loadCalendarNotices(weekStart) {
+  const box = document.getElementById('calendarNotices');
+  if (!box || !weekStart) return;
+  calendarNoticesWeek = weekStart;
+
+  let result;
+  try {
+    const response = await fetch(
+      `/api/calendar-notices?store=${encodeURIComponent(state.store)}&week=${encodeURIComponent(weekStart)}`,
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+    );
+    result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'failed');
+  } catch (err) {
+    result = { configured: true, calendars: [], events: [], error: 'Calendar events could not be loaded.' };
+  }
+
+  // A newer week was picked while this one loaded
+  if (calendarNoticesWeek !== weekStart) return;
+
+  if (!result.configured || (!result.calendars.length && !result.error)) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+
+  const items = (result.events || []).map(event => `
+    <li><strong>${escapeHtml(event.days)}</strong>, ${escapeHtml(event.time)}: ${escapeHtml(event.subject)}${
+      event.location ? ` <span class="muted">· ${escapeHtml(event.location)}</span>` : ''}</li>`).join('');
+
+  box.innerHTML = `
+    <strong>📅 Calendar this week${result.calendars.length ? ` (${escapeHtml(result.calendars.join(', '))})` : ''}:</strong>
+    ${items ? `<ul>${items}</ul>` : (result.error ? '' : ' <span class="muted">no events.</span>')}
+    ${result.error ? `<div class="muted">${escapeHtml(result.error)}</div>` : ''}`;
+  box.hidden = false;
+}
+
 async function loadTimeOffForWeek(weekStart) {
   if (!weekStart) return;
 
   // PTO hours belong to the same week
   const ptoLoading = loadPtoForWeek(weekStart);
+
+  // Calendar notices load on their own; they don't hold up the rest
+  loadCalendarNotices(weekStart);
 
   try {
     const response = await fetch(
